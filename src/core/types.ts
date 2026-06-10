@@ -15,10 +15,12 @@ export type ChangedFileStatus = "added" | "modified" | "deleted" | "renamed";
 export type ChangedFileCategory =
   | "source"
   | "test"
+  | "migration"
   | "config"
-  | "dependency"
+  | "ci"
   | "documentation"
-  | "workflow"
+  | "i18n"
+  | "security"
   | "unknown";
 
 export type ChangedFile = {
