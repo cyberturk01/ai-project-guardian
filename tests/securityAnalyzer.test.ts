@@ -43,16 +43,63 @@ describe("analyzeSecurity", () => {
         "security-api-key",
         "security-console-sensitive-value",
         "security-cors-wildcard",
+        "security-env-secret-default",
         "security-hardcoded-secret",
         "security-jwt-secret-default",
         "security-sql-string-interpolation",
+        "security-new-route-missing-auth-middleware",
         "security-new-route-missing-rate-limit"
       ]
     );
     assert.ok(findings.every((finding) => finding.area === "security"));
-    assert.ok(findings.every((finding) => /possible risk/i.test(finding.description)));
+    assert.ok(findings.every((finding) => /possible security risk/i.test(finding.description)));
+    assert.ok(findings.every((finding) => /not a confirmed vulnerability/i.test(finding.description)));
     assert.equal(findings.find((finding) => finding.id === "security-hardcoded-secret")?.lineNumber, 1);
     assert.equal(findings.find((finding) => finding.id === "security-new-route-missing-rate-limit")?.filePath, "src/routes/publicRoutes.ts");
+  });
+
+  it("detects Security Analyzer V2 practical risk hints without claiming certainty", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [
+        changedFile("src/config/security.ts"),
+        changedFile("src/routes/adminRoutes.ts", "added"),
+        changedFile("src/db/reporting.ts")
+      ],
+      readFile: fakeReader({
+        "src/config/security.ts": [
+          "const jwtSecret = process.env.JWT_SECRET || 'localJwtSecret123';",
+          "const adminPassword = 'AdminPass12345';",
+          "const apiSecret = process.env.PAYMENT_SECRET ?? 'paySecret12345';",
+          "console.warn('authorization header', req.headers.authorization);",
+          "const config = { cors: { origin: '*' }, disableRateLimit: true };"
+        ].join("\n"),
+        "src/routes/adminRoutes.ts": [
+          "import { Router } from 'express';",
+          "const router = Router();",
+          "router.get('/admin/users', listUsers);"
+        ].join("\n"),
+        "src/db/reporting.ts": "const sql = 'select * from users where id = ' + userId;"
+      })
+    });
+
+    assert.deepEqual(
+      findings.map((finding) => finding.id),
+      [
+        "security-console-sensitive-value",
+        "security-cors-wildcard",
+        "security-disabled-rate-limiting",
+        "security-env-secret-default",
+        "security-hardcoded-admin-password",
+        "security-hardcoded-secret",
+        "security-jwt-secret-default",
+        "security-sql-string-interpolation",
+        "security-new-route-missing-auth-middleware",
+        "security-new-route-missing-rate-limit"
+      ]
+    );
+    assert.ok(findings.every((finding) => /possible security risk/i.test(finding.description)));
+    assert.ok(findings.every((finding) => /not a confirmed vulnerability/i.test(finding.description)));
   });
 
   it("does not report placeholder secrets, deleted files, or existing routes with rate limits", async () => {
@@ -61,16 +108,22 @@ describe("analyzeSecurity", () => {
       changedFiles: [
         changedFile("src/config/example.ts"),
         changedFile("src/routes/limitedRoutes.ts", "added"),
+        changedFile("src/routes/privateRoutes.ts", "added"),
         changedFile("assets/logo.png")
       ],
       readFile: fakeReader({
         "src/config/example.ts": [
           "const PASSWORD = 'changeme';",
+          "const adminPassword = 'changeme';",
           "const JWT_SECRET = process.env.JWT_SECRET;"
         ].join("\n"),
         "src/routes/limitedRoutes.ts": [
           "import { rateLimit } from 'express-rate-limit';",
-          "router.get('/status', rateLimit(), statusHandler);"
+          "router.get('/status', requireAuth, rateLimit(), statusHandler);"
+        ].join("\n"),
+        "src/routes/privateRoutes.ts": [
+          "import { rateLimit } from 'express-rate-limit';",
+          "router.get('/me', requireAuth, rateLimit(), meHandler);"
         ].join("\n"),
         "assets/logo.png": "not scanned"
       })

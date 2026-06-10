@@ -31,6 +31,9 @@ const textFilePattern = /\.(cjs|cts|env|go|js|jsx|json|mjs|mts|php|py|rb|sql|ts|
 const routeFilePattern = /(^|\/)(api|apis|routes?|controllers?|handlers?|endpoints?)(\/|$)|(\.|-|_)(route|routes|controller|handler|api)\.[^.]+$/i;
 const routeHandlerPattern = /\b(app|router|server)\s*\.\s*(get|post|put|patch|delete|all|use)\s*\(/i;
 const rateLimitHintPattern = /\b(rateLimit|rateLimiter|limiter|throttle|slowDown|express-rate-limit)\b/i;
+const authMiddlewareHintPattern = /\b(auth|authenticate|authenticated|authorization|authorize|requireAuth|requiresAuth|isAuthenticated|checkAuth|verifyToken|verifyJwt|jwtAuth|passport|protect|permission|canAccess)\b/i;
+const secretNamePattern = /\b[A-Za-z0-9_-]*(?:password|passwd|secret|client_secret|private_key|access_token|refresh_token|token|api[_-]?key|apikey|authorization)[A-Za-z0-9_-]*\b/i;
+const jwtSecretNamePattern = /\b[A-Za-z0-9_-]*(?:jwt|token)[A-Za-z0-9_-]*(?:secret|key)|(?:secret|key)[A-Za-z0-9_-]*(?:jwt|token)[A-Za-z0-9_-]*\b/i;
 
 const placeholderSecretValues = new Set([
   "changeme",
@@ -54,6 +57,13 @@ const securityRules: SecurityRule[] = [
     matches: (line) => hasHardcodedSecret(line)
   },
   {
+    id: "security-hardcoded-admin-password",
+    title: "Possible hardcoded admin password",
+    riskLevel: "high",
+    recommendation: "Move admin credentials to secure configuration and rotate the password if the value is real.",
+    matches: (line) => hasHardcodedAdminPassword(line)
+  },
+  {
     id: "security-api-key",
     title: "Possible API key",
     riskLevel: "high",
@@ -62,10 +72,17 @@ const securityRules: SecurityRule[] = [
   },
   {
     id: "security-jwt-secret-default",
-    title: "Possible JWT secret default",
+    title: "Possible JWT secret fallback",
     riskLevel: "high",
     recommendation: "Require JWT secrets to be provided by secure configuration and fail startup when they are missing.",
     matches: (line) => hasJwtSecretDefault(line)
+  },
+  {
+    id: "security-env-secret-default",
+    title: "Possible secret default in environment config",
+    riskLevel: "high",
+    recommendation: "Avoid fallback defaults for secret-like environment variables. Fail startup when required secrets are missing.",
+    matches: (line) => hasSecretEnvDefault(line)
   },
   {
     id: "security-console-sensitive-value",
@@ -94,6 +111,20 @@ const securityRules: SecurityRule[] = [
     riskLevel: "high",
     recommendation: "Confirm this is not production code. Restore auth checks or guard bypasses behind explicit test-only configuration.",
     matches: (line) => hasDisabledAuthCheck(line)
+  },
+  {
+    id: "security-new-route-missing-auth-middleware",
+    title: "Possible missing auth middleware on new route",
+    riskLevel: "high",
+    recommendation: "Confirm the endpoint is intentionally public or add the expected auth middleware or authorization guard.",
+    matches: (line, context) => hasNewRouteWithoutAuthMiddleware(line, context)
+  },
+  {
+    id: "security-disabled-rate-limiting",
+    title: "Possible disabled rate limiting",
+    riskLevel: "medium",
+    recommendation: "Confirm this is not production code. Restore rate limiting or limit bypasses to explicit test-only configuration.",
+    matches: (line) => hasDisabledRateLimiting(line)
   },
   {
     id: "security-new-route-missing-rate-limit",
@@ -127,7 +158,7 @@ export async function analyzeSecurity(input: AnalyzeSecurityInput): Promise<Secu
         id: rule.id,
         area: "security",
         title: rule.title,
-        description: `${rule.title} detected in a changed file. This is a possible risk based on heuristic matching, not a confirmed vulnerability.`,
+        description: `${rule.title} detected in a changed file. This is a possible security risk based on heuristic matching, not a confirmed vulnerability.`,
         riskLevel: rule.riskLevel,
         filePath: normalizePath(scannedFile.file.path),
         lineNumber: matchingLineIndex + 1,
@@ -172,6 +203,22 @@ function hasHardcodedSecret(line: string): boolean {
   return isPotentialRealSecret(match[1] ?? "");
 }
 
+function hasHardcodedAdminPassword(line: string): boolean {
+  const match = line.match(/\b(?:admin[A-Za-z0-9_-]*password|password[A-Za-z0-9_-]*admin|ADMIN_PASSWORD|adminPassword)\b\s*[:=]\s*["']([^"']{6,})["']/i);
+
+  if (match !== null) {
+    return isPotentialRealSecret(match[1] ?? "");
+  }
+
+  const adminObjectMatch = line.match(/\badmin\b[^;\n]{0,80}\bpassword\b\s*[:=]\s*["']([^"']{6,})["']/i);
+
+  if (adminObjectMatch === null) {
+    return false;
+  }
+
+  return isPotentialRealSecret(adminObjectMatch[1] ?? "");
+}
+
 function hasApiKey(line: string): boolean {
   return (
     /\b[A-Za-z0-9_-]*(?:api[_-]?key|apikey)[A-Za-z0-9_-]*\b\s*[:=]\s*["'][A-Za-z0-9_\-]{16,}["']/i.test(line) ||
@@ -181,14 +228,32 @@ function hasApiKey(line: string): boolean {
 }
 
 function hasJwtSecretDefault(line: string): boolean {
+  const normalized = line.trim();
+
   return (
-    /\bJWT_SECRET\b.*(?:\|\||\?\?)\s*["'](?:secret|changeme|change-me|default|dev-secret|jwt-secret)["']/i.test(line) ||
-    /\bjwtSecret\b\s*[:=]\s*["'](?:secret|changeme|change-me|default|dev-secret|jwt-secret)["']/i.test(line)
+    /\b[A-Za-z0-9_.-]*(?:JWT_SECRET|JWT_PRIVATE_KEY|JWT_SIGNING_KEY|jwtSecret|jwtPrivateKey|jwtSigningKey)[A-Za-z0-9_.-]*\b.*(?:\|\||\?\?)\s*["'][^"']{4,}["']/i.test(normalized) ||
+    /\b[A-Za-z0-9_.-]*(?:JWT_SECRET|JWT_PRIVATE_KEY|JWT_SIGNING_KEY|jwtSecret|jwtPrivateKey|jwtSigningKey)[A-Za-z0-9_.-]*\b\s*[:=]\s*["'][^"']{4,}["']/i.test(normalized) ||
+    (jwtSecretNamePattern.test(normalized) && /(?:\|\||\?\?)\s*["'][^"']{4,}["']/.test(normalized))
   );
 }
 
+function hasSecretEnvDefault(line: string): boolean {
+  const match = line.match(/\bprocess\.env\.([A-Za-z0-9_]+)\b\s*(?:\|\||\?\?)\s*["']([^"']{4,})["']/);
+
+  if (match === null) {
+    return false;
+  }
+
+  const [, envName = "", defaultValue = ""] = match;
+  return secretNamePattern.test(envName) && (isPotentialRealSecret(defaultValue) || isKnownWeakSecretDefault(defaultValue));
+}
+
+function isKnownWeakSecretDefault(value: string): boolean {
+  return /^(secret|changeme|change-me|default|dev-secret|jwt-secret|password|admin|admin123|test-secret)$/i.test(value.trim());
+}
+
 function hasSensitiveConsoleLog(line: string): boolean {
-  return /\bconsole\.(?:log|info|warn|error|debug)\s*\([^)]*\b(?:token|password|secret)\b[^)]*\)/i.test(line);
+  return /\bconsole\.(?:log|info|warn|error|debug)\s*\([^)]*\b(?:token|password|secret|authorization(?:\s*header)?|authorizationHeader|authHeader)\b[^)]*\)/i.test(line);
 }
 
 function hasCorsWildcard(line: string): boolean {
@@ -200,7 +265,11 @@ function hasCorsWildcard(line: string): boolean {
 }
 
 function hasSqlStringInterpolation(line: string): boolean {
-  return /`[^`]*(?:select|insert|update|delete|where|from)\b[^`]*\$\{[^`]+`/i.test(line);
+  return (
+    /`[^`]*(?:select|insert|update|delete|where|from)\b[^`]*\$\{[^`]+`/i.test(line) ||
+    /["'][^"']*(?:select|insert|update|delete|where|from)\b[^"']*["']\s*\+\s*[A-Za-z_$]/i.test(line) ||
+    /\b(?:query|execute|raw|sql)\s*\(\s*`[^`]*(?:select|insert|update|delete|where|from)\b[^`]*\$\{[^`]+`/i.test(line)
+  );
 }
 
 function hasDisabledAuthCheck(line: string): boolean {
@@ -208,6 +277,23 @@ function hasDisabledAuthCheck(line: string): boolean {
     /\b(?:auth|authenticate|authorization|requiredAuth|requireAuth|isAuthenticated|checkAuth)\b\s*:\s*false\b/i.test(line) ||
     /\b(?:skipAuth|disableAuth|authDisabled|bypassAuth)\b\s*[:=]\s*true\b/i.test(line) ||
     /\/\/\s*(?:auth|authentication|authorization)\s+(?:disabled|bypassed|off)/i.test(line)
+  );
+}
+
+function hasNewRouteWithoutAuthMiddleware(line: string, context: RuleContext): boolean {
+  return (
+    context.file.status === "added" &&
+    routeFilePattern.test(normalizePath(context.file.path)) &&
+    routeHandlerPattern.test(line) &&
+    !authMiddlewareHintPattern.test(context.content)
+  );
+}
+
+function hasDisabledRateLimiting(line: string): boolean {
+  return (
+    /\b(?:rateLimit|rateLimiter|limiter|throttle|slowDown)\b\s*:\s*false\b/i.test(line) ||
+    /\b(?:disableRateLimit|disableRateLimiting|skipRateLimit|skipRateLimiting|rateLimitDisabled|rateLimitingDisabled|bypassRateLimit)\b\s*[:=]\s*true\b/i.test(line) ||
+    /\/\/\s*(?:rate\s*limit|rate\s*limiting|throttling)\s+(?:disabled|bypassed|off)/i.test(line)
   );
 }
 
