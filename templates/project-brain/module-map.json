@@ -1,0 +1,10 @@
+{
+  "modules": [
+    {
+      "name": "api",
+      "paths": ["src/api"],
+      "owner": "team-name",
+      "risk": "Handles external requests and validation."
+    }
+  ]
+}

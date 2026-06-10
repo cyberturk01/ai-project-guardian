@@ -1,5 +1,5 @@
 # Project Brain Template
 
-This directory will hold starter templates for repository-specific project context.
+Copy these files into a target repository as `.project-brain/` and fill them in with repository-specific context.
 
-Analysis templates are intentionally not implemented yet.
+The loader only reads these files. It does not call AI APIs, GitHub APIs, or other network services.

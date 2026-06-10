@@ -1,0 +1,9 @@
+{
+  "modules": [
+    {
+      "name": "orders",
+      "paths": ["src/orders"],
+      "owner": "platform"
+    }
+  ]
+}
