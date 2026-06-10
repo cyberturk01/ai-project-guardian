@@ -11,7 +11,7 @@ import { runGuardianCli, shouldFailBuild } from "../src/cli/runGuardian.js";
 const execFileAsync = promisify(execFile);
 
 describe("runGuardianCli integration", () => {
-  it("runs against a fixture repository and writes a markdown report without failing by default", async () => {
+  it("runs against a fixture repository and writes a summary report without failing by default", async () => {
     await withFixtureRepo(async (repoPath) => {
       const outputPath = join(repoPath, "guardian-report.md");
       const stdout = new MemoryWritable();
@@ -26,6 +26,27 @@ describe("runGuardianCli integration", () => {
       assert.equal(result.exitCode, 0);
       assert.equal(result.overallRisk, "critical");
       assert.match(stdout.value, /Guardian report written to/);
+      assert.match(report, /# AI Project Guardian Summary/);
+      assert.match(report, /\| Overall risk \| \*\*critical\*\* \|/);
+      assert.match(report, /Run with `--full-report`/);
+      assert.doesNotMatch(report, /## Changed Files/);
+    });
+  });
+
+  it("writes the complete markdown report when --full-report is set", async () => {
+    await withFixtureRepo(async (repoPath) => {
+      const outputPath = join(repoPath, "guardian-report.md");
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["--repo", repoPath, "--base", "origin/main", "--out", outputPath, "--full-report"],
+        stdout
+      });
+
+      const report = await readFile(outputPath, "utf8");
+
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.overallRisk, "critical");
       assert.match(report, /# AI Project Guardian Report/);
       assert.match(report, /\| Overall risk \| \*\*critical\*\* \|/);
       assert.match(report, /src\/auth\/session.ts/);
@@ -39,7 +60,7 @@ describe("runGuardianCli integration", () => {
       const stdout = new MemoryWritable();
 
       const result = await runGuardianCli({
-        argv: ["--repo", repoPath, "--base", "origin/main", "--out", outputPath, "--fail-on", "high"],
+        argv: ["--repo", repoPath, "--base", "origin/main", "--out", outputPath, "--full-report", "--fail-on", "high"],
         stdout
       });
 
@@ -55,7 +76,7 @@ describe("runGuardianCli integration", () => {
       const stdout = new MemoryWritable();
 
       await runGuardianCli({
-        argv: ["--repo", repoPath, "--base", "origin/main", "--out", outputPath],
+        argv: ["--repo", repoPath, "--base", "origin/main", "--out", outputPath, "--full-report"],
         stdout
       });
 
@@ -88,7 +109,7 @@ describe("runGuardianCli integration", () => {
       const stdout = new MemoryWritable();
 
       await runGuardianCli({
-        argv: ["--repo", repoPath, "--base", "origin/main", "--out", outputPath],
+        argv: ["--repo", repoPath, "--base", "origin/main", "--out", outputPath, "--full-report"],
         stdout
       });
 
@@ -139,7 +160,7 @@ describe("runGuardianCli integration", () => {
       const stdout = new MemoryWritable();
 
       const result = await runGuardianCli({
-        argv: ["--repo", repoPath, "--base", "origin/main", "--out", outputPath, "--fail-on", "critical"],
+        argv: ["--repo", repoPath, "--base", "origin/main", "--out", outputPath, "--full-report", "--fail-on", "critical"],
         stdout
       });
 

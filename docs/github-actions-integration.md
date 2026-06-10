@@ -1,6 +1,11 @@
 # GitHub Actions Integration
 
-This workflow runs `ai-project-guardian` from another repository. It checks out the target repository, checks out Guardian into `.guardian`, installs Guardian dependencies, runs the CLI against the target repository, and appends the report to the GitHub Actions job summary.
+This workflow runs `ai-project-guardian` from another repository. It checks out the target repository, checks out Guardian into `.guardian`, installs Guardian dependencies, runs the CLI against the target repository, and appends a short report to the GitHub Actions job summary.
+
+Guardian has two Markdown output modes:
+
+- `--summary-only`: short overview for `GITHUB_STEP_SUMMARY`. This is the default.
+- `--full-report`: complete report with changed files and detailed findings.
 
 Replace `your-org/ai-project-guardian` with the actual GitHub owner and repository for this tool.
 
@@ -47,14 +52,20 @@ jobs:
         working-directory: target/.guardian
         run: npm run build
 
-      - name: Run guardian against target repo
+      - name: Run guardian summary against target repo
         working-directory: target/.guardian
-        run: npm run guardian -- --repo .. --base origin/main --out guardian-report.md
+        run: npm run guardian -- --repo .. --base origin/main --out guardian-summary.md --summary-only --fail-on critical
 
-      - name: Append report to job summary
-        run: cat target/.guardian/guardian-report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Append summary to job summary
+        run: cat target/.guardian/guardian-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Generate full guardian report
+        if: always()
+        working-directory: target/.guardian
+        run: npm run guardian -- --repo .. --base origin/main --out guardian-report.md --full-report
 
       - name: Upload guardian report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: guardian-report

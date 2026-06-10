@@ -14,7 +14,9 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npm run build
-      - run: npm run guardian -- --repo . --base origin/main --out guardian-report.md --fail-on critical
+      - run: npm run guardian -- --repo . --base origin/main --out guardian-summary.md --summary-only --fail-on critical
+      - run: cat guardian-summary.md >> "$GITHUB_STEP_SUMMARY"
+      - run: npm run guardian -- --repo . --base origin/main --out guardian-report.md --full-report
       - uses: actions/upload-artifact@v4
         with:
           name: guardian-report

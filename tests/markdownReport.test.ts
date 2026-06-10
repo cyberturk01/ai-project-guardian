@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { GuardianReport } from "../src/core/types.js";
 import { renderMarkdownReport } from "../src/renderers/markdownReport.js";
+import { renderMarkdownSummary } from "../src/renderers/markdownSummary.js";
 import { renderReport } from "../src/renderers/renderReport.js";
 
 describe("renderMarkdownReport", () => {
@@ -19,6 +20,23 @@ describe("renderMarkdownReport", () => {
     const report = makeReport();
 
     assert.equal(renderReport(report, "markdown"), renderMarkdownReport(report));
+  });
+
+  it("renders the short summary style for GitHub Actions", () => {
+    const actual = renderMarkdownSummary(makeReport());
+
+    assert.match(actual, /# AI Project Guardian Summary/);
+    assert.match(actual, /\| Overall risk \| \*\*high\*\* \|/);
+    assert.match(actual, /\| Active findings \| 3 \|/);
+    assert.match(actual, /Run with `--full-report`/);
+    assert.doesNotMatch(actual, /## Changed Files/);
+    assert.doesNotMatch(actual, /src\/api\/reservations\.ts:18/);
+  });
+
+  it("uses summary style when requested by the generic renderer", () => {
+    const report = makeReport();
+
+    assert.equal(renderReport(report, "markdown", "summary"), renderMarkdownSummary(report));
   });
 });
 

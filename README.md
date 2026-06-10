@@ -55,6 +55,8 @@ Available flags:
 - `--repo <path>`: target repository to inspect. Defaults to `GUARDIAN_REPO_PATH` or `.`.
 - `--base <ref>`: base git ref for changed-file detection. Defaults to `origin/main`, then falls back to `HEAD~1` when the default ref is unavailable.
 - `--out <path>`: optional output file. Defaults to `GUARDIAN_OUTPUT_PATH` when set.
+- `--summary-only`: write a short overview for GitHub Actions summaries. This is the default.
+- `--full-report`: write the complete Markdown report with changed files, detailed findings, accepted findings, required actions, and suggested tests.
 - `--fail-on <high|critical>`: exit with code 1 when the calculated risk meets the threshold. Defaults to not failing the build.
 - `--help`: print CLI help.
 
@@ -145,7 +147,9 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npm run build
-      - run: npm run guardian -- --repo . --base origin/main --out guardian-report.md --fail-on critical
+      - run: npm run guardian -- --repo . --base origin/main --out guardian-summary.md --summary-only --fail-on critical
+      - run: cat guardian-summary.md >> "$GITHUB_STEP_SUMMARY"
+      - run: npm run guardian -- --repo . --base origin/main --out guardian-report.md --full-report
       - uses: actions/upload-artifact@v4
         with:
           name: guardian-report
@@ -196,10 +200,10 @@ jobs:
 
       - name: Run guardian against target repo
         working-directory: target/.guardian
-        run: npm run guardian -- --repo .. --base origin/main --out guardian-report.md
+        run: npm run guardian -- --repo .. --base origin/main --out guardian-summary.md --summary-only
 
       - name: Append report to job summary
-        run: cat target/.guardian/guardian-report.md >> "$GITHUB_STEP_SUMMARY"
+        run: cat target/.guardian/guardian-summary.md >> "$GITHUB_STEP_SUMMARY"
 ```
 
 Replace `your-org/ai-project-guardian` with the actual owner and repository name for this project.

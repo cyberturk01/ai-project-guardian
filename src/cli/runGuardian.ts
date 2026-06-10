@@ -2,7 +2,7 @@ import { writeFile } from "node:fs/promises";
 import { loadConfig } from "../config/loadConfig.js";
 import type { RiskLevel } from "../core/types.js";
 import { runGuardian as runGuardianCore } from "../core/guardian.js";
-import { renderReport } from "../renderers/renderReport.js";
+import { renderReport, type ReportStyle } from "../renderers/renderReport.js";
 
 export type FailOnRisk = Extract<RiskLevel, "high" | "critical">;
 
@@ -11,6 +11,7 @@ export type CliArgs = {
   base?: string;
   out?: string;
   failOn?: FailOnRisk;
+  reportStyle: ReportStyle;
   help: boolean;
 };
 
@@ -28,18 +29,20 @@ export type CliRunOptions = {
 export const helpText = `ai-project-guardian
 
 Usage:
-  ai-project-guardian --repo <path> [--base <ref>] [--out <path>] [--fail-on high|critical]
+  ai-project-guardian --repo <path> [--base <ref>] [--out <path>] [--summary-only|--full-report] [--fail-on high|critical]
 
 Options:
   --repo <path>          Target repository path. Defaults to GUARDIAN_REPO_PATH or ".".
   --base <ref>           Base git ref for changed file detection. Defaults to origin/main with HEAD~1 fallback.
   --out <path>           Output Markdown report path. Defaults to GUARDIAN_OUTPUT_PATH when set.
+  --summary-only         Write a short GitHub Actions-friendly summary. This is the default.
+  --full-report          Write the complete Markdown report with detailed findings.
   --fail-on <risk>       Exit 1 when overall risk meets the threshold: high or critical.
   --help                 Show this help message.
 `;
 
 export function parseArgs(args: string[]): CliArgs {
-  const parsed: CliArgs = { help: false };
+  const parsed: CliArgs = { help: false, reportStyle: "summary" };
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -64,6 +67,16 @@ export function parseArgs(args: string[]): CliArgs {
     if (arg === "--out") {
       parsed.out = readValue(args, index, arg);
       index += 1;
+      continue;
+    }
+
+    if (arg === "--summary-only") {
+      parsed.reportStyle = "summary";
+      continue;
+    }
+
+    if (arg === "--full-report") {
+      parsed.reportStyle = "full";
       continue;
     }
 
@@ -95,7 +108,7 @@ export async function runGuardianCli(options: CliRunOptions): Promise<CliRunResu
     format: "markdown"
   });
   const report = await runGuardianCore(config);
-  const rendered = renderReport(report, "markdown");
+  const rendered = renderReport(report, "markdown", args.reportStyle);
 
   if (config.outputPath === undefined) {
     stdout.write(rendered);
