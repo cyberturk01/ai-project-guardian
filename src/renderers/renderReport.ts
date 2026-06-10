@@ -10,6 +10,7 @@ export function renderReport(report: GuardianReport, format: ReportFormat): stri
 
 - Project: ${report.projectName}
 - Generated: ${report.generatedAt}
+- Risk score: ${report.riskScore}/100
 - Overall risk: ${report.overallRisk}
 
 ## Changed files

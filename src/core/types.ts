@@ -61,6 +61,7 @@ export type SecurityFinding = FindingBase & {
 export type GuardianReport = {
   projectName: string;
   generatedAt: string;
+  riskScore: number;
   overallRisk: RiskLevel;
   changedFiles: ChangedFile[];
   qaFindings: QaFinding[];

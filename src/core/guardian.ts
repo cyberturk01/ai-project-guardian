@@ -2,10 +2,11 @@ import type { CliConfig } from "../config/loadConfig.js";
 import { analyzeQa } from "../analyzers/qaAnalyzer.js";
 import { analyzeRelease } from "../analyzers/releaseAnalyzer.js";
 import { analyzeSecurity } from "../analyzers/securityAnalyzer.js";
+import { scoreRisk } from "../analyzers/riskScorer.js";
 import { loadProjectBrain } from "../project-brain/loadProjectBrain.js";
 import { classifyFile } from "../repo/fileClassifier.js";
 import { getChangedFiles } from "../repo/getChangedFiles.js";
-import { riskLevels, type GuardianReport, type RiskLevel } from "./types.js";
+import type { GuardianReport } from "./types.js";
 import { listRepoFiles } from "../repo/listRepoFiles.js";
 
 export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
@@ -40,16 +41,18 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     repoPath: config.repoPath,
     changedFiles
   });
+  const riskScore = scoreRisk({
+    changedFiles,
+    qaFindings,
+    releaseFindings,
+    securityFindings
+  });
 
   return {
     projectName: config.guardian.projectName,
     generatedAt: new Date().toISOString(),
-    overallRisk: highestRisk([
-      ...changedFiles.map((file) => file.riskLevel),
-      ...qaFindings.map((finding) => finding.riskLevel),
-      ...releaseFindings.map((finding) => finding.riskLevel),
-      ...securityFindings.map((finding) => finding.riskLevel)
-    ]),
+    riskScore: riskScore.score,
+    overallRisk: riskScore.overallRisk,
     changedFiles,
     qaFindings,
     releaseFindings,
@@ -57,10 +60,4 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     requiredActions: releaseFindings.flatMap((finding) => finding.requiredBeforeDeploy),
     warnings: [...config.warnings, ...projectBrainResult.warnings]
   };
-}
-
-function highestRisk(values: RiskLevel[]): RiskLevel {
-  return values.reduce<RiskLevel>((highest, value) => {
-    return riskLevels.indexOf(value) > riskLevels.indexOf(highest) ? value : highest;
-  }, "info");
 }
