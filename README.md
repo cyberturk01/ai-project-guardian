@@ -47,12 +47,13 @@ npm run build
 Run the scaffolded CLI against the current repository:
 
 ```sh
-npm run guardian -- --repo . --format markdown --out guardian-report.md
+npm run guardian -- --repo . --base origin/main --format markdown --out guardian-report.md
 ```
 
 Available flags:
 
 - `--repo <path>`: target repository to inspect. Defaults to `GUARDIAN_REPO_PATH` or `.`.
+- `--base <ref>`: base git ref for changed-file detection. Defaults to `origin/main`, then falls back to `HEAD~1` when the default ref is unavailable.
 - `--format <markdown|json>`: report output format. Defaults to `GUARDIAN_REPORT_FORMAT` or `markdown`.
 - `--out <path>`: optional output file. Defaults to `GUARDIAN_OUTPUT_PATH` when set.
 - `--help`: print CLI help.
@@ -78,7 +79,7 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npm run build
-      - run: npm run guardian -- --repo . --format markdown --out guardian-report.md
+      - run: npm run guardian -- --repo . --base origin/main --format markdown --out guardian-report.md
       - uses: actions/upload-artifact@v4
         with:
           name: guardian-report

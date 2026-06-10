@@ -10,7 +10,7 @@ export type GuardianConfig = {
   requiredChecks: string[];
 };
 
-export type ChangedFileStatus = "added" | "modified" | "deleted" | "renamed" | "unknown";
+export type ChangedFileStatus = "added" | "modified" | "deleted" | "renamed";
 
 export type ChangedFileCategory =
   | "source"
@@ -23,6 +23,7 @@ export type ChangedFileCategory =
 
 export type ChangedFile = {
   path: string;
+  previousPath?: string;
   status: ChangedFileStatus;
   category: ChangedFileCategory;
   riskLevel: RiskLevel;

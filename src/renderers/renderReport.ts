@@ -14,7 +14,7 @@ export function renderReport(report: GuardianReport, format: ReportFormat): stri
 
 ## Changed files
 
-${renderCount(report.changedFiles.length)}
+${renderChangedFiles(report.changedFiles)}
 
 ## QA findings
 
@@ -40,6 +40,19 @@ ${renderList(report.warnings)}
 
 function renderCount(count: number): string {
   return count === 0 ? "None." : `${count} item(s).`;
+}
+
+function renderChangedFiles(changedFiles: GuardianReport["changedFiles"]): string {
+  if (changedFiles.length === 0) {
+    return "None.";
+  }
+
+  return changedFiles
+    .map((file) => {
+      const renameDetail = file.previousPath === undefined ? "" : ` from ${file.previousPath}`;
+      return `- ${file.status}: ${file.path}${renameDetail}`;
+    })
+    .join("\n");
 }
 
 function renderList(items: string[]): string {

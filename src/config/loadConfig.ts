@@ -6,6 +6,7 @@ export type ReportFormat = "markdown" | "json";
 
 export type CliConfig = {
   repoPath: string;
+  baseRef?: string;
   format: ReportFormat;
   outputPath?: string;
   guardian: GuardianConfig;
@@ -14,6 +15,7 @@ export type CliConfig = {
 
 type ConfigInput = {
   repoPath?: string;
+  baseRef?: string;
   format?: string;
   outputPath?: string;
 };
@@ -24,6 +26,7 @@ export function loadConfig(input: ConfigInput): CliConfig {
 
   return {
     repoPath,
+    baseRef: normalizeOptionalValue(input.baseRef ?? process.env.GUARDIAN_BASE_REF),
     format: parseFormat(input.format ?? process.env.GUARDIAN_REPORT_FORMAT),
     outputPath: resolveOptionalPath(input.outputPath ?? process.env.GUARDIAN_OUTPUT_PATH),
     guardian: guardianConfig.config,
@@ -32,11 +35,21 @@ export function loadConfig(input: ConfigInput): CliConfig {
 }
 
 function resolveOptionalPath(path: string | undefined): string | undefined {
-  if (path === undefined || path === "") {
+  const normalized = normalizeOptionalValue(path);
+
+  if (normalized === undefined) {
     return undefined;
   }
 
-  return resolve(path);
+  return resolve(normalized);
+}
+
+function normalizeOptionalValue(value: string | undefined): string | undefined {
+  if (value === undefined || value.trim() === "") {
+    return undefined;
+  }
+
+  return value;
 }
 
 function parseFormat(format: string | undefined): ReportFormat {

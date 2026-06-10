@@ -18,10 +18,12 @@ describe("loadConfig", () => {
   it("resolves relative repository and output paths", () => {
     const config = loadConfig({
       repoPath: ".",
+      baseRef: "origin/main",
       outputPath: "guardian-report.md"
     });
 
     assert.equal(config.repoPath, process.cwd());
+    assert.equal(config.baseRef, "origin/main");
     assert.equal(config.outputPath, join(process.cwd(), "guardian-report.md"));
     assert.ok(isAbsolute(config.repoPath));
     assert.ok(isAbsolute(config.outputPath));

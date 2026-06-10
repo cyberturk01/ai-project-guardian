@@ -9,10 +9,11 @@ import { renderReport } from "../renderers/renderReport.js";
 const helpText = `ai-project-guardian
 
 Usage:
-  ai-project-guardian --repo <path> [--format markdown|json] [--out <path>]
+  ai-project-guardian --repo <path> [--base <ref>] [--format markdown|json] [--out <path>]
 
 Options:
   --repo <path>       Target repository path. Defaults to GUARDIAN_REPO_PATH or ".".
+  --base <ref>        Base git ref for changed file detection. Defaults to origin/main.
   --format <format>   Output format: markdown or json. Defaults to markdown.
   --out <path>        Optional output file path.
   --help              Show this help message.
@@ -20,6 +21,7 @@ Options:
 
 type CliArgs = {
   repo?: string;
+  base?: string;
   format?: string;
   out?: string;
   help: boolean;
@@ -48,6 +50,12 @@ function parseArgs(args: string[]): CliArgs {
       continue;
     }
 
+    if (arg === "--base") {
+      parsed.base = args[index + 1];
+      index += 1;
+      continue;
+    }
+
     if (arg === "--out") {
       parsed.out = args[index + 1];
       index += 1;
@@ -67,6 +75,7 @@ async function main(): Promise<void> {
 
   const config = loadConfig({
     repoPath: args.repo,
+    baseRef: args.base,
     format: args.format,
     outputPath: args.out
   });
