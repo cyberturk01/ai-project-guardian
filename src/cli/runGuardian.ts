@@ -1,0 +1,142 @@
+import { writeFile } from "node:fs/promises";
+import { loadConfig } from "../config/loadConfig.js";
+import type { RiskLevel } from "../core/types.js";
+import { runGuardian as runGuardianCore } from "../core/guardian.js";
+import { renderReport } from "../renderers/renderReport.js";
+
+export type FailOnRisk = Extract<RiskLevel, "high" | "critical">;
+
+export type CliArgs = {
+  repo?: string;
+  base?: string;
+  out?: string;
+  failOn?: FailOnRisk;
+  help: boolean;
+};
+
+export type CliRunResult = {
+  exitCode: number;
+  outputPath?: string;
+  overallRisk?: RiskLevel;
+};
+
+export type CliRunOptions = {
+  argv: string[];
+  stdout?: NodeJS.WritableStream;
+};
+
+export const helpText = `ai-project-guardian
+
+Usage:
+  ai-project-guardian --repo <path> [--base <ref>] [--out <path>] [--fail-on high|critical]
+
+Options:
+  --repo <path>          Target repository path. Defaults to GUARDIAN_REPO_PATH or ".".
+  --base <ref>           Base git ref for changed file detection. Defaults to origin/main with HEAD~1 fallback.
+  --out <path>           Output Markdown report path. Defaults to GUARDIAN_OUTPUT_PATH when set.
+  --fail-on <risk>       Exit 1 when overall risk meets the threshold: high or critical.
+  --help                 Show this help message.
+`;
+
+export function parseArgs(args: string[]): CliArgs {
+  const parsed: CliArgs = { help: false };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+
+    if (arg === "--help" || arg === "-h") {
+      parsed.help = true;
+      continue;
+    }
+
+    if (arg === "--repo") {
+      parsed.repo = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--base") {
+      parsed.base = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--out") {
+      parsed.out = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--fail-on") {
+      parsed.failOn = parseFailOn(readValue(args, index, arg));
+      index += 1;
+      continue;
+    }
+
+    throw new Error(`Unknown argument: ${arg}`);
+  }
+
+  return parsed;
+}
+
+export async function runGuardianCli(options: CliRunOptions): Promise<CliRunResult> {
+  const stdout = options.stdout ?? process.stdout;
+  const args = parseArgs(options.argv);
+
+  if (args.help) {
+    stdout.write(helpText);
+    return { exitCode: 0 };
+  }
+
+  const config = loadConfig({
+    repoPath: args.repo,
+    baseRef: args.base,
+    outputPath: args.out,
+    format: "markdown"
+  });
+  const report = await runGuardianCore(config);
+  const rendered = renderReport(report, "markdown");
+
+  if (config.outputPath === undefined) {
+    stdout.write(rendered);
+  } else {
+    await writeFile(config.outputPath, rendered, "utf8");
+    stdout.write(`Guardian report written to ${config.outputPath}\n`);
+  }
+
+  return {
+    exitCode: shouldFailBuild(args.failOn, report.overallRisk) ? 1 : 0,
+    outputPath: config.outputPath,
+    overallRisk: report.overallRisk
+  };
+}
+
+export function shouldFailBuild(failOn: FailOnRisk | undefined, overallRisk: RiskLevel): boolean {
+  if (failOn === undefined) {
+    return false;
+  }
+
+  if (failOn === "critical") {
+    return overallRisk === "critical";
+  }
+
+  return overallRisk === "high" || overallRisk === "critical";
+}
+
+function readValue(args: string[], index: number, flag: string): string {
+  const value = args[index + 1];
+
+  if (value === undefined || value.startsWith("-")) {
+    throw new Error(`Missing value for ${flag}`);
+  }
+
+  return value;
+}
+
+function parseFailOn(value: string): FailOnRisk {
+  if (value === "high" || value === "critical") {
+    return value;
+  }
+
+  throw new Error(`Unsupported --fail-on value: ${value}`);
+}

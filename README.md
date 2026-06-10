@@ -25,7 +25,7 @@ The MVP will focus on:
 - Producing Markdown reports for QA, release readiness, and security risk.
 - Running cleanly in GitHub Actions.
 
-Analysis logic is intentionally not implemented yet. The current project is a scaffold for the CLI, module boundaries, templates, and CI usage.
+The current project includes initial heuristic analyzers for changed files, QA coverage gaps, release-sensitive changes, and security review signals.
 
 ## Non-goals
 
@@ -44,18 +44,18 @@ npm install
 npm run build
 ```
 
-Run the scaffolded CLI against the current repository:
+Run the CLI against another repository:
 
 ```sh
-npm run guardian -- --repo . --base origin/main --format markdown --out guardian-report.md
+npm run guardian -- --repo ../AI-Restaurants --base origin/main --out guardian-report.md
 ```
 
 Available flags:
 
 - `--repo <path>`: target repository to inspect. Defaults to `GUARDIAN_REPO_PATH` or `.`.
 - `--base <ref>`: base git ref for changed-file detection. Defaults to `origin/main`, then falls back to `HEAD~1` when the default ref is unavailable.
-- `--format <markdown|json>`: report output format. Defaults to `GUARDIAN_REPORT_FORMAT` or `markdown`.
 - `--out <path>`: optional output file. Defaults to `GUARDIAN_OUTPUT_PATH` when set.
+- `--fail-on <high|critical>`: exit with code 1 when the calculated risk meets the threshold. Defaults to not failing the build.
 - `--help`: print CLI help.
 
 ## GitHub Actions
@@ -79,7 +79,7 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npm run build
-      - run: npm run guardian -- --repo . --base origin/main --format markdown --out guardian-report.md
+      - run: npm run guardian -- --repo . --base origin/main --out guardian-report.md --fail-on critical
       - uses: actions/upload-artifact@v4
         with:
           name: guardian-report
