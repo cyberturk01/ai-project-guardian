@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { readFileSync } from "fs";
+import { isAbsolute, join, relative, resolve } from "path";
 import type { GuardianConfig } from "../core/types.js";
 
 export const guardianConfigFileName = "guardian.config.json";
