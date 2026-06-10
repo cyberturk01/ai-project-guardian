@@ -65,4 +65,40 @@ describe("analyzeQa", () => {
 
     assert.deepEqual(findings, []);
   });
+
+  it("does not create QA findings for Project Brain documentation changes", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: ".project-brain/security-rules.md",
+          status: "modified",
+          category: "documentation",
+          riskLevel: "info"
+        }
+      ],
+      repoFiles: [".project-brain/security-rules.md"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    assert.deepEqual(findings, []);
+  });
+
+  it("still reports missing negative tests for real auth and security code", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/auth/session.ts",
+          status: "modified",
+          category: "security",
+          riskLevel: "high"
+        }
+      ],
+      repoFiles: ["src/auth/session.ts"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    assert.ok(findings.some((finding) => finding.id === "qa-auth-security-without-negative-test"));
+  });
 });

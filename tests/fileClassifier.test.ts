@@ -34,6 +34,11 @@ describe("classifyFile", () => {
     assertClassification(".github/workflows/test.yml", "ci", "medium");
     assertClassification("assets/logo.png", "unknown", "info");
   });
+
+  it("classifies Project Brain files as informational documentation", () => {
+    assertClassification(".project-brain/security-rules.md", "documentation", "info");
+    assertClassification(".project-brain/module-map.json", "documentation", "info");
+  });
 });
 
 function assertClassification(path: string, category: string, riskLevel: string): void {

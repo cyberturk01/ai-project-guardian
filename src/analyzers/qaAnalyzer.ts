@@ -49,6 +49,7 @@ const uiPathPattern = /(^|\/)(components?|pages?|views?|screens?|ui|frontend|cli
 const migrationPathPattern = /(^|\/)(migrations?|schema|prisma\/migrations)(\/|$)/i;
 const i18nPathPattern = /(^|\/)(i18n|l10n|locales?|translations?|lang|messages)(\/|$)/i;
 const authSecurityPathPattern = /(^|\/)(auth|authentication|authorization|crypto|jwt|oauth|password|permissions|secrets?|security|session)(\/|\.|-|_|$)/i;
+const projectBrainPathPattern = /(^|\/)\.project-brain(\/|$)/i;
 const apiTestPattern = /(^|\/)(api|integration|e2e|request|requests|supertest)(\/|\.|-|_)/i;
 const dbTestPattern = /(^|\/)(db|database|integration|migrations?|repository|repositories)(\/|\.|-|_)/i;
 const localizationTestPattern = /(^|\/)(i18n|l10n|localization|locales?|translations?)(\/|\.|-|_)/i;
@@ -69,7 +70,7 @@ const qaRules: QaRule[] = [
     title: "Route or API changed without API/integration test coverage",
     description: "A route, controller, handler, or API file changed without a matching API or integration test.",
     riskLevel: "high",
-    matches: (file) => isChangedCodeFile(file) && apiPathPattern.test(normalizePath(file.path)),
+    matches: (file) => isChangedCodeFile(file) && !isDocumentationContextFile(file) && apiPathPattern.test(normalizePath(file.path)),
     hasCoverage: (file, context) => hasTopicalTest(file.path, context.testFiles, apiTestPattern),
     suggestedTests: (file) => [`Add an API or integration test that exercises ${file.path}.`]
   },
@@ -78,7 +79,7 @@ const qaRules: QaRule[] = [
     title: "UI changed without Cypress coverage",
     description: "A UI-facing file changed, but no relevant Cypress test was found in the repository.",
     riskLevel: "medium",
-    matches: (file) => isChangedCodeFile(file) && uiPathPattern.test(normalizePath(file.path)),
+    matches: (file) => isChangedCodeFile(file) && !isDocumentationContextFile(file) && uiPathPattern.test(normalizePath(file.path)),
     hasCoverage: (file, context) => hasTopicalTest(file.path, context.cypressFiles, /cypress|\.cy\./i),
     suggestedTests: (file) => [`Add or update a Cypress test for the UI behavior touched by ${file.path}.`]
   },
@@ -87,7 +88,7 @@ const qaRules: QaRule[] = [
     title: "Migration changed without DB/integration test coverage",
     description: "A database migration or schema file changed without a matching database or integration test.",
     riskLevel: "high",
-    matches: (file) => isActiveFile(file) && (file.category === "migration" || migrationPathPattern.test(normalizePath(file.path))),
+    matches: (file) => isActiveFile(file) && !isDocumentationContextFile(file) && (file.category === "migration" || migrationPathPattern.test(normalizePath(file.path))),
     hasCoverage: (file, context) => hasTopicalTest(file.path, context.testFiles, dbTestPattern),
     suggestedTests: (file) => [`Add a DB or integration test that validates the migration path for ${file.path}.`]
   },
@@ -105,7 +106,7 @@ const qaRules: QaRule[] = [
     title: "Auth or security changed without negative test coverage",
     description: "Auth or security-sensitive code changed without a negative-path test for denied or invalid access.",
     riskLevel: "high",
-    matches: (file) => isActiveFile(file) && (file.category === "security" || authSecurityPathPattern.test(normalizePath(file.path))),
+    matches: (file) => isActiveFile(file) && !isDocumentationContextFile(file) && (file.category === "security" || authSecurityPathPattern.test(normalizePath(file.path))),
     hasCoverage: (file, context) => hasTopicalTest(file.path, context.testFiles, negativeSecurityTestPattern),
     suggestedTests: (file) => [`Add a negative test for invalid, forbidden, or unauthorized behavior around ${file.path}.`]
   }
@@ -211,6 +212,10 @@ function isGenericSourceFile(file: ChangedFile): boolean {
 
 function isChangedCodeFile(file: ChangedFile): boolean {
   return isActiveFile(file) && sourceExtensions.has(extname(file.path).toLowerCase());
+}
+
+function isDocumentationContextFile(file: ChangedFile): boolean {
+  return file.category === "documentation" || projectBrainPathPattern.test(normalizePath(file.path));
 }
 
 function isActiveFile(file: ChangedFile): boolean {

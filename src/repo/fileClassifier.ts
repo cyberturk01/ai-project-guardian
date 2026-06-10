@@ -48,6 +48,7 @@ const testPathPattern = /(^|\/)(__tests__|tests?|spec|cypress|playwright)(\/|$)|
 const migrationPathPattern = /(^|\/)(migrations?|schema|prisma\/migrations)(\/|$)/i;
 const ciPathPattern = /(^|\/)(\.github\/workflows|\.github\/actions|\.gitlab-ci\.yml|circleci|\.circleci|jenkinsfile|buildkite|\.buildkite)(\/|$)/i;
 const documentationPathPattern = /(^|\/)(docs?|documentation|adr|readme)(\/|$)|(^|\/)(readme|changelog|contributing|license)(\.[^.]+)?$/i;
+const projectBrainPathPattern = /(^|\/)\.project-brain(\/|$)/i;
 const i18nPathPattern = /(^|\/)(i18n|l10n|locales?|translations?|lang|messages)(\/|$)/i;
 
 export function classifyFile(path: string, config: GuardianConfig): ClassifiedFile {
@@ -62,6 +63,10 @@ export function classifyFile(path: string, config: GuardianConfig): ClassifiedFi
 }
 
 export function classifyFileCategory(path: string, config: GuardianConfig): ChangedFileCategory {
+  if (isProjectBrainFile(path)) {
+    return "documentation";
+  }
+
   if (matchesConfiguredPath(path, config.releaseSensitiveFiles)) {
     return classifyReleaseSensitiveFile(path);
   }
@@ -102,6 +107,10 @@ export function classifyFileCategory(path: string, config: GuardianConfig): Chan
 }
 
 export function classifyRiskLevel(path: string, category: ChangedFileCategory, config: GuardianConfig): RiskLevel {
+  if (isProjectBrainFile(path)) {
+    return "info";
+  }
+
   if (matchesConfiguredPath(path, config.releaseSensitiveFiles) || matchesConfiguredPath(path, config.riskFolders)) {
     return "high";
   }
@@ -186,6 +195,10 @@ function isCiFile(path: string): boolean {
 
 function isDocumentationFile(path: string): boolean {
   return documentationPathPattern.test(path) || documentationExtensions.has(extname(path).toLowerCase());
+}
+
+function isProjectBrainFile(path: string): boolean {
+  return projectBrainPathPattern.test(path);
 }
 
 function isI18nFile(path: string): boolean {
