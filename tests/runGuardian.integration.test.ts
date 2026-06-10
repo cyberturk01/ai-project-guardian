@@ -101,7 +101,7 @@ describe("runGuardianCli integration", () => {
     });
   });
 
-  it("excludes accepted findings from the overall score while showing them separately", async () => {
+  it("excludes accepted findings from critical combinations while showing them separately", async () => {
     await withFixtureRepo(async (repoPath) => {
       await writeFile(
         join(repoPath, ".guardian-baseline.json"),
@@ -139,14 +139,14 @@ describe("runGuardianCli integration", () => {
       const stdout = new MemoryWritable();
 
       const result = await runGuardianCli({
-        argv: ["--repo", repoPath, "--base", "origin/main", "--out", outputPath, "--fail-on", "high"],
+        argv: ["--repo", repoPath, "--base", "origin/main", "--out", outputPath, "--fail-on", "critical"],
         stdout
       });
 
       const report = await readFile(outputPath, "utf8");
 
       assert.equal(result.exitCode, 0);
-      assert.equal(result.overallRisk, "low");
+      assert.equal(result.overallRisk, "high");
       assert.match(report, /## Accepted Findings/);
       assert.match(report, /Possible hardcoded secret/);
       assert.match(report, /These findings matched `\.guardian-baseline\.json`/);

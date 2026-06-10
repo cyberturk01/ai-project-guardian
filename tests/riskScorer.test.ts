@@ -19,31 +19,166 @@ describe("riskLevelForScore", () => {
 });
 
 describe("scoreRisk", () => {
-  it("combines changed file, QA, release, and security risk into a numeric score", () => {
+  it("keeps documentation-only changes in the 0-10 range", () => {
     const result = scoreRisk({
-      changedFiles: [changedFile({ riskLevel: "medium" })],
-      qaFindings: [qaFinding({ riskLevel: "medium" })],
-      releaseFindings: [releaseFinding({ riskLevel: "low" })],
-      securityFindings: [securityFinding({ riskLevel: "medium" })]
+      changedFiles: Array.from({ length: 5 }, (_, index) =>
+        changedFile({
+          path: `docs/page-${index}.md`,
+          category: "documentation",
+          riskLevel: "info"
+        })
+      ),
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: []
     });
 
-    assert.equal(result.score, 42);
+    assert.equal(result.score, 8);
+    assert.equal(result.overallRisk, "info");
+  });
+
+  it("keeps config-only changes in the 10-25 range", () => {
+    const result = scoreRisk({
+      changedFiles: [
+        changedFile({
+          path: "tsconfig.json",
+          category: "config",
+          riskLevel: "high"
+        })
+      ],
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: []
+    });
+
+    assert.equal(result.score, 19);
+    assert.equal(result.overallRisk, "info");
+  });
+
+  it("keeps workflow-only changes in the 25-50 range", () => {
+    const result = scoreRisk({
+      changedFiles: [
+        changedFile({
+          path: ".github/workflows/ci.yml",
+          category: "ci",
+          riskLevel: "medium"
+        })
+      ],
+      qaFindings: [],
+      releaseFindings: [releaseFinding({ id: "release-github-actions-changed", riskLevel: "high" })],
+      securityFindings: []
+    });
+
+    assert.equal(result.score, 44);
     assert.equal(result.overallRisk, "medium");
   });
 
-  it("strongly increases score for a critical security finding", () => {
+  it("keeps workflow plus deploy config changes in the 50-70 range", () => {
     const result = scoreRisk({
-      changedFiles: [],
+      changedFiles: [
+        changedFile({
+          path: ".github/workflows/deploy.yml",
+          category: "ci",
+          riskLevel: "high"
+        }),
+        changedFile({
+          path: ".env.production.example",
+          category: "config",
+          riskLevel: "high"
+        })
+      ],
       qaFindings: [],
-      releaseFindings: [],
-      securityFindings: [securityFinding({ riskLevel: "critical" })]
+      releaseFindings: [
+        releaseFinding({ id: "release-github-actions-changed", riskLevel: "high" }),
+        releaseFinding({ id: "release-env-config-changed", riskLevel: "medium" })
+      ],
+      securityFindings: []
     });
 
-    assert.equal(result.score, 81);
+    assert.equal(result.score, 69);
+    assert.equal(result.overallRisk, "high");
+  });
+
+  it("keeps migration changes in the 60-80 range when DB tests are not missing", () => {
+    const result = scoreRisk({
+      changedFiles: [
+        changedFile({
+          path: "src/db/migrations/001_create_users.sql",
+          category: "migration",
+          riskLevel: "high"
+        })
+      ],
+      qaFindings: [],
+      releaseFindings: [releaseFinding({ id: "release-migration-changed", riskLevel: "high" })],
+      securityFindings: []
+    });
+
+    assert.equal(result.score, 75);
+    assert.equal(result.overallRisk, "high");
+  });
+
+  it("keeps auth changes in the 70-90 range when negative tests are not missing", () => {
+    const result = scoreRisk({
+      changedFiles: [
+        changedFile({
+          path: "src/auth/session.ts",
+          category: "security",
+          riskLevel: "high"
+        })
+      ],
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: []
+    });
+
+    assert.equal(result.score, 77);
+    assert.equal(result.overallRisk, "high");
+  });
+
+  it("keeps security findings in the 80-100 range", () => {
+    const result = scoreRisk({
+      changedFiles: [
+        changedFile({
+          path: "src/api/reservations.ts",
+          category: "source",
+          riskLevel: "medium"
+        })
+      ],
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: [securityFinding({ riskLevel: "high" })]
+    });
+
+    assert.equal(result.score, 89);
     assert.equal(result.overallRisk, "critical");
   });
 
-  it("increases score when a migration is missing DB test coverage", () => {
+  it("prevents documentation changes from inflating non-documentation risk", () => {
+    const result = scoreRisk({
+      changedFiles: [
+        changedFile({
+          path: ".github/workflows/ci.yml",
+          category: "ci",
+          riskLevel: "medium"
+        }),
+        ...Array.from({ length: 20 }, (_, index) =>
+          changedFile({
+            path: `docs/page-${index}.md`,
+            category: "documentation",
+            riskLevel: "info"
+          })
+        )
+      ],
+      qaFindings: [],
+      releaseFindings: [releaseFinding({ id: "release-github-actions-changed", riskLevel: "high" })],
+      securityFindings: []
+    });
+
+    assert.equal(result.score, 44);
+    assert.equal(result.overallRisk, "medium");
+  });
+
+  it("marks migration plus missing DB test coverage as critical", () => {
     const result = scoreRisk({
       changedFiles: [
         changedFile({
@@ -62,11 +197,11 @@ describe("scoreRisk", () => {
       securityFindings: []
     });
 
-    assert.equal(result.score, 46);
-    assert.equal(result.overallRisk, "medium");
+    assert.equal(result.score, 91);
+    assert.equal(result.overallRisk, "critical");
   });
 
-  it("increases score when an auth change is missing negative test coverage", () => {
+  it("marks auth plus missing negative test coverage as critical", () => {
     const result = scoreRisk({
       changedFiles: [
         changedFile({
@@ -85,8 +220,32 @@ describe("scoreRisk", () => {
       securityFindings: []
     });
 
-    assert.equal(result.score, 46);
-    assert.equal(result.overallRisk, "medium");
+    assert.equal(result.score, 91);
+    assert.equal(result.overallRisk, "critical");
+  });
+
+  it("marks payment plus missing integration test coverage as critical", () => {
+    const result = scoreRisk({
+      changedFiles: [
+        changedFile({
+          path: "src/payments/checkout.ts",
+          category: "source",
+          riskLevel: "medium"
+        })
+      ],
+      qaFindings: [
+        qaFinding({
+          id: "qa-api-without-integration-test",
+          riskLevel: "high",
+          affectedFiles: ["src/payments/checkout.ts"]
+        })
+      ],
+      releaseFindings: [],
+      securityFindings: []
+    });
+
+    assert.equal(result.score, 91);
+    assert.equal(result.overallRisk, "critical");
   });
 
   it("caps the score at 100", () => {
