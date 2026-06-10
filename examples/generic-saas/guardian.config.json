@@ -1,0 +1,80 @@
+{
+  "projectName": "Generic SaaS",
+  "riskFolders": [
+    "src/auth",
+    "src/billing",
+    "src/admin"
+  ],
+  "testFolders": [
+    "tests",
+    "e2e"
+  ],
+  "releaseSensitiveFiles": [
+    "package.json",
+    ".github/workflows",
+    "src/db/schema.sql"
+  ],
+  "requiredChecks": [
+    "npm run lint",
+    "npm test",
+    "npm run build"
+  ],
+  "businessAreas": [
+    {
+      "name": "authentication",
+      "description": "Login, sessions, password reset, and account access",
+      "riskLevel": "high",
+      "paths": [
+        "src/auth",
+        "src/session",
+        "src/routes/authRoutes.ts"
+      ],
+      "requiredTestHints": [
+        "auth",
+        "session",
+        "password"
+      ],
+      "requiredBeforeDeploy": [
+        "Confirm login, logout, and password reset flows still work",
+        "Confirm unauthorized users cannot access protected routes"
+      ]
+    },
+    {
+      "name": "billing",
+      "description": "Plans, invoices, subscriptions, checkout, and payment webhooks",
+      "riskLevel": "high",
+      "paths": [
+        "src/billing",
+        "src/payments",
+        "src/webhooks"
+      ],
+      "requiredTestHints": [
+        "billing",
+        "payment",
+        "webhook",
+        "subscription"
+      ],
+      "requiredBeforeDeploy": [
+        "Run payment provider sandbox tests for success and failure paths",
+        "Confirm webhook idempotency and retry behavior"
+      ]
+    },
+    {
+      "name": "admin controls",
+      "description": "Admin-only dashboards, moderation tools, and support operations",
+      "riskLevel": "medium",
+      "paths": [
+        "src/admin",
+        "src/routes/adminRoutes.ts"
+      ],
+      "requiredTestHints": [
+        "admin",
+        "permission",
+        "role"
+      ],
+      "requiredBeforeDeploy": [
+        "Confirm admin-only actions are protected by role checks"
+      ]
+    }
+  ]
+}

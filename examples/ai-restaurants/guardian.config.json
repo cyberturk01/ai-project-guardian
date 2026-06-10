@@ -19,5 +19,85 @@
     "npm run lint",
     "npm test",
     "npm run build"
+  ],
+  "businessAreas": [
+    {
+      "name": "consent",
+      "description": "Consent, privacy policy, and audit evidence flow",
+      "riskLevel": "high",
+      "paths": [
+        "src/consent",
+        "src/privacy",
+        "src/routes/consentRoutes.ts"
+      ],
+      "requiredTestHints": [
+        "consent",
+        "privacy",
+        "audit"
+      ],
+      "requiredBeforeDeploy": [
+        "Confirm consent audit evidence is still written",
+        "Confirm privacy policy versioning is not broken"
+      ]
+    },
+    {
+      "name": "email",
+      "description": "Campaign, survey, reminder, and transactional email flow",
+      "riskLevel": "high",
+      "paths": [
+        "src/email",
+        "src/services/email",
+        "src/campaigns",
+        "src/messages"
+      ],
+      "requiredTestHints": [
+        "email",
+        "campaign",
+        "delivery",
+        "webhook"
+      ],
+      "requiredBeforeDeploy": [
+        "Confirm sender/domain configuration",
+        "Confirm unsubscribe and suppression behavior"
+      ]
+    },
+    {
+      "name": "referral",
+      "description": "Referral reward and abuse prevention logic",
+      "riskLevel": "high",
+      "paths": [
+        "src/referral",
+        "src/rewards",
+        "src/routes/referralRoutes.ts"
+      ],
+      "requiredTestHints": [
+        "referral",
+        "reward",
+        "fraud",
+        "abuse"
+      ],
+      "requiredBeforeDeploy": [
+        "Confirm duplicate reward prevention",
+        "Confirm suspicious referral suppression"
+      ]
+    },
+    {
+      "name": "i18n",
+      "description": "Localization and translated UI text",
+      "riskLevel": "medium",
+      "paths": [
+        "src/i18n",
+        "public/locales",
+        "locales"
+      ],
+      "requiredTestHints": [
+        "i18n",
+        "locale",
+        "translation"
+      ],
+      "requiredBeforeDeploy": [
+        "Confirm no user-facing hardcoded strings were introduced"
+      ]
+    }
   ]
 }

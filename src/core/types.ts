@@ -2,12 +2,22 @@ export const riskLevels = ["info", "low", "medium", "high", "critical"] as const
 
 export type RiskLevel = (typeof riskLevels)[number];
 
+export type BusinessArea = {
+  name: string;
+  description?: string;
+  riskLevel: RiskLevel;
+  paths: string[];
+  requiredTestHints?: string[];
+  requiredBeforeDeploy?: string[];
+};
+
 export type GuardianConfig = {
   projectName: string;
   riskFolders: string[];
   testFolders: string[];
   releaseSensitiveFiles: string[];
   requiredChecks: string[];
+  businessAreas?: BusinessArea[];
 };
 
 export type ChangedFileStatus = "added" | "modified" | "deleted" | "renamed";

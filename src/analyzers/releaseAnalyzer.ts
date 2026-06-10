@@ -25,10 +25,6 @@ const stageEnvPattern = /(^|\/|\.|-|_)(stage|staging)(\.|-|_|\/|$)/i;
 const prodEnvPattern = /(^|\/|\.|-|_)(prod|production)(\.|-|_|\/|$)/i;
 const packageDependencyPattern = /(^|\/)(package\.json|package-lock\.json|npm-shrinkwrap\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb|bun\.lock|composer\.json|composer\.lock|requirements\.txt|poetry\.lock|pyproject\.toml|go\.mod|go\.sum|cargo\.toml|cargo\.lock|gemfile|gemfile\.lock)$/i;
 const githubActionsPattern = /(^|\/)\.github\/(workflows|actions)(\/|$)/i;
-const emailNotificationPattern = /(^|\/|\.|-|_)(email|emails|mail|mailer|notification|notifications|notify|campaign|campaigns|push|sms|webhook|webhooks)(\/|\.|-|_|$)/i;
-const consentPrivacyPattern = /(^|\/|\.|-|_)(consent|privacy|gdpr|ccpa|cookie|cookies|audit|audits|data-retention|retention)(\/|\.|-|_|$)/i;
-const referralRewardPattern = /(^|\/|\.|-|_)(referral|referrals|reward|rewards|loyalty|points|credits|coupon|coupons|promo|promotion|discount)(\/|\.|-|_|$)/i;
-const paymentBillingPattern = /(^|\/|\.|-|_)(payment|payments|billing|billings|stripe|checkout|invoice|invoices|subscription|subscriptions|refund|refunds|payout|payouts)(\/|\.|-|_|$)/i;
 const projectBrainPathPattern = /(^|\/)\.project-brain(\/|$)/i;
 
 const releaseRules: ReleaseRule[] = [
@@ -96,58 +92,6 @@ const releaseRules: ReleaseRule[] = [
       "Validate the workflow on a non-production branch or dry run."
     ],
     matches: (file) => file.category === "ci" || githubActionsPattern.test(normalizePath(file.path))
-  },
-  {
-    id: "release-email-notification-changed",
-    title: "Email or notification logic changed",
-    description: "Email, campaign, notification, SMS, push, or webhook logic changed.",
-    riskLevel: "medium",
-    whyItMatters: "Notification changes can send duplicate, missing, or incorrect messages to customers during a release.",
-    requiredBeforeDeploy: [
-      "Verify templates, recipients, unsubscribe behavior, and retry/idempotency rules.",
-      "Test the flow with a sandbox provider or non-production recipients.",
-      "Confirm campaign or transactional email volume is expected."
-    ],
-    matches: (file) => emailNotificationPattern.test(normalizePath(file.path))
-  },
-  {
-    id: "release-consent-privacy-changed",
-    title: "Consent or privacy logic changed",
-    description: "Consent, privacy, cookie, audit, or data-retention logic changed.",
-    riskLevel: "high",
-    whyItMatters: "Consent and privacy changes can affect legal compliance, auditability, and whether users are contacted or tracked correctly.",
-    requiredBeforeDeploy: [
-      "Confirm consent records are preserved and auditable.",
-      "Review privacy-impacting behavior with the release owner.",
-      "Test opt-in, opt-out, and existing-user migration paths."
-    ],
-    matches: (file) => consentPrivacyPattern.test(normalizePath(file.path))
-  },
-  {
-    id: "release-referral-reward-changed",
-    title: "Referral or reward logic changed",
-    description: "Referral, reward, loyalty, promo, coupon, credit, or discount logic changed.",
-    riskLevel: "high",
-    whyItMatters: "Referral and reward changes can create incorrect customer credits, abuse paths, or financial liability.",
-    requiredBeforeDeploy: [
-      "Verify eligibility, limits, idempotency, and abuse-prevention checks.",
-      "Test reward creation and reversal paths.",
-      "Confirm reporting or ledger entries remain consistent."
-    ],
-    matches: (file) => referralRewardPattern.test(normalizePath(file.path))
-  },
-  {
-    id: "release-payment-billing-changed",
-    title: "Payment or billing logic changed",
-    description: "Payment, billing, checkout, invoice, subscription, refund, or payout logic changed.",
-    riskLevel: "high",
-    whyItMatters: "Payment and billing changes can affect revenue collection, refunds, subscriptions, customer trust, and compliance obligations.",
-    requiredBeforeDeploy: [
-      "Run provider sandbox tests for success, failure, webhook, and retry paths.",
-      "Confirm idempotency keys and ledger updates are correct.",
-      "Review deploy timing for active billing cycles or payment provider changes."
-    ],
-    matches: (file) => paymentBillingPattern.test(normalizePath(file.path))
   }
 ];
 

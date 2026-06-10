@@ -44,7 +44,17 @@ describe("loadGuardianConfig", () => {
         riskFolders: ["src/api"],
         testFolders: ["tests"],
         releaseSensitiveFiles: ["package.json"],
-        requiredChecks: ["npm test"]
+        requiredChecks: ["npm test"],
+        businessAreas: [
+          {
+            name: "consent",
+            description: "Consent flow",
+            riskLevel: "high",
+            paths: ["src/consent"],
+            requiredTestHints: ["consent"],
+            requiredBeforeDeploy: ["Confirm consent audit evidence is still written"]
+          }
+        ]
       }),
       "utf8"
     );
@@ -57,7 +67,17 @@ describe("loadGuardianConfig", () => {
         riskFolders: ["src/api"],
         testFolders: ["tests"],
         releaseSensitiveFiles: ["package.json"],
-        requiredChecks: ["npm test"]
+        requiredChecks: ["npm test"],
+        businessAreas: [
+          {
+            name: "consent",
+            description: "Consent flow",
+            riskLevel: "high",
+            paths: ["src/consent"],
+            requiredTestHints: ["consent"],
+            requiredBeforeDeploy: ["Confirm consent audit evidence is still written"]
+          }
+        ]
       },
       warnings: []
     });
@@ -71,7 +91,14 @@ describe("loadGuardianConfig", () => {
         riskFolders: ["src/api", "./src/auth"],
         testFolders: ["tests"],
         releaseSensitiveFiles: ["../shared/package.json"],
-        requiredChecks: ["npm test"]
+        requiredChecks: ["npm test"],
+        businessAreas: [
+          {
+            name: "privacy",
+            riskLevel: "high",
+            paths: ["src/privacy", "./src/consent"]
+          }
+        ]
       }),
       "utf8"
     );
@@ -82,6 +109,7 @@ describe("loadGuardianConfig", () => {
     assert.deepEqual(result.config.testFolders, ["tests"]);
     assert.deepEqual(result.config.releaseSensitiveFiles, ["../shared/package.json"]);
     assert.deepEqual(result.config.requiredChecks, ["npm test"]);
+    assert.deepEqual(result.config.businessAreas?.[0].paths, ["src/privacy", "src/consent"]);
   });
 
   it("uses defaults and warns when config is missing", () => {
@@ -89,6 +117,7 @@ describe("loadGuardianConfig", () => {
 
     assert.equal(result.config.projectName, "ai-project-guardian");
     assert.deepEqual(result.config.riskFolders, []);
+    assert.deepEqual(result.config.businessAreas, []);
     assert.equal(result.warnings.length, 1);
     assert.match(result.warnings[0], /not found/);
   });
@@ -103,6 +132,28 @@ describe("loadGuardianConfig", () => {
         testFolders: "tests",
         releaseSensitiveFiles: ["package.json"],
         requiredChecks: ["npm test"],
+        businessAreas: [
+          {
+            name: "consent",
+            riskLevel: "high",
+            paths: ["src/consent"]
+          },
+          {
+            name: "",
+            riskLevel: "high",
+            paths: ["src/email"]
+          },
+          {
+            name: "referral",
+            riskLevel: "urgent",
+            paths: ["src/referral"]
+          },
+          {
+            name: "i18n",
+            riskLevel: "medium",
+            paths: "src/i18n"
+          }
+        ],
         extraField: true
       }),
       "utf8"
@@ -115,7 +166,35 @@ describe("loadGuardianConfig", () => {
     assert.deepEqual(result.config.testFolders, []);
     assert.deepEqual(result.config.releaseSensitiveFiles, ["package.json"]);
     assert.deepEqual(result.config.requiredChecks, ["npm test"]);
-    assert.equal(result.warnings.length, 4);
+    assert.deepEqual(result.config.businessAreas, [
+      {
+        name: "consent",
+        riskLevel: "high",
+        paths: ["src/consent"],
+        requiredTestHints: undefined,
+        requiredBeforeDeploy: undefined,
+        description: undefined
+      }
+    ]);
+    assert.equal(result.warnings.length, 7);
+  });
+
+  it("warns and continues when businessAreas is invalid", () => {
+    const repoPath = makeRepo();
+    writeFileSync(
+      join(repoPath, "guardian.config.json"),
+      JSON.stringify({
+        projectName: "Invalid Business Areas",
+        businessAreas: "consent"
+      }),
+      "utf8"
+    );
+
+    const result = loadGuardianConfig(repoPath);
+
+    assert.deepEqual(result.config.businessAreas, []);
+    assert.equal(result.warnings.length, 1);
+    assert.match(result.warnings[0], /businessAreas/);
   });
 });
 

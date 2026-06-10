@@ -49,6 +49,24 @@ describe("runGuardianCli integration", () => {
     });
   });
 
+  it("adds business area requiredBeforeDeploy items to report actions", async () => {
+    await withBusinessAreaFixtureRepo(async (repoPath) => {
+      const outputPath = join(repoPath, "guardian-report.md");
+      const stdout = new MemoryWritable();
+
+      await runGuardianCli({
+        argv: ["--repo", repoPath, "--base", "origin/main", "--out", outputPath],
+        stdout
+      });
+
+      const report = await readFile(outputPath, "utf8");
+
+      assert.match(report, /Business area changed with required deploy checks: order fulfillment/);
+      assert.match(report, /- \[ \] Confirm fulfillment queue processing before deploy/);
+      assert.match(report, /## Required Actions[\s\S]*Confirm fulfillment queue processing before deploy/);
+    });
+  });
+
   it("excludes accepted findings from the overall score while showing them separately", async () => {
     await withFixtureRepo(async (repoPath) => {
       await writeFile(
@@ -129,6 +147,17 @@ async function withFixtureRepo(test: (repoPath: string) => Promise<void>): Promi
   }
 }
 
+async function withBusinessAreaFixtureRepo(test: (repoPath: string) => Promise<void>): Promise<void> {
+  const repoPath = await mkdtemp(join(tmpdir(), "guardian-business-area-fixture-"));
+
+  try {
+    await createBusinessAreaFixtureRepo(repoPath);
+    await test(repoPath);
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+}
+
 async function createFixtureRepo(repoPath: string): Promise<void> {
   await git(repoPath, "init");
   await git(repoPath, "config", "user.email", "guardian@example.com");
@@ -175,6 +204,45 @@ async function createFixtureRepo(repoPath: string): Promise<void> {
   );
   await git(repoPath, "add", ".");
   await git(repoPath, "commit", "-m", "Risky fixture changes");
+}
+
+async function createBusinessAreaFixtureRepo(repoPath: string): Promise<void> {
+  await git(repoPath, "init");
+  await git(repoPath, "config", "user.email", "guardian@example.com");
+  await git(repoPath, "config", "user.name", "Guardian Test");
+  await mkdir(join(repoPath, "src", "fulfillment"), { recursive: true });
+  await mkdir(join(repoPath, "tests"), { recursive: true });
+  await writeFile(
+    join(repoPath, "guardian.config.json"),
+    JSON.stringify(
+      {
+        projectName: "Business Area Fixture",
+        testFolders: ["tests"],
+        businessAreas: [
+          {
+            name: "order fulfillment",
+            description: "Order queue and fulfillment handoff",
+            riskLevel: "high",
+            paths: ["src/fulfillment"],
+            requiredTestHints: ["fulfillment"],
+            requiredBeforeDeploy: ["Confirm fulfillment queue processing before deploy"]
+          }
+        ]
+      },
+      null,
+      2
+    ),
+    "utf8"
+  );
+  await writeFile(join(repoPath, "src", "fulfillment", "queue.ts"), "export const queue = [];\n", "utf8");
+  await writeFile(join(repoPath, "tests", "fulfillment.test.ts"), "import 'node:test';\n", "utf8");
+  await git(repoPath, "add", ".");
+  await git(repoPath, "commit", "-m", "Initial business area fixture");
+  await git(repoPath, "update-ref", "refs/remotes/origin/main", "HEAD");
+
+  await writeFile(join(repoPath, "src", "fulfillment", "queue.ts"), "export const queue = ['changed'];\n", "utf8");
+  await git(repoPath, "add", ".");
+  await git(repoPath, "commit", "-m", "Change fulfillment queue");
 }
 
 async function git(cwd: string, ...args: string[]): Promise<void> {

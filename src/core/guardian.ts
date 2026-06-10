@@ -2,6 +2,7 @@ import type { CliConfig } from "../config/loadConfig.js";
 import { analyzeQa } from "../analyzers/qaAnalyzer.js";
 import { analyzeRelease } from "../analyzers/releaseAnalyzer.js";
 import { analyzeSecurity } from "../analyzers/securityAnalyzer.js";
+import { analyzeBusinessAreas } from "../analyzers/businessAreaAnalyzer.js";
 import { scoreRisk } from "../analyzers/riskScorer.js";
 import { loadProjectBrain } from "../project-brain/loadProjectBrain.js";
 import { classifyFile } from "../repo/fileClassifier.js";
@@ -38,13 +39,24 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     changedFiles,
     config: config.guardian
   });
+  const businessAreaFindings = analyzeBusinessAreas({
+    changedFiles,
+    repoFiles,
+    config: config.guardian
+  });
   const securityFindings = await analyzeSecurity({
     repoPath: config.repoPath,
     changedFiles
   });
   const baselineResult = await loadBaseline(config.repoPath);
   const baselineApplied = applyBaseline(
-    [...qaFindings, ...releaseFindings, ...securityFindings],
+    [
+      ...qaFindings,
+      ...releaseFindings,
+      ...businessAreaFindings.qaFindings,
+      ...businessAreaFindings.releaseFindings,
+      ...securityFindings
+    ],
     baselineResult.baseline
   );
   const activeQaFindings = baselineApplied.activeFindings.filter((finding) => finding.area === "qa");

@@ -18,11 +18,7 @@ describe("analyzeRelease", () => {
         changedFile("src/db/migrations/018_add_reservation_rewards.sql", "migration"),
         changedFile(".env.example", "config"),
         changedFile("package-lock.json", "config"),
-        changedFile(".github/workflows/deploy.yml", "ci"),
-        changedFile("src/notifications/emailSender.ts", "source"),
-        changedFile("src/privacy/consentStore.ts", "source"),
-        changedFile("src/referrals/rewardLedger.ts", "source"),
-        changedFile("src/payments/billingService.ts", "source")
+        changedFile(".github/workflows/deploy.yml", "ci")
       ],
       config
     });
@@ -33,11 +29,7 @@ describe("analyzeRelease", () => {
         "release-migration-changed",
         "release-env-config-changed",
         "release-package-dependency-changed",
-        "release-github-actions-changed",
-        "release-email-notification-changed",
-        "release-consent-privacy-changed",
-        "release-referral-reward-changed",
-        "release-payment-billing-changed"
+        "release-github-actions-changed"
       ]
     );
 
@@ -48,12 +40,9 @@ describe("analyzeRelease", () => {
     assert.ok(migrationFinding?.requiredBeforeDeploy.some((action) => /rollback/.test(action)));
   });
 
-  it("detects AI Restaurants release examples", () => {
+  it("detects stage and production environment changes", () => {
     const findings = analyzeRelease({
       changedFiles: [
-        changedFile("src/referrals/referralRewards.ts", "source"),
-        changedFile("src/campaigns/campaignEmailWorker.ts", "source"),
-        changedFile("src/privacy/consentAudit.ts", "source"),
         changedFile("config/stage.env", "config"),
         changedFile("config/prod.env", "config")
       ],
@@ -62,18 +51,11 @@ describe("analyzeRelease", () => {
 
     assert.deepEqual(
       findings.map((finding) => finding.id),
-      [
-        "release-stage-prod-env-mismatch",
-        "release-email-notification-changed",
-        "release-consent-privacy-changed",
-        "release-referral-reward-changed"
-      ]
+      ["release-stage-prod-env-mismatch"]
     );
 
     assert.deepEqual(findings[0].affectedFiles, ["config/prod.env", "config/stage.env"]);
-    assert.match(findings[1].title, /Email|notification/);
-    assert.match(findings[2].whyItMatters, /legal compliance/);
-    assert.match(findings[3].requiredBeforeDeploy.join(" "), /abuse-prevention/);
+    assert.match(findings[0].whyItMatters, /config drift/);
   });
 
   it("returns no findings for unrelated source changes", () => {

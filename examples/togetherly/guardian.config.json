@@ -1,0 +1,81 @@
+{
+  "projectName": "Togetherly",
+  "riskFolders": [
+    "src/auth",
+    "src/firebase",
+    "src/permissions"
+  ],
+  "testFolders": [
+    "tests",
+    "e2e"
+  ],
+  "releaseSensitiveFiles": [
+    "firebase.json",
+    "firestore.rules",
+    ".github/workflows"
+  ],
+  "requiredChecks": [
+    "npm run lint",
+    "npm test",
+    "npm run build"
+  ],
+  "businessAreas": [
+    {
+      "name": "family permissions",
+      "description": "Family membership, guardian roles, and child account permissions",
+      "riskLevel": "high",
+      "paths": [
+        "src/families",
+        "src/permissions",
+        "src/routes/familyRoutes.ts"
+      ],
+      "requiredTestHints": [
+        "family",
+        "permission",
+        "guardian"
+      ],
+      "requiredBeforeDeploy": [
+        "Confirm family role boundaries still prevent unauthorized access",
+        "Confirm invitation and membership changes preserve existing families"
+      ]
+    },
+    {
+      "name": "expenses",
+      "description": "Shared expenses, reimbursements, and balance calculations",
+      "riskLevel": "high",
+      "paths": [
+        "src/expenses",
+        "src/balances",
+        "src/routes/expenseRoutes.ts"
+      ],
+      "requiredTestHints": [
+        "expense",
+        "balance",
+        "reimbursement"
+      ],
+      "requiredBeforeDeploy": [
+        "Confirm split and reimbursement calculations are correct",
+        "Confirm historical expense records are not recalculated unexpectedly"
+      ]
+    },
+    {
+      "name": "Firebase rules",
+      "description": "Firestore, Storage, and Firebase security rules",
+      "riskLevel": "critical",
+      "paths": [
+        "firestore.rules",
+        "storage.rules",
+        "src/firebase"
+      ],
+      "requiredTestHints": [
+        "firebase",
+        "firestore",
+        "rules"
+      ],
+      "requiredBeforeDeploy": [
+        "Run Firebase rules tests before deploy",
+        "Confirm production rules deny cross-family reads and writes"
+      ]
+    }
+  ]
+}

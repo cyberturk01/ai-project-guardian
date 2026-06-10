@@ -58,6 +58,55 @@ Available flags:
 - `--fail-on <high|critical>`: exit with code 1 when the calculated risk meets the threshold. Defaults to not failing the build.
 - `--help`: print CLI help.
 
+## Business Areas
+
+Every product has business-critical paths that generic repository heuristics cannot fully understand. `ai-project-guardian` supports project-specific business rules through `guardian.config.json` so each repository can describe its own risky areas without changing Guardian code.
+
+Add a `businessAreas` array to the target repository config:
+
+```json
+{
+  "projectName": "AI-Restaurants",
+  "businessAreas": [
+    {
+      "name": "consent",
+      "description": "Consent, privacy policy, and audit evidence flow",
+      "riskLevel": "high",
+      "paths": [
+        "src/consent",
+        "src/privacy",
+        "src/routes/consentRoutes.ts"
+      ],
+      "requiredTestHints": [
+        "consent",
+        "privacy",
+        "audit"
+      ],
+      "requiredBeforeDeploy": [
+        "Confirm consent audit evidence is still written",
+        "Confirm privacy policy versioning is not broken"
+      ]
+    }
+  ]
+}
+```
+
+When a changed file matches a business area path, Guardian can add:
+
+- A QA finding when no existing or changed test file path matches `requiredTestHints`.
+- A release finding when `requiredBeforeDeploy` contains deploy checklist items.
+- Required actions in the report based on `requiredBeforeDeploy`.
+
+Path matching supports exact file paths, folder prefixes, and simple substring matches. Test hint matching is deterministic and checks test file paths from the existing repository file list and changed test files. Guardian does not make AI or LLM calls for this behavior.
+
+New projects only need a `guardian.config.json` to define their business areas. They can optionally add `.project-brain` files for extra human-readable context and team conventions.
+
+Example configs are available in:
+
+- `examples/ai-restaurants/guardian.config.json`
+- `examples/togetherly/guardian.config.json`
+- `examples/generic-saas/guardian.config.json`
+
 ## Risk baseline
 
 Add `.guardian-baseline.json` to a target repository to accept known findings without counting them toward the overall score:

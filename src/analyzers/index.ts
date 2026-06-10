@@ -1,4 +1,4 @@
-export type AnalyzerName = "qa" | "release" | "security";
+export type AnalyzerName = "qa" | "release" | "security" | "business-area";
 
 export { analyzeQa } from "./qaAnalyzer.js";
 export type { AnalyzeQaInput } from "./qaAnalyzer.js";
