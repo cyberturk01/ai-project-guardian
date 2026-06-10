@@ -3,6 +3,7 @@ import { analyzeQa } from "../analyzers/qaAnalyzer.js";
 import { analyzeRelease } from "../analyzers/releaseAnalyzer.js";
 import { analyzeSecurity } from "../analyzers/securityAnalyzer.js";
 import { analyzeBusinessAreas } from "../analyzers/businessAreaAnalyzer.js";
+import { analyzeWorkflows } from "../analyzers/workflowAnalyzer.js";
 import { scoreRisk } from "../analyzers/riskScorer.js";
 import { loadProjectBrain } from "../project-brain/loadProjectBrain.js";
 import { classifyFile } from "../repo/fileClassifier.js";
@@ -48,6 +49,11 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     repoPath: config.repoPath,
     changedFiles
   });
+  const workflowFindings = await analyzeWorkflows({
+    repoPath: config.repoPath,
+    repoFiles,
+    config: config.guardian
+  });
   const baselineResult = await loadBaseline(config.repoPath);
   const baselineApplied = applyBaseline(
     [
@@ -55,18 +61,21 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
       ...releaseFindings,
       ...businessAreaFindings.qaFindings,
       ...businessAreaFindings.releaseFindings,
-      ...securityFindings
+      ...securityFindings,
+      ...workflowFindings
     ],
     baselineResult.baseline
   );
   const activeQaFindings = baselineApplied.activeFindings.filter((finding) => finding.area === "qa");
   const activeReleaseFindings = baselineApplied.activeFindings.filter((finding) => finding.area === "release");
   const activeSecurityFindings = baselineApplied.activeFindings.filter((finding) => finding.area === "security");
+  const activeWorkflowFindings = baselineApplied.activeFindings.filter((finding) => finding.area === "workflow");
   const riskScore = scoreRisk({
     changedFiles,
     qaFindings: activeQaFindings,
     releaseFindings: activeReleaseFindings,
-    securityFindings: activeSecurityFindings
+    securityFindings: activeSecurityFindings,
+    workflowFindings: activeWorkflowFindings
   });
 
   return {
@@ -78,6 +87,7 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     qaFindings: activeQaFindings,
     releaseFindings: activeReleaseFindings,
     securityFindings: activeSecurityFindings,
+    workflowFindings: activeWorkflowFindings,
     acceptedFindings: baselineApplied.acceptedFindings,
     requiredActions: activeReleaseFindings.flatMap((finding) => finding.requiredBeforeDeploy),
     warnings: [...config.warnings, ...projectBrainResult.warnings, ...baselineResult.warnings]

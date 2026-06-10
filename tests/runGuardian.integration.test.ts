@@ -67,6 +67,40 @@ describe("runGuardianCli integration", () => {
     });
   });
 
+  it("reports required checks missing from GitHub Actions workflows", async () => {
+    await withFixtureRepo(async (repoPath) => {
+      await writeFile(
+        join(repoPath, "guardian.config.json"),
+        JSON.stringify(
+          {
+            projectName: "Fixture Repo",
+            riskFolders: ["src/auth"],
+            testFolders: ["tests"],
+            releaseSensitiveFiles: ["package.json"],
+            requiredChecks: ["npm test", "npm run lint"]
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+      const outputPath = join(repoPath, "guardian-report.md");
+      const stdout = new MemoryWritable();
+
+      await runGuardianCli({
+        argv: ["--repo", repoPath, "--base", "origin/main", "--out", outputPath],
+        stdout
+      });
+
+      const report = await readFile(outputPath, "utf8");
+
+      assert.match(report, /## Workflow Findings/);
+      assert.match(report, /Required workflow check is missing/);
+      assert.match(report, /npm run lint/);
+      assert.match(report, /\.github\/workflows\/ci.yml/);
+    });
+  });
+
   it("excludes accepted findings from the overall score while showing them separately", async () => {
     await withFixtureRepo(async (repoPath) => {
       await writeFile(
@@ -164,6 +198,7 @@ async function createFixtureRepo(repoPath: string): Promise<void> {
   await git(repoPath, "config", "user.name", "Guardian Test");
   await mkdir(join(repoPath, "src", "auth"), { recursive: true });
   await mkdir(join(repoPath, "db", "migrations"), { recursive: true });
+  await mkdir(join(repoPath, ".github", "workflows"), { recursive: true });
   await writeFile(
     join(repoPath, "guardian.config.json"),
     JSON.stringify(
@@ -180,6 +215,21 @@ async function createFixtureRepo(repoPath: string): Promise<void> {
     "utf8"
   );
   await writeFile(join(repoPath, "package.json"), JSON.stringify({ name: "fixture-repo", version: "1.0.0" }, null, 2), "utf8");
+  await writeFile(
+    join(repoPath, ".github", "workflows", "ci.yml"),
+    [
+      "name: CI",
+      "on: [pull_request]",
+      "jobs:",
+      "  test:",
+      "    runs-on: ubuntu-latest",
+      "    steps:",
+      "      - uses: actions/checkout@v4",
+      "      - run: npm test",
+      ""
+    ].join("\n"),
+    "utf8"
+  );
   await writeFile(join(repoPath, "README.md"), "# Fixture Repo\n", "utf8");
   await git(repoPath, "add", ".");
   await git(repoPath, "commit", "-m", "Initial fixture");

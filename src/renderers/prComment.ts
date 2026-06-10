@@ -23,6 +23,7 @@ export function renderPrComment(report: GuardianReport): string {
     `- ${formatCount(report.releaseFindings.length, "release finding")}`,
     `- ${formatCount(report.qaFindings.length, "QA finding")}`,
     `- ${formatCount(report.securityFindings.length, "security finding")}`,
+    `- ${formatCount(report.workflowFindings.length, "workflow finding")}`,
     "",
     "Top Findings:",
     ...listItems(findings.slice(0, maxTopFindings).map((finding) => finding.title)),
@@ -35,7 +36,7 @@ export function renderPrComment(report: GuardianReport): string {
 }
 
 function prioritizedFindings(report: GuardianReport): GuardianFinding[] {
-  return [...report.releaseFindings, ...report.qaFindings, ...report.securityFindings].sort(
+  return [...report.releaseFindings, ...report.qaFindings, ...report.securityFindings, ...report.workflowFindings].sort(
     (left, right) => riskWeights[right.riskLevel] - riskWeights[left.riskLevel]
   );
 }

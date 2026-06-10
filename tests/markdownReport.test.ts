@@ -87,6 +87,7 @@ function makeReport(): GuardianReport {
         recommendation: "Move secrets to a managed secret store or environment variable, then rotate the exposed value if it is real."
       }
     ],
+    workflowFindings: [],
     acceptedFindings: [
       {
         id: "release-github-actions-changed",

@@ -15,6 +15,7 @@
 | QA findings | 1 |
 | Release findings | 1 |
 | Security findings | 1 |
+| Workflow findings | 0 |
 | Accepted findings | 1 |
 | Required actions | 2 |
 
@@ -81,6 +82,10 @@ A GitHub Actions workflow or local action changed.
 Possible hardcoded secret detected in a changed file. This is a possible risk based on heuristic matching, not a confirmed vulnerability.
 
 **Recommendation:** Move secrets to a managed secret store or environment variable, then rotate the exposed value if it is real.
+
+## Workflow Findings
+
+No workflow findings.
 
 ## Accepted Findings
 

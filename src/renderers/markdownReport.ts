@@ -27,6 +27,10 @@ ${renderReleaseFindings(report.releaseFindings)}
 
 ${renderSecurityFindings(report.securityFindings)}
 
+## Workflow Findings
+
+${renderWorkflowFindings(report.workflowFindings)}
+
 ## Accepted Findings
 
 ${renderAcceptedFindings(report.acceptedFindings)}
@@ -57,13 +61,15 @@ function renderHeader(report: GuardianReport): string {
 }
 
 function renderExecutiveSummary(report: GuardianReport): string {
-  const totalFindings = report.qaFindings.length + report.releaseFindings.length + report.securityFindings.length;
+  const totalFindings =
+    report.qaFindings.length + report.releaseFindings.length + report.securityFindings.length + report.workflowFindings.length;
   const highestRisk = highestRiskLevel([
     report.overallRisk,
     ...report.changedFiles.map((file) => file.riskLevel),
     ...report.qaFindings.map((finding) => finding.riskLevel),
     ...report.releaseFindings.map((finding) => finding.riskLevel),
-    ...report.securityFindings.map((finding) => finding.riskLevel)
+    ...report.securityFindings.map((finding) => finding.riskLevel),
+    ...report.workflowFindings.map((finding) => finding.riskLevel)
   ]);
 
   return `| Metric | Count |
@@ -72,6 +78,7 @@ function renderExecutiveSummary(report: GuardianReport): string {
 | QA findings | ${report.qaFindings.length} |
 | Release findings | ${report.releaseFindings.length} |
 | Security findings | ${report.securityFindings.length} |
+| Workflow findings | ${report.workflowFindings.length} |
 | Accepted findings | ${report.acceptedFindings.length} |
 | Required actions | ${report.requiredActions.length} |
 
@@ -186,6 +193,28 @@ function renderSecurityFindings(findings: GuardianReport["securityFindings"]): s
 ${finding.description}
 
 **Recommendation:** ${finding.recommendation ?? "Review this changed file manually."}`;
+    })
+    .join("\n\n");
+}
+
+function renderWorkflowFindings(findings: GuardianReport["workflowFindings"]): string {
+  if (findings.length === 0) {
+    return "No workflow findings.";
+  }
+
+  return findings
+    .map((finding) => {
+      return `### ${finding.title}
+
+| Field | Value |
+| --- | --- |
+| Risk | ${renderRiskLabel(finding.riskLevel)} |
+| Missing check | ${escapeTableCell(finding.missingCheck)} |
+| Workflow file | ${escapeTableCell(finding.workflowFile)} |
+
+${finding.description}
+
+**Recommendation:** ${finding.recommendation ?? "Add the missing check to a required GitHub Actions workflow."}`;
     })
     .join("\n\n");
 }

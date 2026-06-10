@@ -1,10 +1,11 @@
-import type { ChangedFile, QaFinding, ReleaseFinding, RiskLevel, SecurityFinding } from "../core/types.js";
+import type { ChangedFile, QaFinding, ReleaseFinding, RiskLevel, SecurityFinding, WorkflowFinding } from "../core/types.js";
 
 export type RiskScoreInput = {
   changedFiles: ChangedFile[];
   qaFindings: QaFinding[];
   releaseFindings: ReleaseFinding[];
   securityFindings: SecurityFinding[];
+  workflowFindings?: WorkflowFinding[];
 };
 
 export type RiskScoreResult = {
@@ -37,6 +38,7 @@ export function scoreRisk(input: RiskScoreInput): RiskScoreResult {
     scoreChangedFiles(input.changedFiles) +
     scoreFindings(input.qaFindings) +
     scoreFindings(input.releaseFindings) +
+    scoreFindings(input.workflowFindings ?? []) +
     scoreSecurityFindings(input.securityFindings);
   const boostedScore = applyContextBoosts(baseScore, input);
   const securityAdjustedScore = applySecurityFloor(boostedScore, input.securityFindings);
@@ -72,7 +74,7 @@ function scoreChangedFiles(changedFiles: ChangedFile[]): number {
   return changedFiles.reduce((score, file) => score + changedFileWeights[file.riskLevel], 0);
 }
 
-function scoreFindings(findings: Array<QaFinding | ReleaseFinding>): number {
+function scoreFindings(findings: Array<QaFinding | ReleaseFinding | WorkflowFinding>): number {
   return findings.reduce((score, finding) => score + findingWeights[finding.riskLevel], 0);
 }
 

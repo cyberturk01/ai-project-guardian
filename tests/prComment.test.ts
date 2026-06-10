@@ -17,6 +17,7 @@ Summary:
 - 2 release findings
 - 1 QA finding
 - 0 security findings
+- 0 workflow findings
 
 Top Findings:
 - GitHub Actions changed
@@ -75,6 +76,7 @@ function makeReport(): GuardianReport {
       releaseFinding("Package dependency changed", "medium", ["Review dependency lockfile changes"])
     ],
     securityFindings: [],
+    workflowFindings: [],
     acceptedFindings: [],
     requiredActions: [],
     warnings: []

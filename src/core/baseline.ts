@@ -89,7 +89,7 @@ function parseBaseline(raw: string): GuardianBaseline {
 function isBaselineFinding(value: unknown): value is BaselineFinding {
   return (
     isObject(value) &&
-    (value.type === "qa" || value.type === "release" || value.type === "security") &&
+    (value.type === "qa" || value.type === "release" || value.type === "security" || value.type === "workflow") &&
     typeof value.title === "string" &&
     value.title.trim() !== ""
   );

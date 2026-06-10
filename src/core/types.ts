@@ -70,7 +70,13 @@ export type SecurityFinding = FindingBase & {
   lineNumber?: number;
 };
 
-export type GuardianFinding = QaFinding | ReleaseFinding | SecurityFinding;
+export type WorkflowFinding = FindingBase & {
+  area: "workflow";
+  missingCheck: string;
+  workflowFile: string;
+};
+
+export type GuardianFinding = QaFinding | ReleaseFinding | SecurityFinding | WorkflowFinding;
 
 export type GuardianReport = {
   projectName: string;
@@ -81,6 +87,7 @@ export type GuardianReport = {
   qaFindings: QaFinding[];
   releaseFindings: ReleaseFinding[];
   securityFindings: SecurityFinding[];
+  workflowFindings: WorkflowFinding[];
   acceptedFindings: GuardianFinding[];
   requiredActions: string[];
   warnings: string[];
