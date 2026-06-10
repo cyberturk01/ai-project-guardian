@@ -1,7 +1,7 @@
 {
   "acceptedFindings": [
     {
-      "type": "release",
+      "type": "workflow",
       "title": "GitHub Actions changed"
     }
   ]

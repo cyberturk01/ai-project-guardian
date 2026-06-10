@@ -269,7 +269,7 @@ Add `.guardian-baseline.json` to a target repository to accept known findings wi
 {
   "acceptedFindings": [
     {
-      "type": "release",
+      "type": "workflow",
       "title": "GitHub Actions changed"
     }
   ]

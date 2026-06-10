@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { applyBaseline, loadBaseline } from "../src/core/baseline.js";
-import type { GuardianFinding, ReleaseFinding } from "../src/core/types.js";
+import type { GuardianFinding, ReleaseFinding, WorkflowFinding } from "../src/core/types.js";
 
 describe("loadBaseline", () => {
   it("returns an empty baseline when .guardian-baseline.json is missing", async () => {
@@ -40,6 +40,19 @@ describe("loadBaseline", () => {
         }
       ]);
       assert.deepEqual(result.warnings, []);
+    });
+  });
+
+  it("returns a warning instead of failing when the baseline is invalid", async () => {
+    await withTempDir(async (repoPath) => {
+      await writeFile(join(repoPath, ".guardian-baseline.json"), "{", "utf8");
+
+      const result = await loadBaseline(repoPath);
+
+      assert.deepEqual(result.baseline, { acceptedFindings: [] });
+      assert.deepEqual(result.warnings, [
+        ".guardian-baseline.json could not be loaded; accepted findings were ignored."
+      ]);
     });
   });
 });
@@ -85,6 +98,25 @@ describe("applyBaseline", () => {
     assert.deepEqual(result.activeFindings.map((activeFinding) => activeFinding.title), ["Shared title"]);
     assert.deepEqual(result.acceptedFindings, []);
   });
+
+  it("supports accepting workflow findings by type and title", () => {
+    const workflowFinding = makeWorkflowFinding({
+      title: "GitHub Actions changed"
+    });
+
+    const result = applyBaseline([workflowFinding], {
+      acceptedFindings: [
+        {
+          type: "workflow",
+          title: "GitHub Actions changed"
+        }
+      ]
+    });
+
+    assert.deepEqual(result.activeFindings, []);
+    assert.deepEqual(result.acceptedFindings.map((finding) => finding.title), ["GitHub Actions changed"]);
+    assert.equal(result.acceptedFindings[0].accepted, true);
+  });
 });
 
 async function withTempDir(test: (repoPath: string) => Promise<void>): Promise<void> {
@@ -107,6 +139,20 @@ function makeReleaseFinding(overrides: Partial<ReleaseFinding> = {}): GuardianFi
     affectedFiles: [".github/workflows/release.yml"],
     whyItMatters: "CI/CD workflow changes can skip required checks, alter deployment permissions, or deploy from the wrong trigger.",
     requiredBeforeDeploy: ["Review workflow triggers, permissions, environments, and secrets usage."],
+    ...overrides
+  };
+}
+
+function makeWorkflowFinding(overrides: Partial<WorkflowFinding> = {}): GuardianFinding {
+  return {
+    id: "workflow-github-actions-changed",
+    area: "workflow",
+    title: "GitHub Actions changed",
+    description: "A GitHub Actions workflow changed.",
+    riskLevel: "high",
+    missingCheck: "npm test",
+    workflowFile: ".github/workflows/ci.yml",
+    recommendation: "Review workflow changes before release.",
     ...overrides
   };
 }
