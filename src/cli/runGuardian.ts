@@ -86,7 +86,7 @@ export function parseArgs(args: string[]): CliArgs {
       continue;
     }
 
-    throw new Error(`Unknown argument: ${arg}`);
+    throw new Error(`Unknown flag: ${arg}`);
   }
 
   return parsed;
@@ -151,5 +151,5 @@ function parseFailOn(value: string): FailOnRisk {
     return value;
   }
 
-  throw new Error(`Unsupported --fail-on value: ${value}`);
+  throw new Error(`Unsupported --fail-on value: ${value}. Expected "high" or "critical".`);
 }
