@@ -48,6 +48,9 @@ export type QaFinding = FindingBase & {
 
 export type ReleaseFinding = FindingBase & {
   area: "release";
+  affectedFiles: string[];
+  whyItMatters: string;
+  requiredBeforeDeploy: string[];
 };
 
 export type SecurityFinding = FindingBase & {

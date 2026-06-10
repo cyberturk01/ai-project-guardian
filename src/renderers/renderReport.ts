@@ -22,7 +22,7 @@ ${renderQaFindings(report.qaFindings)}
 
 ## Release findings
 
-${renderCount(report.releaseFindings.length)}
+${renderReleaseFindings(report.releaseFindings)}
 
 ## Security findings
 
@@ -67,6 +67,25 @@ function renderQaFindings(findings: GuardianReport["qaFindings"]): string {
 - Risk: ${finding.riskLevel}
 - Affected files: ${finding.affectedFiles.join(", ")}
 - Suggested tests: ${finding.suggestedTests.join(" ")}
+
+${finding.description}`;
+    })
+    .join("\n\n");
+}
+
+function renderReleaseFindings(findings: GuardianReport["releaseFindings"]): string {
+  if (findings.length === 0) {
+    return "None.";
+  }
+
+  return findings
+    .map((finding) => {
+      return `### ${finding.title}
+
+- Risk: ${finding.riskLevel}
+- Affected files: ${finding.affectedFiles.join(", ")}
+- Why it matters: ${finding.whyItMatters}
+- Required before deploy: ${finding.requiredBeforeDeploy.join(" ")}
 
 ${finding.description}`;
     })

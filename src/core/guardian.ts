@@ -1,5 +1,6 @@
 import type { CliConfig } from "../config/loadConfig.js";
 import { analyzeQa } from "../analyzers/qaAnalyzer.js";
+import { analyzeRelease } from "../analyzers/releaseAnalyzer.js";
 import { loadProjectBrain } from "../project-brain/loadProjectBrain.js";
 import { classifyFile } from "../repo/fileClassifier.js";
 import { getChangedFiles } from "../repo/getChangedFiles.js";
@@ -30,20 +31,25 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     config: config.guardian,
     projectBrain: projectBrainResult.projectBrain
   });
+  const releaseFindings = analyzeRelease({
+    changedFiles,
+    config: config.guardian
+  });
 
   return {
     projectName: config.guardian.projectName,
     generatedAt: new Date().toISOString(),
     overallRisk: highestRisk([
       ...changedFiles.map((file) => file.riskLevel),
-      ...qaFindings.map((finding) => finding.riskLevel)
+      ...qaFindings.map((finding) => finding.riskLevel),
+      ...releaseFindings.map((finding) => finding.riskLevel)
     ]),
     changedFiles,
     qaFindings,
-    releaseFindings: [],
+    releaseFindings,
     securityFindings: [],
-    requiredActions: [],
-    warnings: [...config.warnings, ...projectBrainResult.warnings, "Release and security analysis have not been implemented yet."]
+    requiredActions: releaseFindings.flatMap((finding) => finding.requiredBeforeDeploy),
+    warnings: [...config.warnings, ...projectBrainResult.warnings, "Security analysis has not been implemented yet."]
   };
 }
 
