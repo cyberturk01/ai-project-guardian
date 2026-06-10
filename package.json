@@ -1,0 +1,30 @@
+{
+  "name": "ai-project-guardian",
+  "version": "0.1.0",
+  "description": "CLI repository risk analysis reports for QA, release, and security workflows.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "ai-project-guardian": "./dist/src/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test dist/tests/*.test.js",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "guardian": "node dist/src/cli/index.js"
+  },
+  "keywords": [
+    "cli",
+    "qa",
+    "release",
+    "security",
+    "github-actions"
+  ],
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

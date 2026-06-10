@@ -1,0 +1,66 @@
+export const riskLevels = ["info", "low", "medium", "high", "critical"] as const;
+
+export type RiskLevel = (typeof riskLevels)[number];
+
+export type GuardianConfig = {
+  projectName: string;
+  riskFolders: string[];
+  testFolders: string[];
+  releaseSensitiveFiles: string[];
+  requiredChecks: string[];
+};
+
+export type ChangedFileStatus = "added" | "modified" | "deleted" | "renamed" | "unknown";
+
+export type ChangedFileCategory =
+  | "source"
+  | "test"
+  | "config"
+  | "dependency"
+  | "documentation"
+  | "workflow"
+  | "unknown";
+
+export type ChangedFile = {
+  path: string;
+  status: ChangedFileStatus;
+  category: ChangedFileCategory;
+  riskLevel: RiskLevel;
+};
+
+export type FindingBase = {
+  id: string;
+  title: string;
+  description: string;
+  riskLevel: RiskLevel;
+  filePath?: string;
+  recommendation?: string;
+};
+
+export type QaFinding = FindingBase & {
+  area: "qa";
+};
+
+export type ReleaseFinding = FindingBase & {
+  area: "release";
+};
+
+export type SecurityFinding = FindingBase & {
+  area: "security";
+};
+
+export type GuardianReport = {
+  projectName: string;
+  generatedAt: string;
+  overallRisk: RiskLevel;
+  changedFiles: ChangedFile[];
+  qaFindings: QaFinding[];
+  releaseFindings: ReleaseFinding[];
+  securityFindings: SecurityFinding[];
+  requiredActions: string[];
+  warnings: string[];
+};
+
+export function isRiskLevel(value: unknown): value is RiskLevel {
+  return typeof value === "string" && riskLevels.includes(value as RiskLevel);
+}
