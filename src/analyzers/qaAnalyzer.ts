@@ -215,7 +215,7 @@ function isChangedCodeFile(file: ChangedFile): boolean {
 }
 
 function isDocumentationContextFile(file: ChangedFile): boolean {
-  return file.category === "documentation" || projectBrainPathPattern.test(normalizePath(file.path));
+  return file.category === "documentation" || file.category === "project-brain" || projectBrainPathPattern.test(normalizePath(file.path));
 }
 
 function isActiveFile(file: ChangedFile): boolean {

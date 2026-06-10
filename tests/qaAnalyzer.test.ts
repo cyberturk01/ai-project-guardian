@@ -70,13 +70,13 @@ describe("analyzeQa", () => {
     const findings = analyzeQa({
       changedFiles: [
         {
-          path: ".project-brain/security-rules.md",
+          path: ".project-brain/testing-strategy.md",
           status: "modified",
-          category: "documentation",
+          category: "project-brain",
           riskLevel: "info"
         }
       ],
-      repoFiles: [".project-brain/security-rules.md"],
+      repoFiles: [".project-brain/testing-strategy.md"],
       config: guardianConfigFixture,
       projectBrain: projectBrainFixture
     });

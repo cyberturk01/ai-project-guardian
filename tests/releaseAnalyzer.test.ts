@@ -84,6 +84,19 @@ describe("analyzeRelease", () => {
 
     assert.deepEqual(findings, []);
   });
+
+  it("ignores Project Brain files even when names match release heuristics", () => {
+    const findings = analyzeRelease({
+      changedFiles: [
+        changedFile(".project-brain/package.json", "project-brain"),
+        changedFile(".project-brain/production-env.md", "project-brain"),
+        changedFile(".project-brain/staging-env.md", "project-brain")
+      ],
+      config
+    });
+
+    assert.deepEqual(findings, []);
+  });
 });
 
 function changedFile(path: string, category: ChangedFile["category"]): ChangedFile {
@@ -91,6 +104,6 @@ function changedFile(path: string, category: ChangedFile["category"]): ChangedFi
     path,
     status: "modified",
     category,
-    riskLevel: category === "ci" || category === "config" || category === "migration" ? "high" : "medium"
+    riskLevel: category === "project-brain" ? "info" : category === "ci" || category === "config" || category === "migration" ? "high" : "medium"
   };
 }

@@ -19,6 +19,7 @@ export type ChangedFileCategory =
   | "config"
   | "ci"
   | "documentation"
+  | "project-brain"
   | "i18n"
   | "security"
   | "unknown";

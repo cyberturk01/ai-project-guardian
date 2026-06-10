@@ -35,9 +35,9 @@ describe("classifyFile", () => {
     assertClassification("assets/logo.png", "unknown", "info");
   });
 
-  it("classifies Project Brain files as informational documentation", () => {
-    assertClassification(".project-brain/security-rules.md", "documentation", "info");
-    assertClassification(".project-brain/module-map.json", "documentation", "info");
+  it("classifies Project Brain markdown and JSON files as informational context", () => {
+    assertClassification(".project-brain/security-rules.md", "project-brain", "info");
+    assertClassification(".project-brain/module-map.json", "project-brain", "info");
   });
 });
 

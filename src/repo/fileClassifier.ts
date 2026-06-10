@@ -49,6 +49,7 @@ const migrationPathPattern = /(^|\/)(migrations?|schema|prisma\/migrations)(\/|$
 const ciPathPattern = /(^|\/)(\.github\/workflows|\.github\/actions|\.gitlab-ci\.yml|circleci|\.circleci|jenkinsfile|buildkite|\.buildkite)(\/|$)/i;
 const documentationPathPattern = /(^|\/)(docs?|documentation|adr|readme)(\/|$)|(^|\/)(readme|changelog|contributing|license)(\.[^.]+)?$/i;
 const projectBrainPathPattern = /(^|\/)\.project-brain(\/|$)/i;
+const projectBrainExtensions = new Set([".json", ".md"]);
 const i18nPathPattern = /(^|\/)(i18n|l10n|locales?|translations?|lang|messages)(\/|$)/i;
 
 export function classifyFile(path: string, config: GuardianConfig): ClassifiedFile {
@@ -64,7 +65,7 @@ export function classifyFile(path: string, config: GuardianConfig): ClassifiedFi
 
 export function classifyFileCategory(path: string, config: GuardianConfig): ChangedFileCategory {
   if (isProjectBrainFile(path)) {
-    return "documentation";
+    return "project-brain";
   }
 
   if (matchesConfiguredPath(path, config.releaseSensitiveFiles)) {
@@ -127,7 +128,7 @@ export function classifyRiskLevel(path: string, category: ChangedFileCategory, c
     return "low";
   }
 
-  if (category === "documentation") {
+  if (category === "documentation" || category === "project-brain") {
     return "info";
   }
 
@@ -198,7 +199,7 @@ function isDocumentationFile(path: string): boolean {
 }
 
 function isProjectBrainFile(path: string): boolean {
-  return projectBrainPathPattern.test(path);
+  return projectBrainPathPattern.test(path) && projectBrainExtensions.has(extname(path).toLowerCase());
 }
 
 function isI18nFile(path: string): boolean {

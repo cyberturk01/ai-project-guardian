@@ -144,7 +144,7 @@ async function readChangedTextFiles(input: AnalyzeSecurityInput): Promise<Scanne
   const scannedFiles: ScannedFile[] = [];
 
   for (const file of input.changedFiles) {
-    if (file.status === "deleted" || !isScannablePath(file.path)) {
+    if (file.status === "deleted" || isProjectBrainFile(file) || !isScannablePath(file.path)) {
       continue;
     }
 
@@ -232,6 +232,10 @@ function isPotentialRealSecret(value: string): boolean {
 
 function isScannablePath(path: string): boolean {
   return textFilePattern.test(normalizePath(path));
+}
+
+function isProjectBrainFile(file: ChangedFile): boolean {
+  return file.category === "project-brain" || /(^|\/)\.project-brain(\/|$)/i.test(normalizePath(file.path));
 }
 
 function compareFindings(left: SecurityFinding, right: SecurityFinding): number {

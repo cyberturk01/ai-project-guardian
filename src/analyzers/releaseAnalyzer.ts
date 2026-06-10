@@ -29,6 +29,7 @@ const emailNotificationPattern = /(^|\/|\.|-|_)(email|emails|mail|mailer|notific
 const consentPrivacyPattern = /(^|\/|\.|-|_)(consent|privacy|gdpr|ccpa|cookie|cookies|audit|audits|data-retention|retention)(\/|\.|-|_|$)/i;
 const referralRewardPattern = /(^|\/|\.|-|_)(referral|referrals|reward|rewards|loyalty|points|credits|coupon|coupons|promo|promotion|discount)(\/|\.|-|_|$)/i;
 const paymentBillingPattern = /(^|\/|\.|-|_)(payment|payments|billing|billings|stripe|checkout|invoice|invoices|subscription|subscriptions|refund|refunds|payout|payouts)(\/|\.|-|_|$)/i;
+const projectBrainPathPattern = /(^|\/)\.project-brain(\/|$)/i;
 
 const releaseRules: ReleaseRule[] = [
   {
@@ -151,12 +152,13 @@ const releaseRules: ReleaseRule[] = [
 ];
 
 export function analyzeRelease(input: AnalyzeReleaseInput): ReleaseFinding[] {
+  const releaseChangedFiles = input.changedFiles.filter((file) => !isProjectBrainFile(file));
   const context: ReleaseContext = {
-    changedPaths: input.changedFiles.map((file) => normalizePath(file.path))
+    changedPaths: releaseChangedFiles.map((file) => normalizePath(file.path))
   };
 
   return releaseRules
-    .map((rule) => buildFinding(rule, input.changedFiles, context))
+    .map((rule) => buildFinding(rule, releaseChangedFiles, context))
     .filter((finding): finding is ReleaseFinding => finding !== undefined);
 }
 
@@ -191,6 +193,10 @@ function isEnvConfigPath(path: string): boolean {
 function hasStageAndProdEnvChanges(paths: string[]): boolean {
   const envPaths = paths.filter(isEnvConfigPath);
   return envPaths.some((path) => stageEnvPattern.test(path)) && envPaths.some((path) => prodEnvPattern.test(path));
+}
+
+function isProjectBrainFile(file: ChangedFile): boolean {
+  return file.category === "project-brain" || projectBrainPathPattern.test(normalizePath(file.path));
 }
 
 function uniqueSorted(values: string[]): string[] {

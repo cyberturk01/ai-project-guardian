@@ -90,6 +90,29 @@ describe("analyzeSecurity", () => {
 
     assert.deepEqual(findings, []);
   });
+
+  it("does not scan Project Brain security rules for security findings", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [
+        {
+          path: ".project-brain/security-rules.md",
+          status: "modified",
+          category: "project-brain",
+          riskLevel: "info"
+        }
+      ],
+      readFile: fakeReader({
+        ".project-brain/security-rules.md": [
+          "Document examples like apiKey = 'safeFakeApiKey123456789' are context only.",
+          "const PAYMENT_SECRET = 'safeFakeSecret12345';",
+          "router.post('/signup', signupHandler);"
+        ].join("\n")
+      })
+    });
+
+    assert.deepEqual(findings, []);
+  });
 });
 
 function changedFile(path: string, status: ChangedFile["status"] = "modified"): ChangedFile {
