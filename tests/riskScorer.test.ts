@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { riskLevelForScore, scoreRisk } from "../src/analyzers/riskScorer.js";
-import type { ChangedFile, QaFinding, ReleaseFinding, SecurityFinding } from "../src/core/types.js";
+import type { ChangedFile, QaFinding, ReleaseFinding, SecurityFinding, WorkflowFinding } from "../src/core/types.js";
 
 describe("riskLevelForScore", () => {
   it("maps scores to the configured risk scale", () => {
@@ -37,7 +37,7 @@ describe("scoreRisk", () => {
     assert.equal(result.overallRisk, "info");
   });
 
-  it("keeps config-only changes in the 10-25 range", () => {
+  it("keeps config-only changes in the 20-50 range", () => {
     const result = scoreRisk({
       changedFiles: [
         changedFile({
@@ -51,11 +51,11 @@ describe("scoreRisk", () => {
       securityFindings: []
     });
 
-    assert.equal(result.score, 19);
-    assert.equal(result.overallRisk, "info");
+    assert.equal(result.score, 25);
+    assert.equal(result.overallRisk, "low");
   });
 
-  it("keeps workflow-only changes in the 25-50 range", () => {
+  it("keeps workflow-only changes in the 20-40 range", () => {
     const result = scoreRisk({
       changedFiles: [
         changedFile({
@@ -69,11 +69,11 @@ describe("scoreRisk", () => {
       securityFindings: []
     });
 
-    assert.equal(result.score, 44);
-    assert.equal(result.overallRisk, "medium");
+    assert.equal(result.score, 29);
+    assert.equal(result.overallRisk, "low");
   });
 
-  it("keeps workflow plus deploy config changes in the 50-70 range", () => {
+  it("keeps workflow plus deploy config changes in the workflow 20-40 range", () => {
     const result = scoreRisk({
       changedFiles: [
         changedFile({
@@ -95,11 +95,11 @@ describe("scoreRisk", () => {
       securityFindings: []
     });
 
-    assert.equal(result.score, 69);
-    assert.equal(result.overallRisk, "high");
+    assert.equal(result.score, 31);
+    assert.equal(result.overallRisk, "low");
   });
 
-  it("keeps migration changes in the 60-80 range when DB tests are not missing", () => {
+  it("keeps migration changes in the 50-80 range when DB tests are not missing", () => {
     const result = scoreRisk({
       changedFiles: [
         changedFile({
@@ -113,11 +113,11 @@ describe("scoreRisk", () => {
       securityFindings: []
     });
 
-    assert.equal(result.score, 75);
-    assert.equal(result.overallRisk, "high");
+    assert.equal(result.score, 60);
+    assert.equal(result.overallRisk, "medium");
   });
 
-  it("keeps auth changes in the 70-90 range when negative tests are not missing", () => {
+  it("keeps auth changes in the 60-90 range when negative tests are not missing", () => {
     const result = scoreRisk({
       changedFiles: [
         changedFile({
@@ -131,11 +131,11 @@ describe("scoreRisk", () => {
       securityFindings: []
     });
 
-    assert.equal(result.score, 77);
+    assert.equal(result.score, 68);
     assert.equal(result.overallRisk, "high");
   });
 
-  it("keeps security findings in the 80-100 range", () => {
+  it("keeps security findings in the 70-100 range", () => {
     const result = scoreRisk({
       changedFiles: [
         changedFile({
@@ -149,7 +149,25 @@ describe("scoreRisk", () => {
       securityFindings: [securityFinding({ riskLevel: "high" })]
     });
 
-    assert.equal(result.score, 89);
+    assert.equal(result.score, 80);
+    assert.equal(result.overallRisk, "high");
+  });
+
+  it("allows security findings to become critical when the score crosses the critical threshold", () => {
+    const result = scoreRisk({
+      changedFiles: [
+        changedFile({
+          path: "src/api/reservations.ts",
+          category: "source",
+          riskLevel: "medium"
+        })
+      ],
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: [securityFinding({ riskLevel: "high" }), securityFinding({ id: "security-sql-string-interpolation", riskLevel: "medium" })]
+    });
+
+    assert.equal(result.score, 82);
     assert.equal(result.overallRisk, "critical");
   });
 
@@ -174,8 +192,56 @@ describe("scoreRisk", () => {
       securityFindings: []
     });
 
-    assert.equal(result.score, 44);
-    assert.equal(result.overallRisk, "medium");
+    assert.equal(result.score, 29);
+    assert.equal(result.overallRisk, "low");
+  });
+
+  it("never marks workflow-only changes as critical", () => {
+    const result = scoreRisk({
+      changedFiles: Array.from({ length: 20 }, (_, index) =>
+        changedFile({
+          path: `.github/workflows/workflow-${index}.yml`,
+          category: "ci",
+          riskLevel: "critical"
+        })
+      ),
+      qaFindings: [],
+      releaseFindings: Array.from({ length: 10 }, (_, index) =>
+        releaseFinding({
+          id: `release-github-actions-changed-${index}`,
+          riskLevel: "critical",
+          affectedFiles: [`.github/workflows/workflow-${index}.yml`]
+        })
+      ),
+      securityFindings: [],
+      workflowFindings: Array.from({ length: 10 }, (_, index) =>
+        workflowFinding({
+          id: `workflow-missing-required-check-${index}`,
+          riskLevel: "critical"
+        })
+      )
+    });
+
+    assert.equal(result.score, 40);
+    assert.notEqual(result.overallRisk, "critical");
+  });
+
+  it("does not mark high auth scores as critical without missing negative tests", () => {
+    const result = scoreRisk({
+      changedFiles: Array.from({ length: 20 }, (_, index) =>
+        changedFile({
+          path: `src/auth/file-${index}.ts`,
+          category: "security",
+          riskLevel: "critical"
+        })
+      ),
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: []
+    });
+
+    assert.equal(result.score, 90);
+    assert.equal(result.overallRisk, "high");
   });
 
   it("marks migration plus missing DB test coverage as critical", () => {
@@ -250,7 +316,7 @@ describe("scoreRisk", () => {
 
   it("caps the score at 100", () => {
     const result = scoreRisk({
-      changedFiles: Array.from({ length: 8 }, (_, index) =>
+      changedFiles: Array.from({ length: 20 }, (_, index) =>
         changedFile({
           path: `src/security/file-${index}.ts`,
           category: "security",
@@ -263,8 +329,8 @@ describe("scoreRisk", () => {
           riskLevel: "high"
         })
       ],
-      releaseFindings: [releaseFinding({ riskLevel: "critical" })],
-      securityFindings: [securityFinding({ riskLevel: "critical" })]
+      releaseFindings: Array.from({ length: 5 }, () => releaseFinding({ riskLevel: "critical" })),
+      securityFindings: Array.from({ length: 5 }, (_, index) => securityFinding({ id: `security-critical-${index}`, riskLevel: "critical" }))
     });
 
     assert.equal(result.score, 100);
@@ -318,6 +384,20 @@ function securityFinding(overrides: Partial<SecurityFinding> = {}): SecurityFind
     riskLevel: "low",
     filePath: "src/index.ts",
     recommendation: "Review the finding.",
+    ...overrides
+  };
+}
+
+function workflowFinding(overrides: Partial<WorkflowFinding> = {}): WorkflowFinding {
+  return {
+    id: "workflow-missing-required-check",
+    area: "workflow",
+    title: "Workflow finding",
+    description: "A workflow finding.",
+    riskLevel: "low",
+    missingCheck: "npm test",
+    workflowFile: ".github/workflows/ci.yml",
+    recommendation: "Add the missing check.",
     ...overrides
   };
 }

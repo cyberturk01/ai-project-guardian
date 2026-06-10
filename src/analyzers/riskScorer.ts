@@ -13,7 +13,7 @@ export type RiskScoreResult = {
   overallRisk: RiskLevel;
 };
 
-type RiskBandName = "documentation" | "config" | "workflow" | "workflowDeploy" | "source" | "migration" | "auth" | "security";
+type RiskBandName = "documentation" | "config" | "workflow" | "source" | "migration" | "auth" | "security";
 
 type RiskBand = {
   name: RiskBandName;
@@ -24,13 +24,12 @@ type RiskBand = {
 
 const riskBands: Record<RiskBandName, RiskBand> = {
   documentation: { name: "documentation", base: 4, max: 10, factor: 1.5 },
-  config: { name: "config", base: 15, max: 25, factor: 1.5 },
-  workflow: { name: "workflow", base: 35, max: 50, factor: 2 },
-  workflowDeploy: { name: "workflowDeploy", base: 58, max: 70, factor: 2 },
+  config: { name: "config", base: 20, max: 50, factor: 2 },
+  workflow: { name: "workflow", base: 20, max: 40, factor: 2 },
   source: { name: "source", base: 32, max: 60, factor: 2 },
-  migration: { name: "migration", base: 68, max: 80, factor: 1.5 },
-  auth: { name: "auth", base: 72, max: 90, factor: 1.2 },
-  security: { name: "security", base: 82, max: 100, factor: 1.4 }
+  migration: { name: "migration", base: 50, max: 80, factor: 2 },
+  auth: { name: "auth", base: 60, max: 90, factor: 2 },
+  security: { name: "security", base: 70, max: 100, factor: 2 }
 };
 
 const categoryWeights: Record<ChangedFile["category"], number> = {
@@ -103,7 +102,7 @@ export function scoreRisk(input: RiskScoreInput): RiskScoreResult {
 
   return {
     score,
-    overallRisk: riskLevelForScore(score)
+    overallRisk: overallRiskForScore(score, input)
   };
 }
 
@@ -140,10 +139,6 @@ function selectRiskBand(input: RiskScoreInput): RiskBand {
     return riskBands.migration;
   }
 
-  if (hasWorkflowChange(input) && hasDeployConfigChange(input)) {
-    return riskBands.workflowDeploy;
-  }
-
   if (hasWorkflowChange(input)) {
     return riskBands.workflow;
   }
@@ -153,6 +148,10 @@ function selectRiskBand(input: RiskScoreInput): RiskBand {
   }
 
   if (hasOnlyConfigChanges(input)) {
+    return riskBands.config;
+  }
+
+  if (hasConfigChange(input)) {
     return riskBands.config;
   }
 
@@ -197,14 +196,28 @@ function scoreSecurityFindings(findings: SecurityFinding[]): number {
 }
 
 function applyCriticalCombinations(score: number, input: RiskScoreInput): number {
-  if (hasCriticalCombination(input)) {
+  if (hasScoreElevatingCriticalCombination(input)) {
     return Math.max(score, criticalCombinationMinimumScore);
   }
 
   return score;
 }
 
-function hasCriticalCombination(input: RiskScoreInput): boolean {
+function overallRiskForScore(score: number, input: RiskScoreInput): RiskLevel {
+  const riskLevel = riskLevelForScore(score);
+
+  if (riskLevel === "critical" && !hasCriticalPrerequisite(input)) {
+    return "high";
+  }
+
+  return riskLevel;
+}
+
+function hasCriticalPrerequisite(input: RiskScoreInput): boolean {
+  return input.securityFindings.length > 0 || hasScoreElevatingCriticalCombination(input);
+}
+
+function hasScoreElevatingCriticalCombination(input: RiskScoreInput): boolean {
   return hasMigrationWithoutDbTest(input) || hasAuthChangeWithoutNegativeTest(input) || hasPaymentChangeWithoutIntegrationTest(input);
 }
 
@@ -247,13 +260,6 @@ function hasWorkflowChange(input: RiskScoreInput): boolean {
   return input.changedFiles.some((file) => file.category === "ci" || isWorkflowPath(file.path)) || (input.workflowFindings ?? []).length > 0;
 }
 
-function hasDeployConfigChange(input: RiskScoreInput): boolean {
-  return (
-    input.changedFiles.some((file) => isDeployConfigPath(file.path)) ||
-    input.releaseFindings.some((finding) => finding.id === "release-stage-prod-env-mismatch" || finding.id === "release-env-config-changed")
-  );
-}
-
 function hasOnlyDocumentationChanges(input: RiskScoreInput): boolean {
   return (
     input.changedFiles.length > 0 &&
@@ -274,6 +280,10 @@ function hasOnlyConfigChanges(input: RiskScoreInput): boolean {
     input.securityFindings.length === 0 &&
     (input.workflowFindings ?? []).length === 0
   );
+}
+
+function hasConfigChange(input: RiskScoreInput): boolean {
+  return input.changedFiles.some((file) => file.category === "config" || isDeployConfigPath(file.path));
 }
 
 function hasNoRiskSignals(input: RiskScoreInput): boolean {

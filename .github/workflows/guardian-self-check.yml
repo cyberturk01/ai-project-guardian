@@ -8,23 +8,45 @@ on:
 jobs:
   guardian-self-check:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 24
           cache: npm
+
       - run: npm ci
       - run: npm run build
-      - name: Run Guardian
-        continue-on-error: true
-        run: npm run guardian -- --repo . --out guardian-report.md
 
-      - name: Add report to summary
+      - name: Guardian Summary
+        continue-on-error: true
+        run: |
+          npm run guardian -- \
+            --repo . \
+            --out guardian-summary.md \
+            --summary-only
+
+      - name: Add Summary
         if: always()
         run: |
-          if [ -f guardian-report.md ]; then
-            cat guardian-report.md >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "Guardian did not generate guardian-report.md." >> "$GITHUB_STEP_SUMMARY"
+          if [ -f guardian-summary.md ]; then
+            cat guardian-summary.md >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      - name: Guardian Full Report
+        if: always()
+        continue-on-error: true
+        run: |
+          npm run guardian -- \
+            --repo . \
+            --out guardian-report.md \
+            --full-report
+
+      - name: Upload Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: guardian-report
+          path: guardian-report.md
