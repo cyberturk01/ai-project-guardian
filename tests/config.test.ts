@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { loadConfig } from "../src/config/loadConfig.js";
 import { loadGuardianConfig } from "../src/config/guardianConfig.js";
 
@@ -11,7 +11,20 @@ describe("loadConfig", () => {
     const config = loadConfig({});
 
     assert.equal(config.format, "markdown");
-    assert.ok(config.repoPath.endsWith("ai-project-guardian"));
+    assert.equal(config.repoPath, process.cwd());
+    assert.equal(config.outputPath, undefined);
+  });
+
+  it("resolves relative repository and output paths", () => {
+    const config = loadConfig({
+      repoPath: ".",
+      outputPath: "guardian-report.md"
+    });
+
+    assert.equal(config.repoPath, process.cwd());
+    assert.equal(config.outputPath, join(process.cwd(), "guardian-report.md"));
+    assert.ok(isAbsolute(config.repoPath));
+    assert.ok(isAbsolute(config.outputPath));
   });
 
   it("rejects unsupported report formats", () => {
@@ -46,6 +59,27 @@ describe("loadGuardianConfig", () => {
       },
       warnings: []
     });
+  });
+
+  it("normalizes config paths relative to the target repository", () => {
+    const repoPath = makeRepo();
+    writeFileSync(
+      join(repoPath, "guardian.config.json"),
+      JSON.stringify({
+        riskFolders: ["src/api", "./src/auth"],
+        testFolders: ["tests"],
+        releaseSensitiveFiles: ["../shared/package.json"],
+        requiredChecks: ["npm test"]
+      }),
+      "utf8"
+    );
+
+    const result = loadGuardianConfig(repoPath);
+
+    assert.deepEqual(result.config.riskFolders, ["src/api", "src/auth"]);
+    assert.deepEqual(result.config.testFolders, ["tests"]);
+    assert.deepEqual(result.config.releaseSensitiveFiles, ["../shared/package.json"]);
+    assert.deepEqual(result.config.requiredChecks, ["npm test"]);
   });
 
   it("uses defaults and warns when config is missing", () => {

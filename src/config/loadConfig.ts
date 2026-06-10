@@ -25,10 +25,18 @@ export function loadConfig(input: ConfigInput): CliConfig {
   return {
     repoPath,
     format: parseFormat(input.format ?? process.env.GUARDIAN_REPORT_FORMAT),
-    outputPath: input.outputPath ?? process.env.GUARDIAN_OUTPUT_PATH,
+    outputPath: resolveOptionalPath(input.outputPath ?? process.env.GUARDIAN_OUTPUT_PATH),
     guardian: guardianConfig.config,
     warnings: guardianConfig.warnings
   };
+}
+
+function resolveOptionalPath(path: string | undefined): string | undefined {
+  if (path === undefined || path === "") {
+    return undefined;
+  }
+
+  return resolve(path);
 }
 
 function parseFormat(format: string | undefined): ReportFormat {

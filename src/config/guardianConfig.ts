@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import type { GuardianConfig } from "../core/types.js";
 
 export const guardianConfigFileName = "guardian.config.json";
@@ -17,6 +17,8 @@ export type GuardianConfigLoadResult = {
   warnings: string[];
 };
 
+type GuardianConfigArrayField = keyof Omit<GuardianConfig, "projectName">;
+
 const allowedKeys = new Set<keyof GuardianConfig>([
   "projectName",
   "riskFolders",
@@ -26,16 +28,17 @@ const allowedKeys = new Set<keyof GuardianConfig>([
 ]);
 
 export function loadGuardianConfig(repoPath: string): GuardianConfigLoadResult {
-  const configPath = join(repoPath, guardianConfigFileName);
+  const resolvedRepoPath = resolve(repoPath);
+  const configPath = join(resolvedRepoPath, guardianConfigFileName);
 
   try {
     const rawConfig = readFileSync(configPath, "utf8");
-    return validateGuardianConfig(JSON.parse(rawConfig));
+    return validateGuardianConfig(JSON.parse(rawConfig), resolvedRepoPath);
   } catch (error: unknown) {
     if (isMissingFileError(error)) {
       return {
         config: { ...defaultGuardianConfig },
-        warnings: [`${guardianConfigFileName} was not found; using default Guardian config.`]
+        warnings: [`${guardianConfigFileName} was not found at ${configPath}; using default Guardian config.`]
       };
     }
 
@@ -46,7 +49,7 @@ export function loadGuardianConfig(repoPath: string): GuardianConfigLoadResult {
   }
 }
 
-export function validateGuardianConfig(value: unknown): GuardianConfigLoadResult {
+export function validateGuardianConfig(value: unknown, repoPath?: string): GuardianConfigLoadResult {
   const warnings: string[] = [];
   const config: GuardianConfig = { ...defaultGuardianConfig };
 
@@ -71,9 +74,9 @@ export function validateGuardianConfig(value: unknown): GuardianConfigLoadResult
     }
   }
 
-  assignStringArray(config, value, "riskFolders", warnings);
-  assignStringArray(config, value, "testFolders", warnings);
-  assignStringArray(config, value, "releaseSensitiveFiles", warnings);
+  assignStringArray(config, value, "riskFolders", warnings, repoPath);
+  assignStringArray(config, value, "testFolders", warnings, repoPath);
+  assignStringArray(config, value, "releaseSensitiveFiles", warnings, repoPath);
   assignStringArray(config, value, "requiredChecks", warnings);
 
   return { config, warnings };
@@ -82,8 +85,9 @@ export function validateGuardianConfig(value: unknown): GuardianConfigLoadResult
 function assignStringArray(
   config: GuardianConfig,
   value: Record<string, unknown>,
-  field: keyof Omit<GuardianConfig, "projectName">,
-  warnings: string[]
+  field: GuardianConfigArrayField,
+  warnings: string[],
+  repoPath?: string
 ): void {
   const fieldValue = value[field];
 
@@ -92,11 +96,19 @@ function assignStringArray(
   }
 
   if (Array.isArray(fieldValue) && fieldValue.every((item) => typeof item === "string")) {
-    config[field] = fieldValue;
+    config[field] = repoPath === undefined ? fieldValue : fieldValue.map((item) => normalizeRepoPath(repoPath, item));
     return;
   }
 
   warnings.push(`Guardian config field "${field}" must be an array of strings; using default value.`);
+}
+
+function normalizeRepoPath(repoPath: string, path: string): string {
+  if (isAbsolute(path)) {
+    return path;
+  }
+
+  return relative(repoPath, resolve(repoPath, path));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
