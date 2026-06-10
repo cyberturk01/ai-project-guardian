@@ -60,6 +60,158 @@ Available flags:
 - `--fail-on <high|critical>`: exit with code 1 when the calculated risk meets the threshold. Defaults to not failing the build.
 - `--help`: print CLI help.
 
+## Onboarding a New Repository
+
+Guardian can run with defaults, but analysis quality is better when the target repository provides repository-specific config and Project Brain context.
+
+Each target repository should add:
+
+- `guardian.config.json`
+- `.project-brain/`
+- `.github/workflows/ai-project-guardian.yml`
+
+### 1. Add guardian.config.json
+
+Add `guardian.config.json` at the target repository root:
+
+```json
+{
+  "projectName": "My Project",
+  "riskFolders": [
+    "src/routes",
+    "src/services",
+    "src/auth",
+    "src/config"
+  ],
+  "testFolders": [
+    "tests",
+    "cypress",
+    "__tests__"
+  ],
+  "releaseSensitiveFiles": [
+    "package.json",
+    "package-lock.json",
+    ".env.example",
+    ".github/workflows"
+  ],
+  "requiredChecks": [
+    "npm test",
+    "npm run lint"
+  ]
+}
+```
+
+### 2. Add Project Brain
+
+Add `.project-brain/` at the target repository root:
+
+```text
+.project-brain/
+  project.md
+  architecture.md
+  testing-strategy.md
+  deployment-rules.md
+  security-rules.md
+  known-risks.md
+  known-bugs.md
+  module-map.json
+```
+
+- `project.md`: what the application does, business flows, and critical user journeys.
+- `architecture.md`: backend, frontend, database, migrations, and external integrations.
+- `testing-strategy.md`: test types, coverage expectations, and regression-critical areas.
+- `deployment-rules.md`: stage/prod separation, environment variables, migration caution, and release checks.
+- `security-rules.md`: auth rules, secret handling, privacy-sensitive data, and commit restrictions.
+- `known-risks.md`: risky flows, fragile modules, and areas needing extra release review.
+- `known-bugs.md`: unresolved issues, or empty when there are no known current issues.
+- `module-map.json`: important folders mapped to business areas.
+
+### Quick Start Prompt for Project Brain
+
+Use this prompt with an AI coding agent in the target repository:
+
+```text
+Create a .project-brain folder for this repository.
+
+Goal:
+Provide structured context for AI Project Guardian and future AI coding agents.
+
+Create:
+.project-brain/
+  project.md
+  architecture.md
+  testing-strategy.md
+  deployment-rules.md
+  security-rules.md
+  known-risks.md
+  known-bugs.md
+  module-map.json
+
+Content requirements:
+1. project.md:
+   - Explain what this application does.
+   - Mention important business flows and critical user journeys.
+
+2. architecture.md:
+   - Explain backend structure.
+   - Explain frontend structure.
+   - Explain database/migration structure.
+   - Explain external integrations.
+
+3. testing-strategy.md:
+   - Explain existing test types.
+   - Mention coverage requirements.
+   - Mention critical areas that need regression tests.
+
+4. deployment-rules.md:
+   - Explain stage/prod separation.
+   - Mention required environment variables.
+   - Mention migration caution.
+   - Mention release checks.
+
+5. security-rules.md:
+   - Mention authentication and authorization rules.
+   - Mention secret handling.
+   - Mention privacy-sensitive data handling.
+   - Mention what must never be committed.
+
+6. known-risks.md:
+   - List known risky flows.
+   - List fragile modules.
+   - List areas that need extra review before release.
+
+7. known-bugs.md:
+   - Keep empty if there are no known current issues.
+   - Otherwise list known unresolved bugs.
+
+8. module-map.json:
+   - Map important folders to business areas.
+
+Do not change application logic.
+Only add documentation/context files.
+```
+
+### 3. Add GitHub Actions workflow
+
+Each target repository should add:
+
+```text
+.github/workflows/ai-project-guardian.yml
+```
+
+The workflow checks out the target repo, checks out the `ai-project-guardian` repo, runs Guardian against the target repo, and writes `guardian-report.md` to the GitHub Actions summary.
+
+See `docs/github-actions-integration.md` for a complete workflow.
+
+### Recommended Repository Layout
+
+```text
+repository-root/
+  guardian.config.json
+  .project-brain/
+  .github/workflows/ai-project-guardian.yml
+```
+
 ## Business Areas
 
 Every product has business-critical paths that generic repository heuristics cannot fully understand. `ai-project-guardian` supports project-specific business rules through `guardian.config.json` so each repository can describe its own risky areas without changing Guardian code.
