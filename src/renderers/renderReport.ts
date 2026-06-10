@@ -18,7 +18,7 @@ ${renderChangedFiles(report.changedFiles)}
 
 ## QA findings
 
-${renderCount(report.qaFindings.length)}
+${renderQaFindings(report.qaFindings)}
 
 ## Release findings
 
@@ -53,6 +53,24 @@ function renderChangedFiles(changedFiles: GuardianReport["changedFiles"]): strin
       return `- ${file.status}: ${file.path}${renameDetail}`;
     })
     .join("\n");
+}
+
+function renderQaFindings(findings: GuardianReport["qaFindings"]): string {
+  if (findings.length === 0) {
+    return "None.";
+  }
+
+  return findings
+    .map((finding) => {
+      return `### ${finding.title}
+
+- Risk: ${finding.riskLevel}
+- Affected files: ${finding.affectedFiles.join(", ")}
+- Suggested tests: ${finding.suggestedTests.join(" ")}
+
+${finding.description}`;
+    })
+    .join("\n\n");
 }
 
 function renderList(items: string[]): string {

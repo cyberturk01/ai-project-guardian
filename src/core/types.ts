@@ -42,6 +42,8 @@ export type FindingBase = {
 
 export type QaFinding = FindingBase & {
   area: "qa";
+  affectedFiles: string[];
+  suggestedTests: string[];
 };
 
 export type ReleaseFinding = FindingBase & {
