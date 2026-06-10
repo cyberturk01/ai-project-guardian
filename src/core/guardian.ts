@@ -11,6 +11,6 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     releaseFindings: [],
     securityFindings: [],
     requiredActions: [],
-    warnings: ["Analysis logic has not been implemented yet."]
+    warnings: [...config.warnings, "Analysis logic has not been implemented yet."]
   };
 }

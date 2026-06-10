@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import type { GuardianConfig } from "../core/types.js";
+import { loadGuardianConfig } from "./guardianConfig.js";
 
 export type ReportFormat = "markdown" | "json";
 
@@ -8,6 +9,7 @@ export type CliConfig = {
   format: ReportFormat;
   outputPath?: string;
   guardian: GuardianConfig;
+  warnings: string[];
 };
 
 type ConfigInput = {
@@ -17,17 +19,15 @@ type ConfigInput = {
 };
 
 export function loadConfig(input: ConfigInput): CliConfig {
+  const repoPath = resolve(input.repoPath ?? process.env.GUARDIAN_REPO_PATH ?? ".");
+  const guardianConfig = loadGuardianConfig(repoPath);
+
   return {
-    repoPath: resolve(input.repoPath ?? process.env.GUARDIAN_REPO_PATH ?? "."),
+    repoPath,
     format: parseFormat(input.format ?? process.env.GUARDIAN_REPORT_FORMAT),
     outputPath: input.outputPath ?? process.env.GUARDIAN_OUTPUT_PATH,
-    guardian: {
-      projectName: process.env.GUARDIAN_PROJECT_NAME ?? "ai-project-guardian",
-      riskFolders: [],
-      testFolders: [],
-      releaseSensitiveFiles: [],
-      requiredChecks: []
-    }
+    guardian: guardianConfig.config,
+    warnings: guardianConfig.warnings
   };
 }
 
