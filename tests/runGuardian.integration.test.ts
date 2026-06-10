@@ -48,6 +48,58 @@ describe("runGuardianCli integration", () => {
       assert.match(await readFile(outputPath, "utf8"), /Highest detected risk: \*\*critical\*\*/);
     });
   });
+
+  it("excludes accepted findings from the overall score while showing them separately", async () => {
+    await withFixtureRepo(async (repoPath) => {
+      await writeFile(
+        join(repoPath, ".guardian-baseline.json"),
+        JSON.stringify(
+          {
+            acceptedFindings: [
+              {
+                type: "qa",
+                title: "Auth or security changed without negative test coverage"
+              },
+              {
+                type: "qa",
+                title: "Migration changed without DB/integration test coverage"
+              },
+              {
+                type: "release",
+                title: "Database migration changed"
+              },
+              {
+                type: "release",
+                title: "Package dependency changed"
+              },
+              {
+                type: "security",
+                title: "Possible hardcoded secret"
+              }
+            ]
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+      const outputPath = join(repoPath, "guardian-report.md");
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["--repo", repoPath, "--base", "origin/main", "--out", outputPath, "--fail-on", "high"],
+        stdout
+      });
+
+      const report = await readFile(outputPath, "utf8");
+
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.overallRisk, "low");
+      assert.match(report, /## Accepted Findings/);
+      assert.match(report, /Possible hardcoded secret/);
+      assert.match(report, /These findings matched `\.guardian-baseline\.json`/);
+    });
+  });
 });
 
 describe("shouldFailBuild", () => {

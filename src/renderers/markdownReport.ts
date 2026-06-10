@@ -27,6 +27,10 @@ ${renderReleaseFindings(report.releaseFindings)}
 
 ${renderSecurityFindings(report.securityFindings)}
 
+## Accepted Findings
+
+${renderAcceptedFindings(report.acceptedFindings)}
+
 ## Required Actions
 
 ${renderTaskList(report.requiredActions)}
@@ -68,9 +72,10 @@ function renderExecutiveSummary(report: GuardianReport): string {
 | QA findings | ${report.qaFindings.length} |
 | Release findings | ${report.releaseFindings.length} |
 | Security findings | ${report.securityFindings.length} |
+| Accepted findings | ${report.acceptedFindings.length} |
 | Required actions | ${report.requiredActions.length} |
 
-${totalFindings === 0 ? "No findings were detected by the current Guardian rules." : `${totalFindings} finding(s) need review before release.`}
+${renderFindingSummary(totalFindings, report.acceptedFindings.length)}
 
 Highest detected risk: **${highestRisk}**.`;
 }
@@ -79,6 +84,18 @@ function renderOverallRisk(report: GuardianReport): string {
   return `${renderRiskLabel(report.overallRisk)} with score **${report.riskScore}/100**.
 
 ${riskGuidance(report.overallRisk)}`;
+}
+
+function renderFindingSummary(activeFindings: number, acceptedFindings: number): string {
+  if (activeFindings > 0) {
+    return `${activeFindings} finding(s) need review before release.`;
+  }
+
+  if (acceptedFindings > 0) {
+    return "No new findings need review before release. Accepted findings are listed separately.";
+  }
+
+  return "No findings were detected by the current Guardian rules.";
 }
 
 function renderChangedFiles(changedFiles: ChangedFile[]): string {
@@ -171,6 +188,24 @@ ${finding.description}
 **Recommendation:** ${finding.recommendation ?? "Review this changed file manually."}`;
     })
     .join("\n\n");
+}
+
+function renderAcceptedFindings(findings: GuardianReport["acceptedFindings"]): string {
+  if (findings.length === 0) {
+    return "No accepted findings.";
+  }
+
+  const rows = findings.map((finding) => {
+    const location = finding.filePath ?? ("affectedFiles" in finding ? finding.affectedFiles.join(", ") : "None");
+
+    return `| ${escapeTableCell(finding.area)} | ${escapeTableCell(finding.title)} | ${renderRiskLabel(finding.riskLevel)} | ${escapeTableCell(location)} |`;
+  });
+
+  return `These findings matched ${"`"}.guardian-baseline.json${"`"} and are shown for visibility, but they do not contribute to the overall score.
+
+| Type | Title | Risk | Location |
+| --- | --- | --- | --- |
+${rows.join("\n")}`;
 }
 
 function renderSuggestedTests(report: GuardianReport): string {

@@ -39,6 +39,7 @@ export type FindingBase = {
   riskLevel: RiskLevel;
   filePath?: string;
   recommendation?: string;
+  accepted?: boolean;
 };
 
 export type QaFinding = FindingBase & {
@@ -59,6 +60,8 @@ export type SecurityFinding = FindingBase & {
   lineNumber?: number;
 };
 
+export type GuardianFinding = QaFinding | ReleaseFinding | SecurityFinding;
+
 export type GuardianReport = {
   projectName: string;
   generatedAt: string;
@@ -68,6 +71,7 @@ export type GuardianReport = {
   qaFindings: QaFinding[];
   releaseFindings: ReleaseFinding[];
   securityFindings: SecurityFinding[];
+  acceptedFindings: GuardianFinding[];
   requiredActions: string[];
   warnings: string[];
 };

@@ -15,6 +15,7 @@
 | QA findings | 1 |
 | Release findings | 1 |
 | Security findings | 1 |
+| Accepted findings | 1 |
 | Required actions | 2 |
 
 3 finding(s) need review before release.
@@ -80,6 +81,14 @@ A GitHub Actions workflow or local action changed.
 Possible hardcoded secret detected in a changed file. This is a possible risk based on heuristic matching, not a confirmed vulnerability.
 
 **Recommendation:** Move secrets to a managed secret store or environment variable, then rotate the exposed value if it is real.
+
+## Accepted Findings
+
+These findings matched `.guardian-baseline.json` and are shown for visibility, but they do not contribute to the overall score.
+
+| Type | Title | Risk | Location |
+| --- | --- | --- | --- |
+| release | GitHub Actions changed | **high** | .github/workflows/release.yml |
 
 ## Required Actions
 

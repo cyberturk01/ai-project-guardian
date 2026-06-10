@@ -87,6 +87,19 @@ function makeReport(): GuardianReport {
         recommendation: "Move secrets to a managed secret store or environment variable, then rotate the exposed value if it is real."
       }
     ],
+    acceptedFindings: [
+      {
+        id: "release-github-actions-changed",
+        area: "release",
+        title: "GitHub Actions changed",
+        description: "A GitHub Actions workflow or local action changed.",
+        riskLevel: "high",
+        affectedFiles: [".github/workflows/release.yml"],
+        whyItMatters: "CI/CD workflow changes can skip required checks, alter deployment permissions, or deploy from the wrong trigger.",
+        requiredBeforeDeploy: ["Review workflow triggers, permissions, environments, and secrets usage."],
+        accepted: true
+      }
+    ],
     requiredActions: [
       "Review workflow triggers, permissions, environments, and secrets usage.",
       "Confirm required checks still run before deployment."

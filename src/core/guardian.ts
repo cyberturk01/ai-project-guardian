@@ -8,6 +8,7 @@ import { classifyFile } from "../repo/fileClassifier.js";
 import { getChangedFiles } from "../repo/getChangedFiles.js";
 import type { GuardianReport } from "./types.js";
 import { listRepoFiles } from "../repo/listRepoFiles.js";
+import { applyBaseline, loadBaseline } from "./baseline.js";
 
 export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
   const changedFiles = await getChangedFiles({
@@ -41,11 +42,19 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     repoPath: config.repoPath,
     changedFiles
   });
+  const baselineResult = await loadBaseline(config.repoPath);
+  const baselineApplied = applyBaseline(
+    [...qaFindings, ...releaseFindings, ...securityFindings],
+    baselineResult.baseline
+  );
+  const activeQaFindings = baselineApplied.activeFindings.filter((finding) => finding.area === "qa");
+  const activeReleaseFindings = baselineApplied.activeFindings.filter((finding) => finding.area === "release");
+  const activeSecurityFindings = baselineApplied.activeFindings.filter((finding) => finding.area === "security");
   const riskScore = scoreRisk({
     changedFiles,
-    qaFindings,
-    releaseFindings,
-    securityFindings
+    qaFindings: activeQaFindings,
+    releaseFindings: activeReleaseFindings,
+    securityFindings: activeSecurityFindings
   });
 
   return {
@@ -54,10 +63,11 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     riskScore: riskScore.score,
     overallRisk: riskScore.overallRisk,
     changedFiles,
-    qaFindings,
-    releaseFindings,
-    securityFindings,
-    requiredActions: releaseFindings.flatMap((finding) => finding.requiredBeforeDeploy),
-    warnings: [...config.warnings, ...projectBrainResult.warnings]
+    qaFindings: activeQaFindings,
+    releaseFindings: activeReleaseFindings,
+    securityFindings: activeSecurityFindings,
+    acceptedFindings: baselineApplied.acceptedFindings,
+    requiredActions: activeReleaseFindings.flatMap((finding) => finding.requiredBeforeDeploy),
+    warnings: [...config.warnings, ...projectBrainResult.warnings, ...baselineResult.warnings]
   };
 }

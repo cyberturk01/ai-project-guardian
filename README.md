@@ -58,6 +58,23 @@ Available flags:
 - `--fail-on <high|critical>`: exit with code 1 when the calculated risk meets the threshold. Defaults to not failing the build.
 - `--help`: print CLI help.
 
+## Risk baseline
+
+Add `.guardian-baseline.json` to a target repository to accept known findings without counting them toward the overall score:
+
+```json
+{
+  "acceptedFindings": [
+    {
+      "type": "release",
+      "title": "GitHub Actions changed"
+    }
+  ]
+}
+```
+
+Accepted findings are matched by `type` and `title`. They still appear in the report under `Accepted Findings`, but only new active findings affect the risk score.
+
 ## GitHub Actions
 
 Example workflow:
