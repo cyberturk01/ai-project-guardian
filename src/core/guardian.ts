@@ -1,6 +1,7 @@
 import type { CliConfig } from "../config/loadConfig.js";
 import { analyzeQa } from "../analyzers/qaAnalyzer.js";
 import { analyzeRelease } from "../analyzers/releaseAnalyzer.js";
+import { analyzeSecurity } from "../analyzers/securityAnalyzer.js";
 import { loadProjectBrain } from "../project-brain/loadProjectBrain.js";
 import { classifyFile } from "../repo/fileClassifier.js";
 import { getChangedFiles } from "../repo/getChangedFiles.js";
@@ -35,6 +36,10 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     changedFiles,
     config: config.guardian
   });
+  const securityFindings = await analyzeSecurity({
+    repoPath: config.repoPath,
+    changedFiles
+  });
 
   return {
     projectName: config.guardian.projectName,
@@ -42,14 +47,15 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     overallRisk: highestRisk([
       ...changedFiles.map((file) => file.riskLevel),
       ...qaFindings.map((finding) => finding.riskLevel),
-      ...releaseFindings.map((finding) => finding.riskLevel)
+      ...releaseFindings.map((finding) => finding.riskLevel),
+      ...securityFindings.map((finding) => finding.riskLevel)
     ]),
     changedFiles,
     qaFindings,
     releaseFindings,
-    securityFindings: [],
+    securityFindings,
     requiredActions: releaseFindings.flatMap((finding) => finding.requiredBeforeDeploy),
-    warnings: [...config.warnings, ...projectBrainResult.warnings, "Security analysis has not been implemented yet."]
+    warnings: [...config.warnings, ...projectBrainResult.warnings]
   };
 }
 

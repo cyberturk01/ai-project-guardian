@@ -55,6 +55,7 @@ export type ReleaseFinding = FindingBase & {
 
 export type SecurityFinding = FindingBase & {
   area: "security";
+  lineNumber?: number;
 };
 
 export type GuardianReport = {

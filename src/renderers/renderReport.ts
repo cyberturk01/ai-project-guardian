@@ -26,7 +26,7 @@ ${renderReleaseFindings(report.releaseFindings)}
 
 ## Security findings
 
-${renderCount(report.securityFindings.length)}
+${renderSecurityFindings(report.securityFindings)}
 
 ## Required actions
 
@@ -86,6 +86,26 @@ function renderReleaseFindings(findings: GuardianReport["releaseFindings"]): str
 - Affected files: ${finding.affectedFiles.join(", ")}
 - Why it matters: ${finding.whyItMatters}
 - Required before deploy: ${finding.requiredBeforeDeploy.join(" ")}
+
+${finding.description}`;
+    })
+    .join("\n\n");
+}
+
+function renderSecurityFindings(findings: GuardianReport["securityFindings"]): string {
+  if (findings.length === 0) {
+    return "None.";
+  }
+
+  return findings
+    .map((finding) => {
+      const location = finding.lineNumber === undefined ? finding.filePath : `${finding.filePath}:${finding.lineNumber}`;
+
+      return `### ${finding.title}
+
+- Risk: ${finding.riskLevel}
+- Location: ${location ?? "Unknown"}
+- Recommendation: ${finding.recommendation ?? "Review this changed file manually."}
 
 ${finding.description}`;
     })
