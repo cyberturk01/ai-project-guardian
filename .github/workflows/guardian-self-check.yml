@@ -10,15 +10,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
           cache: npm
+
       - run: npm ci
       - run: npm run build
+
       - name: Run Guardian
         continue-on-error: true
-        run: npm run guardian -- --repo . --format markdown --out guardian-report.md
+        run: npm run guardian -- --repo . --out guardian-report.md
+
       - name: Add report to summary
         if: always()
         run: |
