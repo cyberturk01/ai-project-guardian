@@ -11,6 +11,7 @@ export const defaultGuardianConfig: GuardianConfig = {
   testFolders: [],
   releaseSensitiveFiles: [],
   requiredChecks: [],
+  coverageThreshold: 80,
   businessAreas: [],
   customRules: []
 };
@@ -28,6 +29,7 @@ const allowedKeys = new Set<keyof GuardianConfig>([
   "testFolders",
   "releaseSensitiveFiles",
   "requiredChecks",
+  "coverageThreshold",
   "businessAreas",
   "customRules"
 ]);
@@ -83,10 +85,26 @@ export function validateGuardianConfig(value: unknown, repoPath?: string): Guard
   assignStringArray(config, value, "testFolders", warnings, repoPath);
   assignStringArray(config, value, "releaseSensitiveFiles", warnings, repoPath);
   assignStringArray(config, value, "requiredChecks", warnings);
+  assignCoverageThreshold(config, value, warnings);
   assignBusinessAreas(config, value, warnings, repoPath);
   assignCustomRules(config, value, warnings, repoPath);
 
   return { config, warnings };
+}
+
+function assignCoverageThreshold(config: GuardianConfig, value: Record<string, unknown>, warnings: string[]): void {
+  const fieldValue = value.coverageThreshold;
+
+  if (fieldValue === undefined) {
+    return;
+  }
+
+  if (typeof fieldValue === "number" && Number.isFinite(fieldValue) && fieldValue >= 0 && fieldValue <= 100) {
+    config.coverageThreshold = fieldValue;
+    return;
+  }
+
+  warnings.push('Guardian config field "coverageThreshold" must be a number from 0 to 100; using default value.');
 }
 
 function assignStringArray(

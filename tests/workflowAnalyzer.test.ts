@@ -111,6 +111,7 @@ function configWithRequiredChecks(requiredChecks: string[]): GuardianConfig {
     testFolders: [],
     releaseSensitiveFiles: [],
     requiredChecks,
+    coverageThreshold: 80,
     businessAreas: []
   };
 }

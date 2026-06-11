@@ -1,5 +1,6 @@
 import type { CliConfig } from "../config/loadConfig.js";
 import { analyzeQa } from "../analyzers/qaAnalyzer.js";
+import { analyzeCoverage } from "../analyzers/coverageAnalyzer.js";
 import { analyzeRelease } from "../analyzers/releaseAnalyzer.js";
 import { analyzeSecurity } from "../analyzers/securityAnalyzer.js";
 import { analyzeBusinessAreas } from "../analyzers/businessAreaAnalyzer.js";
@@ -36,6 +37,11 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     config: config.guardian,
     projectBrain: projectBrainResult.projectBrain
   });
+  const coverageFindings = await analyzeCoverage({
+    repoPath: config.repoPath,
+    changedFiles,
+    coverageThreshold: config.guardian.coverageThreshold
+  });
   const releaseFindings = analyzeRelease({
     changedFiles,
     config: config.guardian
@@ -58,6 +64,7 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
   const baselineApplied = applyBaseline(
     [
       ...qaFindings,
+      ...coverageFindings,
       ...releaseFindings,
       ...businessAreaFindings.qaFindings,
       ...businessAreaFindings.releaseFindings,

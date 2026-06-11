@@ -98,6 +98,7 @@ Add `guardian.config.json` at the target repository root:
     "npm test",
     "npm run lint"
   ],
+  "coverageThreshold": 80,
   "customRules": [
     {
       "id": "email-change-requires-test",
@@ -108,6 +109,8 @@ Add `guardian.config.json` at the target repository root:
   ]
 }
 ```
+
+Coverage awareness is optional. When `coverage-final.json` or `lcov.info` exists at the repository root or under `coverage/`, Guardian flags changed source files below `coverageThreshold`.
 
 ### 2. Add Project Brain
 

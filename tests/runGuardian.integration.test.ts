@@ -146,6 +146,56 @@ describe("runGuardianCli integration", () => {
     });
   });
 
+  it("reports changed code below optional coverage threshold when coverage output is present", async () => {
+    await withFixtureRepo(async (repoPath) => {
+      await writeFile(
+        join(repoPath, "guardian.config.json"),
+        JSON.stringify(
+          {
+            projectName: "Fixture Repo",
+            riskFolders: ["src/auth"],
+            testFolders: ["tests"],
+            releaseSensitiveFiles: ["package.json"],
+            requiredChecks: ["npm test"],
+            coverageThreshold: 90
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+      await writeFile(
+        join(repoPath, "coverage-final.json"),
+        JSON.stringify(
+          {
+            "src/auth/session.ts": {
+              s: {
+                "0": 1,
+                "1": 0
+              }
+            }
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+      const outputPath = join(repoPath, "guardian-report.md");
+      const stdout = new MemoryWritable();
+
+      await runGuardianCli({
+        argv: ["--repo", repoPath, "--base", "origin/main", "--out", outputPath, "--full-report"],
+        stdout
+      });
+
+      const report = await readFile(outputPath, "utf8");
+
+      assert.match(report, /Changed code has low test coverage/);
+      assert.match(report, /src\/auth\/session.ts/);
+      assert.match(report, /90%/);
+    });
+  });
+
   it("writes SARIF when --format sarif is set", async () => {
     await withFixtureRepo(async (repoPath) => {
       const outputPath = join(repoPath, "guardian-report.sarif");

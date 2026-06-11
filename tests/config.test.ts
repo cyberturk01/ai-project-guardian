@@ -51,6 +51,7 @@ describe("loadGuardianConfig", () => {
         testFolders: ["tests"],
         releaseSensitiveFiles: ["package.json"],
         requiredChecks: ["npm test"],
+        coverageThreshold: 75,
         customRules: [
           {
             id: "email-change-requires-test",
@@ -88,6 +89,7 @@ describe("loadGuardianConfig", () => {
         testFolders: ["tests"],
         releaseSensitiveFiles: ["package.json"],
         requiredChecks: ["npm test"],
+        coverageThreshold: 75,
         customRules: [
           {
             id: "email-change-requires-test",
@@ -159,6 +161,7 @@ describe("loadGuardianConfig", () => {
     assert.deepEqual(result.config.testFolders, ["tests"]);
     assert.deepEqual(result.config.releaseSensitiveFiles, ["../shared/package.json"]);
     assert.deepEqual(result.config.requiredChecks, ["npm test"]);
+    assert.equal(result.config.coverageThreshold, 80);
     assert.deepEqual(result.config.customRules?.[0].whenChanged, "src/email/**");
     assert.deepEqual(result.config.customRules?.[0].requiresTest, "tests/email/**");
     assert.deepEqual(result.config.businessAreas?.[0].paths, ["src/privacy", "src/consent"]);
@@ -185,6 +188,7 @@ describe("loadGuardianConfig", () => {
         testFolders: "tests",
         releaseSensitiveFiles: ["package.json"],
         requiredChecks: ["npm test"],
+        coverageThreshold: 101,
         businessAreas: [
           {
             name: "consent",
@@ -244,6 +248,7 @@ describe("loadGuardianConfig", () => {
     assert.deepEqual(result.config.testFolders, []);
     assert.deepEqual(result.config.releaseSensitiveFiles, ["package.json"]);
     assert.deepEqual(result.config.requiredChecks, ["npm test"]);
+    assert.equal(result.config.coverageThreshold, 80);
     assert.deepEqual(result.config.businessAreas, [
       {
         name: "consent",
@@ -266,7 +271,7 @@ describe("loadGuardianConfig", () => {
         whyItMatters: undefined
       }
     ]);
-    assert.equal(result.warnings.length, 10);
+    assert.equal(result.warnings.length, 11);
   });
 
   it("warns and continues when businessAreas is invalid", () => {

@@ -6,7 +6,8 @@ export const guardianConfigFixture: GuardianConfig = {
   riskFolders: ["src/auth", "src/security"],
   testFolders: ["tests", "cypress"],
   releaseSensitiveFiles: ["package.json"],
-  requiredChecks: ["npm test"]
+  requiredChecks: ["npm test"],
+  coverageThreshold: 80
 };
 
 export const projectBrainFixture: ProjectBrain = {

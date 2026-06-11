@@ -9,6 +9,7 @@ const baseConfig: GuardianConfig = {
   testFolders: ["tests"],
   releaseSensitiveFiles: [],
   requiredChecks: [],
+  coverageThreshold: 80,
   businessAreas: [
     {
       name: "consent",
@@ -84,7 +85,8 @@ describe("analyzeBusinessAreas", () => {
         riskFolders: [],
         testFolders: [],
         releaseSensitiveFiles: [],
-        requiredChecks: []
+        requiredChecks: [],
+        coverageThreshold: 80
       }
     });
 

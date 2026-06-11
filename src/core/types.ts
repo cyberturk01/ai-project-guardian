@@ -28,6 +28,7 @@ export type GuardianConfig = {
   testFolders: string[];
   releaseSensitiveFiles: string[];
   requiredChecks: string[];
+  coverageThreshold: number;
   businessAreas?: BusinessArea[];
   customRules?: CustomRule[];
 };

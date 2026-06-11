@@ -8,7 +8,8 @@ const config: GuardianConfig = {
   riskFolders: ["src/api", "src/auth", "src/db", "src/payments"],
   testFolders: ["tests", "e2e"],
   releaseSensitiveFiles: ["package.json", "src/db/schema.sql", ".github/workflows"],
-  requiredChecks: ["npm run lint", "npm test", "npm run build"]
+  requiredChecks: ["npm run lint", "npm test", "npm run build"],
+  coverageThreshold: 80
 };
 
 describe("analyzeRelease", () => {

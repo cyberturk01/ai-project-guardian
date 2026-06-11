@@ -8,7 +8,8 @@ const guardianConfig: GuardianConfig = {
   riskFolders: ["src/auth", "src/security"],
   testFolders: ["tests", "cypress"],
   releaseSensitiveFiles: ["package.json", "src/server.ts"],
-  requiredChecks: ["npm test"]
+  requiredChecks: ["npm test"],
+  coverageThreshold: 80
 };
 
 describe("classifyFile", () => {
