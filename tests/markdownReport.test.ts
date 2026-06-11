@@ -113,6 +113,12 @@ function makeReport(): GuardianReport {
       }
     ],
     workflowFindings: [],
+    enterpriseRiskCorrelation: {
+      externalFindings: [],
+      correlatedFindings: [],
+      importedArtifacts: [],
+      warnings: []
+    },
     acceptedFindings: [
       {
         id: "release-github-actions-changed",

@@ -3,6 +3,7 @@ import { analyzeQa } from "../analyzers/qaAnalyzer.js";
 import { analyzeCoverage } from "../analyzers/coverageAnalyzer.js";
 import { analyzeRelease } from "../analyzers/releaseAnalyzer.js";
 import { analyzeSecurity } from "../analyzers/securityAnalyzer.js";
+import { analyzeEnterpriseRiskCorrelation } from "../analyzers/enterpriseRiskCorrelation.js";
 import { analyzeBusinessAreas } from "../analyzers/businessAreaAnalyzer.js";
 import { analyzeWorkflows } from "../analyzers/workflowAnalyzer.js";
 import { scoreRisk } from "../analyzers/riskScorer.js";
@@ -77,12 +78,18 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
   const activeReleaseFindings = baselineApplied.activeFindings.filter((finding) => finding.area === "release");
   const activeSecurityFindings = baselineApplied.activeFindings.filter((finding) => finding.area === "security");
   const activeWorkflowFindings = baselineApplied.activeFindings.filter((finding) => finding.area === "workflow");
+  const enterpriseRiskCorrelation = await analyzeEnterpriseRiskCorrelation({
+    artifacts: config.externalArtifacts,
+    securityFindings: activeSecurityFindings
+  });
   const riskScore = scoreRisk({
     changedFiles,
     qaFindings: activeQaFindings,
     releaseFindings: activeReleaseFindings,
     securityFindings: activeSecurityFindings,
-    workflowFindings: activeWorkflowFindings
+    workflowFindings: activeWorkflowFindings,
+    externalFindings: enterpriseRiskCorrelation.externalFindings,
+    correlatedFindings: enterpriseRiskCorrelation.correlatedFindings
   });
 
   return {
@@ -95,8 +102,9 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     releaseFindings: activeReleaseFindings,
     securityFindings: activeSecurityFindings,
     workflowFindings: activeWorkflowFindings,
+    enterpriseRiskCorrelation,
     acceptedFindings: baselineApplied.acceptedFindings,
     requiredActions: activeReleaseFindings.flatMap((finding) => finding.requiredBeforeDeploy),
-    warnings: [...config.warnings, ...projectBrainResult.warnings, ...baselineResult.warnings]
+    warnings: [...config.warnings, ...projectBrainResult.warnings, ...baselineResult.warnings, ...enterpriseRiskCorrelation.warnings]
   };
 }

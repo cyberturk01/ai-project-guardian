@@ -96,6 +96,12 @@ function makeReport(): GuardianReport {
     ],
     securityFindings: [],
     workflowFindings: [],
+    enterpriseRiskCorrelation: {
+      externalFindings: [],
+      correlatedFindings: [],
+      importedArtifacts: [],
+      warnings: []
+    },
     acceptedFindings: [],
     requiredActions: [],
     warnings: []

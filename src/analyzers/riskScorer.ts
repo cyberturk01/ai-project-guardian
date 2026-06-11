@@ -1,4 +1,13 @@
-import type { ChangedFile, QaFinding, ReleaseFinding, RiskLevel, SecurityFinding, WorkflowFinding } from "../core/types.js";
+import type {
+  ChangedFile,
+  CorrelatedFinding,
+  ExternalFinding,
+  QaFinding,
+  ReleaseFinding,
+  RiskLevel,
+  SecurityFinding,
+  WorkflowFinding
+} from "../core/types.js";
 
 export type RiskScoreInput = {
   changedFiles: ChangedFile[];
@@ -6,6 +15,8 @@ export type RiskScoreInput = {
   releaseFindings: ReleaseFinding[];
   securityFindings: SecurityFinding[];
   workflowFindings?: WorkflowFinding[];
+  externalFindings?: ExternalFinding[];
+  correlatedFindings?: CorrelatedFinding[];
 };
 
 export type RiskScoreResult = {
@@ -127,7 +138,7 @@ export function riskLevelForScore(score: number): RiskLevel {
 }
 
 function selectRiskBand(input: RiskScoreInput): RiskBand {
-  if (input.securityFindings.length > 0) {
+  if (input.securityFindings.length > 0 || (input.externalFindings ?? []).length > 0 || (input.correlatedFindings ?? []).length > 0) {
     return riskBands.security;
   }
 
@@ -164,7 +175,9 @@ function scoreWeightedSignals(input: RiskScoreInput, bandName: RiskBandName): nu
     scoreQaFindings(input.qaFindings) +
     scoreReleaseFindings(input.releaseFindings) +
     scoreWorkflowFindings(input.workflowFindings ?? []) +
-    scoreSecurityFindings(input.securityFindings)
+    scoreSecurityFindings(input.securityFindings) +
+    scoreExternalFindings(input.externalFindings ?? []) +
+    scoreCorrelatedFindings(input.correlatedFindings ?? [])
   );
 }
 
@@ -195,6 +208,22 @@ function scoreSecurityFindings(findings: SecurityFinding[]): number {
   return findings.reduce((score, finding) => score + securityFindingWeights[finding.riskLevel], 0);
 }
 
+function scoreExternalFindings(findings: ExternalFinding[]): number {
+  return Math.min(
+    20,
+    findings.reduce((score, finding) => score + Math.ceil(securityFindingWeights[finding.riskLevel] / 3), 0)
+  );
+}
+
+function scoreCorrelatedFindings(findings: CorrelatedFinding[]): number {
+  return Math.min(
+    30,
+    findings
+      .filter((finding) => finding.confidence === "multi-tool")
+      .reduce((score, finding) => score + 8 + finding.sources.length * 2 + riskLevelWeights[finding.riskLevel], 0)
+  );
+}
+
 function applyCriticalCombinations(score: number, input: RiskScoreInput): number {
   if (hasScoreElevatingCriticalCombination(input)) {
     return Math.max(score, criticalCombinationMinimumScore);
@@ -214,11 +243,15 @@ function overallRiskForScore(score: number, input: RiskScoreInput): RiskLevel {
 }
 
 function hasCriticalPrerequisite(input: RiskScoreInput): boolean {
-  return input.securityFindings.length > 0 || hasScoreElevatingCriticalCombination(input);
+  return input.securityFindings.length > 0 || hasMultiToolCriticalCorrelation(input) || hasScoreElevatingCriticalCombination(input);
 }
 
 function hasScoreElevatingCriticalCombination(input: RiskScoreInput): boolean {
   return hasMigrationWithoutDbTest(input) || hasAuthChangeWithoutNegativeTest(input) || hasPaymentChangeWithoutIntegrationTest(input);
+}
+
+function hasMultiToolCriticalCorrelation(input: RiskScoreInput): boolean {
+  return (input.correlatedFindings ?? []).some((finding) => finding.confidence === "multi-tool" && finding.riskLevel === "critical");
 }
 
 function hasMigrationWithoutDbTest(input: RiskScoreInput): boolean {

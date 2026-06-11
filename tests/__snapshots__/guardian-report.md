@@ -16,6 +16,8 @@
 | Release findings | 1 |
 | Security findings | 1 |
 | Workflow findings | 0 |
+| External scanner findings | 0 |
+| Multi-tool correlations | 0 |
 | Accepted findings | 1 |
 | Required actions | 2 |
 
@@ -86,6 +88,10 @@ Possible hardcoded secret detected in a changed file. This is a possible risk ba
 ## Workflow Findings
 
 No workflow findings.
+
+## Enterprise Risk Correlation
+
+No external scanner artifacts imported.
 
 ## Accepted Findings
 

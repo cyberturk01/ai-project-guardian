@@ -130,6 +130,12 @@ function makeReport(): GuardianReport {
         recommendation: "Add the required check to a GitHub Actions workflow that runs before merge or release."
       }
     ],
+    enterpriseRiskCorrelation: {
+      externalFindings: [],
+      correlatedFindings: [],
+      importedArtifacts: [],
+      warnings: []
+    },
     acceptedFindings: [],
     requiredActions: [],
     warnings: []

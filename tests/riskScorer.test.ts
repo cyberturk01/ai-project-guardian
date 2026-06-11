@@ -171,6 +171,54 @@ describe("scoreRisk", () => {
     assert.equal(result.overallRisk, "critical");
   });
 
+  it("increases risk when external scanners agree with Guardian findings", () => {
+    const baseInput = {
+      changedFiles: [
+        changedFile({
+          path: "src/api/reservations.ts",
+          category: "source",
+          riskLevel: "medium"
+        })
+      ],
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: [securityFinding({ riskLevel: "high", filePath: "src/api/reservations.ts", lineNumber: 12 })],
+      workflowFindings: []
+    };
+    const baseResult = scoreRisk(baseInput);
+    const correlatedResult = scoreRisk({
+      ...baseInput,
+      externalFindings: [
+        {
+          id: "semgrep-hardcoded-secret",
+          source: "semgrep",
+          ruleId: "hardcoded-secret",
+          title: "Security finding",
+          description: "Security finding.",
+          riskLevel: "high",
+          filePath: "src/api/reservations.ts",
+          lineNumber: 12,
+          artifactPath: "reports/semgrep.json"
+        }
+      ],
+      correlatedFindings: [
+        {
+          id: "correlated-hardcoded-secret",
+          title: "Security finding",
+          riskLevel: "high",
+          filePath: "src/api/reservations.ts",
+          lineNumber: 12,
+          sources: ["guardian", "semgrep"],
+          findingIds: ["security-hardcoded-secret", "semgrep-hardcoded-secret"],
+          confidence: "multi-tool"
+        }
+      ]
+    });
+
+    assert.ok(correlatedResult.score > baseResult.score);
+    assert.equal(correlatedResult.overallRisk, "critical");
+  });
+
   it("prevents documentation changes from inflating non-documentation risk", () => {
     const result = scoreRisk({
       changedFiles: [

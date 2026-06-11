@@ -15,6 +15,7 @@ describe("parseArgs", () => {
     assert.throws(() => parseArgs(["--base", "--out", "guardian-report.md"]), /Missing value for --base/);
     assert.throws(() => parseArgs(["--out", "--fail-on", "high"]), /Missing value for --out/);
     assert.throws(() => parseArgs(["--format"]), /Missing value for --format/);
+    assert.throws(() => parseArgs(["--sarif"]), /Missing value for --sarif/);
     assert.throws(() => parseArgs(["--fail-on", "--full-report"]), /Missing value for --fail-on/);
   });
 
@@ -50,5 +51,25 @@ describe("parseArgs", () => {
 
   it("parses PR comment mode", () => {
     assert.equal(parseArgs(["--pr-comment"]).reportStyle, "pr-comment");
+  });
+
+  it("parses repeated local external scanner artifact paths", () => {
+    const args = parseArgs([
+      "--sarif",
+      "reports/generic.sarif",
+      "--codeql",
+      "reports/codeql.sarif",
+      "--semgrep",
+      "reports/semgrep.json",
+      "--snyk",
+      "reports/snyk.json",
+      "--sarif",
+      "reports/extra.sarif"
+    ]);
+
+    assert.deepEqual(args.sarifPaths, ["reports/generic.sarif", "reports/extra.sarif"]);
+    assert.deepEqual(args.codeqlPaths, ["reports/codeql.sarif"]);
+    assert.deepEqual(args.semgrepPaths, ["reports/semgrep.json"]);
+    assert.deepEqual(args.snykPaths, ["reports/snyk.json"]);
   });
 });

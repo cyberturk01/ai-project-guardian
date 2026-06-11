@@ -11,6 +11,10 @@ export type CliArgs = {
   base?: string;
   out?: string;
   format?: ReportFormat;
+  sarifPaths: string[];
+  codeqlPaths: string[];
+  semgrepPaths: string[];
+  snykPaths: string[];
   failOn?: FailOnRisk;
   reportStyle: ReportStyle;
   help: boolean;
@@ -30,13 +34,17 @@ export type CliRunOptions = {
 export const helpText = `ai-project-guardian
 
 Usage:
-  ai-project-guardian --repo <path> [--base <ref>] [--out <path>] [--format markdown|json|sarif] [--summary-only|--full-report|--pr-comment] [--fail-on high|critical]
+  ai-project-guardian --repo <path> [--base <ref>] [--out <path>] [--format markdown|json|sarif] [--sarif <path>] [--codeql <path>] [--semgrep <path>] [--snyk <path>] [--summary-only|--full-report|--pr-comment] [--fail-on high|critical]
 
 Options:
   --repo <path>          Target repository path. Defaults to GUARDIAN_REPO_PATH or ".".
   --base <ref>           Base git ref for changed file detection. Defaults to origin/main with HEAD~1 fallback.
   --out <path>           Output report path. Defaults to GUARDIAN_OUTPUT_PATH when set.
   --format <format>      Report format: markdown, json, or sarif. Defaults to markdown.
+  --sarif <path>         Import a local SARIF artifact. Can be repeated.
+  --codeql <path>        Import a local CodeQL SARIF artifact. Can be repeated.
+  --semgrep <path>       Import a local Semgrep JSON or SARIF artifact. Can be repeated.
+  --snyk <path>          Import a local Snyk JSON or SARIF artifact. Can be repeated.
   --summary-only         Write a short GitHub Actions-friendly summary. This is the default.
   --full-report          Write the complete Markdown report with detailed findings.
   --pr-comment           Write a compact Markdown summary suitable for GitHub PR comments.
@@ -45,7 +53,14 @@ Options:
 `;
 
 export function parseArgs(args: string[]): CliArgs {
-  const parsed: CliArgs = { help: false, reportStyle: "summary" };
+  const parsed: CliArgs = {
+    help: false,
+    reportStyle: "summary",
+    sarifPaths: [],
+    codeqlPaths: [],
+    semgrepPaths: [],
+    snykPaths: []
+  };
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -75,6 +90,30 @@ export function parseArgs(args: string[]): CliArgs {
 
     if (arg === "--format") {
       parsed.format = parseReportFormat(readValue(args, index, arg));
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--sarif") {
+      parsed.sarifPaths.push(readValue(args, index, arg));
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--codeql") {
+      parsed.codeqlPaths.push(readValue(args, index, arg));
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--semgrep") {
+      parsed.semgrepPaths.push(readValue(args, index, arg));
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--snyk") {
+      parsed.snykPaths.push(readValue(args, index, arg));
       index += 1;
       continue;
     }
@@ -119,7 +158,11 @@ export async function runGuardianCli(options: CliRunOptions): Promise<CliRunResu
     repoPath: args.repo,
     baseRef: args.base,
     outputPath: args.out,
-    format: args.format
+    format: args.format,
+    sarifPaths: args.sarifPaths,
+    codeqlPaths: args.codeqlPaths,
+    semgrepPaths: args.semgrepPaths,
+    snykPaths: args.snykPaths
   });
   const report = await runGuardianCore(config);
   const rendered = renderReport(report, config.format, args.reportStyle);

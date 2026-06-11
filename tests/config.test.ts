@@ -38,6 +38,22 @@ describe("loadConfig", () => {
 
     assert.equal(config.format, "sarif");
   });
+
+  it("resolves local external scanner artifact paths", () => {
+    const config = loadConfig({
+      sarifPaths: ["reports/generic.sarif"],
+      codeqlPaths: ["reports/codeql.sarif"],
+      semgrepPaths: ["reports/semgrep.json"],
+      snykPaths: ["reports/snyk.json"]
+    });
+
+    assert.deepEqual(config.externalArtifacts, {
+      sarif: [join(process.cwd(), "reports/generic.sarif")],
+      codeql: [join(process.cwd(), "reports/codeql.sarif")],
+      semgrep: [join(process.cwd(), "reports/semgrep.json")],
+      snyk: [join(process.cwd(), "reports/snyk.json")]
+    });
+  });
 });
 
 describe("loadGuardianConfig", () => {

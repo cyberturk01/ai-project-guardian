@@ -31,6 +31,10 @@ ${renderSecurityFindings(report.securityFindings)}
 
 ${renderWorkflowFindings(report.workflowFindings)}
 
+## Enterprise Risk Correlation
+
+${renderEnterpriseRiskCorrelation(report)}
+
 ## Accepted Findings
 
 ${renderAcceptedFindings(report.acceptedFindings)}
@@ -62,14 +66,20 @@ function renderHeader(report: GuardianReport): string {
 
 function renderExecutiveSummary(report: GuardianReport): string {
   const totalFindings =
-    report.qaFindings.length + report.releaseFindings.length + report.securityFindings.length + report.workflowFindings.length;
+    report.qaFindings.length +
+    report.releaseFindings.length +
+    report.securityFindings.length +
+    report.workflowFindings.length +
+    report.enterpriseRiskCorrelation.externalFindings.length;
   const highestRisk = highestRiskLevel([
     report.overallRisk,
     ...report.changedFiles.map((file) => file.riskLevel),
     ...report.qaFindings.map((finding) => finding.riskLevel),
     ...report.releaseFindings.map((finding) => finding.riskLevel),
     ...report.securityFindings.map((finding) => finding.riskLevel),
-    ...report.workflowFindings.map((finding) => finding.riskLevel)
+    ...report.workflowFindings.map((finding) => finding.riskLevel),
+    ...report.enterpriseRiskCorrelation.externalFindings.map((finding) => finding.riskLevel),
+    ...report.enterpriseRiskCorrelation.correlatedFindings.map((finding) => finding.riskLevel)
   ]);
 
   return `| Metric | Count |
@@ -79,6 +89,8 @@ function renderExecutiveSummary(report: GuardianReport): string {
 | Release findings | ${report.releaseFindings.length} |
 | Security findings | ${report.securityFindings.length} |
 | Workflow findings | ${report.workflowFindings.length} |
+| External scanner findings | ${report.enterpriseRiskCorrelation.externalFindings.length} |
+| Multi-tool correlations | ${report.enterpriseRiskCorrelation.correlatedFindings.filter((finding) => finding.confidence === "multi-tool").length} |
 | Accepted findings | ${report.acceptedFindings.length} |
 | Required actions | ${report.requiredActions.length} |
 
@@ -219,6 +231,48 @@ ${finding.description}
     .join("\n\n");
 }
 
+function renderEnterpriseRiskCorrelation(report: GuardianReport): string {
+  const correlation = report.enterpriseRiskCorrelation;
+
+  if (correlation.importedArtifacts.length === 0) {
+    return "No external scanner artifacts imported.";
+  }
+
+  const importedArtifacts = renderList(correlation.importedArtifacts.map((artifactPath) => escapeTableCell(artifactPath)));
+  const externalFindings =
+    correlation.externalFindings.length === 0
+      ? "No external findings imported."
+      : `| Source | Rule | Risk | Location | Title |
+| --- | --- | --- | --- | --- |
+${correlation.externalFindings.map(renderExternalFindingRow).join("\n")}`;
+  const correlatedFindings =
+    correlation.correlatedFindings.length === 0
+      ? "No correlated findings."
+      : `| Confidence | Sources | Risk | Location | Title |
+| --- | --- | --- | --- | --- |
+${correlation.correlatedFindings.map(renderCorrelatedFindingRow).join("\n")}`;
+
+  return `Imported artifacts:
+
+${importedArtifacts}
+
+### Correlated Findings
+
+${correlatedFindings}
+
+### External Findings
+
+${externalFindings}`;
+}
+
+function renderExternalFindingRow(finding: GuardianReport["enterpriseRiskCorrelation"]["externalFindings"][number]): string {
+  return `| ${escapeTableCell(finding.source)} | ${escapeTableCell(finding.ruleId)} | ${renderRiskLabel(finding.riskLevel)} | ${escapeTableCell(locationText(finding.filePath, finding.lineNumber))} | ${escapeTableCell(finding.title)} |`;
+}
+
+function renderCorrelatedFindingRow(finding: GuardianReport["enterpriseRiskCorrelation"]["correlatedFindings"][number]): string {
+  return `| ${escapeTableCell(finding.confidence)} | ${escapeTableCell(finding.sources.join(", "))} | ${renderRiskLabel(finding.riskLevel)} | ${escapeTableCell(locationText(finding.filePath, finding.lineNumber))} | ${escapeTableCell(finding.title)} |`;
+}
+
 function renderAcceptedFindings(findings: GuardianReport["acceptedFindings"]): string {
   if (findings.length === 0) {
     return "No accepted findings.";
@@ -278,6 +332,18 @@ function renderInlineList(items: string[]): string {
   }
 
   return escapeTableCell(items.join(", "));
+}
+
+function locationText(filePath: string | undefined, lineNumber: number | undefined): string {
+  if (filePath === undefined) {
+    return "Repository";
+  }
+
+  if (lineNumber === undefined) {
+    return filePath;
+  }
+
+  return `${filePath}:${lineNumber}`;
 }
 
 function renderRiskLabel(riskLevel: RiskLevel): string {

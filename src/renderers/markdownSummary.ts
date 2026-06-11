@@ -2,7 +2,11 @@ import type { GuardianReport, RiskLevel } from "../core/types.js";
 
 export function renderMarkdownSummary(report: GuardianReport): string {
   const activeFindings =
-    report.qaFindings.length + report.releaseFindings.length + report.securityFindings.length + report.workflowFindings.length;
+    report.qaFindings.length +
+    report.releaseFindings.length +
+    report.securityFindings.length +
+    report.workflowFindings.length +
+    report.enterpriseRiskCorrelation.externalFindings.length;
 
   return `# AI Project Guardian Summary
 
@@ -14,6 +18,8 @@ export function renderMarkdownSummary(report: GuardianReport): string {
 | Risk score | ${report.riskScore}/100 |
 | Changed files | ${report.changedFiles.length} |
 | Active findings | ${activeFindings} |
+| External scanner findings | ${report.enterpriseRiskCorrelation.externalFindings.length} |
+| Multi-tool correlations | ${report.enterpriseRiskCorrelation.correlatedFindings.filter((finding) => finding.confidence === "multi-tool").length} |
 | Required actions | ${report.requiredActions.length} |
 | Accepted findings | ${report.acceptedFindings.length} |
 
@@ -23,6 +29,7 @@ export function renderMarkdownSummary(report: GuardianReport): string {
 - Release: ${report.releaseFindings.length}
 - Security: ${report.securityFindings.length}
 - Workflow: ${report.workflowFindings.length}
+- External scanners: ${report.enterpriseRiskCorrelation.externalFindings.length}
 
 ## Required Actions
 

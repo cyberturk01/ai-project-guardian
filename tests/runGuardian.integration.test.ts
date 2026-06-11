@@ -222,6 +222,49 @@ describe("runGuardianCli integration", () => {
     });
   });
 
+  it("imports local scanner artifacts into the unified full report", async () => {
+    await withFixtureRepo(async (repoPath) => {
+      const semgrepPath = join(repoPath, "semgrep.json");
+      await writeFile(
+        semgrepPath,
+        JSON.stringify(
+          {
+            results: [
+              {
+                check_id: "generic.secrets.security.detected-secret",
+                path: "src/auth/session.ts",
+                start: { line: 2 },
+                extra: {
+                  message: "Possible hardcoded secret",
+                  severity: "ERROR"
+                }
+              }
+            ]
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+      const outputPath = join(repoPath, "guardian-report.md");
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["--repo", repoPath, "--base", "origin/main", "--out", outputPath, "--full-report", "--semgrep", semgrepPath],
+        stdout
+      });
+      const report = await readFile(outputPath, "utf8");
+
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.overallRisk, "critical");
+      assert.match(report, /## Enterprise Risk Correlation/);
+      assert.match(report, /External scanner findings \| 1/);
+      assert.match(report, /Multi-tool correlations \| 1/);
+      assert.match(report, /guardian, semgrep/);
+      assert.match(report, /generic\.secrets\.security\.detected-secret/);
+    });
+  });
+
   it("excludes accepted findings from critical combinations while showing them separately", async () => {
     await withFixtureRepo(async (repoPath) => {
       await writeFile(
