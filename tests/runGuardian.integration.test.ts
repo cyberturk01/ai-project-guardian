@@ -54,6 +54,30 @@ describe("runGuardianCli integration", () => {
     });
   });
 
+  it("writes a GitHub PR comment markdown summary when --pr-comment is set", async () => {
+    await withFixtureRepo(async (repoPath) => {
+      const outputPath = join(repoPath, "guardian-pr-comment.md");
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["--repo", repoPath, "--base", "origin/main", "--out", outputPath, "--pr-comment"],
+        stdout
+      });
+
+      const report = await readFile(outputPath, "utf8");
+
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.overallRisk, "critical");
+      assert.match(report, /^### AI Project Guardian/);
+      assert.match(report, /\| Risk score \| \d+\/100 \|/);
+      assert.match(report, /\| Overall risk \| \*\*critical\*\* \|/);
+      assert.match(report, /\*\*Top Findings\*\*/);
+      assert.match(report, /\*\*Required Actions\*\*/);
+      assert.match(report, /- \[ \] /);
+      assert.doesNotMatch(report, /## Changed Files/);
+    });
+  });
+
   it("returns exit 1 when --fail-on high sees high or critical risk", async () => {
     await withFixtureRepo(async (repoPath) => {
       const outputPath = join(repoPath, "guardian-report.md");

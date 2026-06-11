@@ -43,7 +43,12 @@ describe("parseArgs", () => {
     assert.match(helpText, /--format <format>/);
     assert.match(helpText, /--summary-only/);
     assert.match(helpText, /--full-report/);
+    assert.match(helpText, /--pr-comment/);
     assert.match(helpText, /--fail-on <risk>/);
     assert.match(helpText, /--help/);
+  });
+
+  it("parses PR comment mode", () => {
+    assert.equal(parseArgs(["--pr-comment"]).reportStyle, "pr-comment");
   });
 });

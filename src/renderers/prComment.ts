@@ -15,21 +15,26 @@ export function renderPrComment(report: GuardianReport): string {
   const findings = prioritizedFindings(report);
   const actions = requiredActions(report, findings);
   const lines = [
-    "AI Project Guardian",
+    "### AI Project Guardian",
     "",
-    `Risk: ${report.overallRisk.toUpperCase()}`,
+    "| Metric | Value |",
+    "| --- | --- |",
+    `| Risk score | ${report.riskScore}/100 |`,
+    `| Overall risk | **${report.overallRisk}** |`,
     "",
-    "Summary:",
-    `- ${formatCount(report.releaseFindings.length, "release finding")}`,
-    `- ${formatCount(report.qaFindings.length, "QA finding")}`,
-    `- ${formatCount(report.securityFindings.length, "security finding")}`,
-    `- ${formatCount(report.workflowFindings.length, "workflow finding")}`,
+    "**Summary**",
     "",
-    "Top Findings:",
-    ...listItems(findings.slice(0, maxTopFindings).map((finding) => finding.title)),
+    `- ${formatCount(report.changedFiles.length, "changed file")}`,
+    `- ${formatCount(totalActiveFindings(report), "active finding")}`,
+    `- ${formatCount(report.requiredActions.length, "required action")}`,
     "",
-    "Required Actions:",
-    ...listItems(actions.slice(0, maxActions))
+    "**Top Findings**",
+    "",
+    ...listItems(findings.slice(0, maxTopFindings).map(renderFindingItem)),
+    "",
+    "**Required Actions**",
+    "",
+    ...taskItems(actions.slice(0, maxActions))
   ];
 
   return `${lines.slice(0, maxLines).join("\n")}\n`;
@@ -64,6 +69,44 @@ function listItems(items: string[]): string[] {
   }
 
   return items.map((item) => `- ${item}`);
+}
+
+function taskItems(items: string[]): string[] {
+  if (items.length === 0) {
+    return ["- [ ] No required actions."];
+  }
+
+  return items.map((item) => `- [ ] ${item}`);
+}
+
+function renderFindingItem(finding: GuardianFinding): string {
+  const location = findingLocation(finding);
+
+  if (location === undefined) {
+    return `**${finding.riskLevel}** ${finding.area}: ${finding.title}`;
+  }
+
+  return `**${finding.riskLevel}** ${finding.area}: ${finding.title} (${location})`;
+}
+
+function findingLocation(finding: GuardianFinding): string | undefined {
+  if (finding.filePath !== undefined) {
+    return finding.area === "security" && finding.lineNumber !== undefined ? `${finding.filePath}:${finding.lineNumber}` : finding.filePath;
+  }
+
+  if ("affectedFiles" in finding && finding.affectedFiles.length > 0) {
+    return finding.affectedFiles[0];
+  }
+
+  if (finding.area === "workflow") {
+    return finding.workflowFile;
+  }
+
+  return undefined;
+}
+
+function totalActiveFindings(report: GuardianReport): number {
+  return report.qaFindings.length + report.releaseFindings.length + report.securityFindings.length + report.workflowFindings.length;
 }
 
 function unique(items: string[]): string[] {

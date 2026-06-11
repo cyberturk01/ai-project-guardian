@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import type { GuardianReport } from "../src/core/types.js";
 import { renderMarkdownReport } from "../src/renderers/markdownReport.js";
 import { renderMarkdownSummary } from "../src/renderers/markdownSummary.js";
+import { renderPrComment } from "../src/renderers/prComment.js";
 import { renderReport } from "../src/renderers/renderReport.js";
 
 describe("renderMarkdownReport", () => {
@@ -37,6 +38,12 @@ describe("renderMarkdownReport", () => {
     const report = makeReport();
 
     assert.equal(renderReport(report, "markdown", "summary"), renderMarkdownSummary(report));
+  });
+
+  it("uses PR comment style when requested by the generic renderer", () => {
+    const report = makeReport();
+
+    assert.equal(renderReport(report, "markdown", "pr-comment"), renderPrComment(report));
   });
 });
 

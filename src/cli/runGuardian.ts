@@ -30,7 +30,7 @@ export type CliRunOptions = {
 export const helpText = `ai-project-guardian
 
 Usage:
-  ai-project-guardian --repo <path> [--base <ref>] [--out <path>] [--format markdown|json|sarif] [--summary-only|--full-report] [--fail-on high|critical]
+  ai-project-guardian --repo <path> [--base <ref>] [--out <path>] [--format markdown|json|sarif] [--summary-only|--full-report|--pr-comment] [--fail-on high|critical]
 
 Options:
   --repo <path>          Target repository path. Defaults to GUARDIAN_REPO_PATH or ".".
@@ -39,6 +39,7 @@ Options:
   --format <format>      Report format: markdown, json, or sarif. Defaults to markdown.
   --summary-only         Write a short GitHub Actions-friendly summary. This is the default.
   --full-report          Write the complete Markdown report with detailed findings.
+  --pr-comment           Write a compact Markdown summary suitable for GitHub PR comments.
   --fail-on <risk>       Exit 1 when overall risk meets the threshold: high or critical.
   --help                 Show this help message.
 `;
@@ -85,6 +86,11 @@ export function parseArgs(args: string[]): CliArgs {
 
     if (arg === "--full-report") {
       parsed.reportStyle = "full";
+      continue;
+    }
+
+    if (arg === "--pr-comment") {
+      parsed.reportStyle = "pr-comment";
       continue;
     }
 

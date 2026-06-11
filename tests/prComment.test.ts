@@ -9,27 +9,43 @@ describe("renderPrComment", () => {
 
     assert.equal(
       actual,
-      `AI Project Guardian
+      `### AI Project Guardian
 
-Risk: HIGH
+| Metric | Value |
+| --- | --- |
+| Risk score | 72/100 |
+| Overall risk | **high** |
 
-Summary:
-- 2 release findings
-- 1 QA finding
-- 0 security findings
-- 0 workflow findings
+**Summary**
 
-Top Findings:
-- GitHub Actions changed
-- Missing integration test
-- Package dependency changed
+- 0 changed files
+- 3 active findings
+- 0 required actions
 
-Required Actions:
-- Validate workflow triggers
-- Add integration coverage
-- Review dependency lockfile changes
+**Top Findings**
+
+- **high** release: GitHub Actions changed (src/example.ts)
+- **high** qa: Missing integration test (src/example.ts)
+- **medium** release: Package dependency changed (src/example.ts)
+
+**Required Actions**
+
+- [ ] Validate workflow triggers
+- [ ] Add integration coverage
+- [ ] Review dependency lockfile changes
 `
     );
+  });
+
+  it("renders markdown suitable for GitHub PR comments", () => {
+    const actual = renderPrComment(makeReport());
+
+    assert.match(actual, /^### AI Project Guardian/);
+    assert.match(actual, /\| Risk score \| 72\/100 \|/);
+    assert.match(actual, /\| Overall risk \| \*\*high\*\* \|/);
+    assert.match(actual, /\*\*Top Findings\*\*/);
+    assert.match(actual, /\*\*Required Actions\*\*/);
+    assert.match(actual, /- \[ \] Validate workflow triggers/);
   });
 
   it("prioritizes critical and high findings before lower risk findings", () => {
@@ -43,9 +59,12 @@ Required Actions:
       releaseFindings: [releaseFinding("Medium release note", "medium"), releaseFinding("High deploy risk", "high")]
     });
 
-    const topFindings = actual.slice(actual.indexOf("Top Findings:"));
+    const topFindings = actual.slice(actual.indexOf("**Top Findings**"));
 
-    assert.match(topFindings, /- Critical missing regression coverage\n- High deploy risk\n- Medium release note\n- Low priority QA note/);
+    assert.match(
+      topFindings,
+      /- \*\*critical\*\* qa: Critical missing regression coverage.*\n- \*\*high\*\* release: High deploy risk.*\n- \*\*medium\*\* release: Medium release note.*\n- \*\*low\*\* qa: Low priority QA note/
+    );
   });
 
   it("keeps the comment within 30 lines", () => {
