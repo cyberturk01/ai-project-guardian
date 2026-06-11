@@ -1,5 +1,5 @@
 import { writeFile } from "node:fs/promises";
-import { loadConfig } from "../config/loadConfig.js";
+import { loadConfig, type ReportFormat } from "../config/loadConfig.js";
 import type { RiskLevel } from "../core/types.js";
 import { runGuardian as runGuardianCore } from "../core/guardian.js";
 import { renderReport, type ReportStyle } from "../renderers/renderReport.js";
@@ -10,6 +10,7 @@ export type CliArgs = {
   repo?: string;
   base?: string;
   out?: string;
+  format?: ReportFormat;
   failOn?: FailOnRisk;
   reportStyle: ReportStyle;
   help: boolean;
@@ -29,12 +30,13 @@ export type CliRunOptions = {
 export const helpText = `ai-project-guardian
 
 Usage:
-  ai-project-guardian --repo <path> [--base <ref>] [--out <path>] [--summary-only|--full-report] [--fail-on high|critical]
+  ai-project-guardian --repo <path> [--base <ref>] [--out <path>] [--format markdown|json|sarif] [--summary-only|--full-report] [--fail-on high|critical]
 
 Options:
   --repo <path>          Target repository path. Defaults to GUARDIAN_REPO_PATH or ".".
   --base <ref>           Base git ref for changed file detection. Defaults to origin/main with HEAD~1 fallback.
-  --out <path>           Output Markdown report path. Defaults to GUARDIAN_OUTPUT_PATH when set.
+  --out <path>           Output report path. Defaults to GUARDIAN_OUTPUT_PATH when set.
+  --format <format>      Report format: markdown, json, or sarif. Defaults to markdown.
   --summary-only         Write a short GitHub Actions-friendly summary. This is the default.
   --full-report          Write the complete Markdown report with detailed findings.
   --fail-on <risk>       Exit 1 when overall risk meets the threshold: high or critical.
@@ -66,6 +68,12 @@ export function parseArgs(args: string[]): CliArgs {
 
     if (arg === "--out") {
       parsed.out = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--format") {
+      parsed.format = parseReportFormat(readValue(args, index, arg));
       index += 1;
       continue;
     }
@@ -105,10 +113,10 @@ export async function runGuardianCli(options: CliRunOptions): Promise<CliRunResu
     repoPath: args.repo,
     baseRef: args.base,
     outputPath: args.out,
-    format: "markdown"
+    format: args.format
   });
   const report = await runGuardianCore(config);
-  const rendered = renderReport(report, "markdown", args.reportStyle);
+  const rendered = renderReport(report, config.format, args.reportStyle);
 
   if (config.outputPath === undefined) {
     stdout.write(rendered);
@@ -152,4 +160,12 @@ function parseFailOn(value: string): FailOnRisk {
   }
 
   throw new Error(`Unsupported --fail-on value: ${value}. Expected "high" or "critical".`);
+}
+
+function parseReportFormat(value: string): ReportFormat {
+  if (value === "markdown" || value === "json" || value === "sarif") {
+    return value;
+  }
+
+  throw new Error(`Unsupported --format value: ${value}. Expected "markdown", "json", or "sarif".`);
 }

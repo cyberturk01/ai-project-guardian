@@ -14,6 +14,7 @@ describe("parseArgs", () => {
     assert.throws(() => parseArgs(["--repo", "--base", "origin/main"]), /Missing value for --repo/);
     assert.throws(() => parseArgs(["--base", "--out", "guardian-report.md"]), /Missing value for --base/);
     assert.throws(() => parseArgs(["--out", "--fail-on", "high"]), /Missing value for --out/);
+    assert.throws(() => parseArgs(["--format"]), /Missing value for --format/);
     assert.throws(() => parseArgs(["--fail-on", "--full-report"]), /Missing value for --fail-on/);
   });
 
@@ -25,10 +26,21 @@ describe("parseArgs", () => {
     assert.throws(() => parseArgs(["--fail-on", "medium"]), /Expected "high" or "critical"/);
   });
 
+  it("parses supported report formats", () => {
+    assert.equal(parseArgs(["--format", "markdown"]).format, "markdown");
+    assert.equal(parseArgs(["--format", "json"]).format, "json");
+    assert.equal(parseArgs(["--format", "sarif"]).format, "sarif");
+  });
+
+  it("reports unsupported --format values clearly", () => {
+    assert.throws(() => parseArgs(["--format", "html"]), /Expected "markdown", "json", or "sarif"/);
+  });
+
   it("keeps help output aligned with supported flags", () => {
     assert.match(helpText, /--repo <path>/);
     assert.match(helpText, /--base <ref>/);
     assert.match(helpText, /--out <path>/);
+    assert.match(helpText, /--format <format>/);
     assert.match(helpText, /--summary-only/);
     assert.match(helpText, /--full-report/);
     assert.match(helpText, /--fail-on <risk>/);

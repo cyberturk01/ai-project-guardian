@@ -122,6 +122,32 @@ describe("runGuardianCli integration", () => {
     });
   });
 
+  it("writes SARIF when --format sarif is set", async () => {
+    await withFixtureRepo(async (repoPath) => {
+      const outputPath = join(repoPath, "guardian-report.sarif");
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["--repo", repoPath, "--base", "origin/main", "--out", outputPath, "--format", "sarif"],
+        stdout
+      });
+      const sarif = JSON.parse(await readFile(outputPath, "utf8")) as {
+        version: string;
+        runs: Array<{
+          tool: { driver: { rules: Array<{ id: string }> } };
+          results: Array<{ ruleId: string }>;
+        }>;
+      };
+
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.overallRisk, "critical");
+      assert.equal(sarif.version, "2.1.0");
+      assert.ok(sarif.runs[0].tool.driver.rules.some((rule) => rule.id === "security-hardcoded-secret"));
+      assert.ok(sarif.runs[0].results.some((sarifResult) => sarifResult.ruleId === "security-hardcoded-secret"));
+      assert.match(stdout.value, /Guardian report written to/);
+    });
+  });
+
   it("excludes accepted findings from critical combinations while showing them separately", async () => {
     await withFixtureRepo(async (repoPath) => {
       await writeFile(

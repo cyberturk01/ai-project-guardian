@@ -32,6 +32,12 @@ describe("loadConfig", () => {
   it("rejects unsupported report formats", () => {
     assert.throws(() => loadConfig({ format: "html" }), /Unsupported report format/);
   });
+
+  it("loads SARIF as a supported report format", () => {
+    const config = loadConfig({ format: "sarif" });
+
+    assert.equal(config.format, "sarif");
+  });
 });
 
 describe("loadGuardianConfig", () => {

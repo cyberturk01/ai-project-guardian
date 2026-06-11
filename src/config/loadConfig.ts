@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import type { GuardianConfig } from "../core/types.js";
 import { loadGuardianConfig } from "./guardianConfig.js";
 
-export type ReportFormat = "markdown" | "json";
+export type ReportFormat = "markdown" | "json" | "sarif";
 
 export type CliConfig = {
   repoPath: string;
@@ -57,7 +57,7 @@ function parseFormat(format: string | undefined): ReportFormat {
     return "markdown";
   }
 
-  if (format === "markdown" || format === "json") {
+  if (format === "markdown" || format === "json" || format === "sarif") {
     return format;
   }
 
