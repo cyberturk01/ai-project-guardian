@@ -1,0 +1,14 @@
+{
+  "name": "hardcoded secret",
+  "expectedRisk": "high",
+  "expectedFindings": [
+    "security-hardcoded-secret"
+  ],
+  "unexpectedFindings": [
+    "qa-auth-security-without-negative-test",
+    "qa-migration-without-db-test",
+    "release-github-actions-changed",
+    "release-migration-changed",
+    "workflow-missing-required-check-npm-test"
+  ]
+}

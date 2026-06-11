@@ -1,0 +1,11 @@
+{
+  "projectName": "Analyzer Accuracy Workflow Fixture",
+  "riskFolders": [],
+  "testFolders": [
+    "tests"
+  ],
+  "releaseSensitiveFiles": [],
+  "requiredChecks": [
+    "npm test"
+  ]
+}

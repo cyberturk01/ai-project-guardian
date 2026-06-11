@@ -1,0 +1,14 @@
+{
+  "name": "workflow change",
+  "expectedRisk": "low",
+  "expectedFindings": [
+    "release-github-actions-changed",
+    "workflow-missing-required-check-npm-test"
+  ],
+  "unexpectedFindings": [
+    "qa-auth-security-without-negative-test",
+    "qa-migration-without-db-test",
+    "release-migration-changed",
+    "security-hardcoded-secret"
+  ]
+}

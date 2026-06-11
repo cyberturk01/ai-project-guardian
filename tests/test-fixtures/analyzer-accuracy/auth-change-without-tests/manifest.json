@@ -1,0 +1,14 @@
+{
+  "name": "auth change without tests",
+  "expectedRisk": "critical",
+  "expectedFindings": [
+    "qa-auth-security-without-negative-test"
+  ],
+  "unexpectedFindings": [
+    "qa-migration-without-db-test",
+    "release-migration-changed",
+    "release-github-actions-changed",
+    "security-hardcoded-secret",
+    "workflow-missing-required-check-npm-test"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "docs-only change",
+  "expectedRisk": "info",
+  "expectedFindings": [],
+  "unexpectedFindings": [
+    "qa-auth-security-without-negative-test",
+    "qa-migration-without-db-test",
+    "release-github-actions-changed",
+    "release-migration-changed",
+    "security-hardcoded-secret",
+    "workflow-missing-required-check-npm-test"
+  ]
+}

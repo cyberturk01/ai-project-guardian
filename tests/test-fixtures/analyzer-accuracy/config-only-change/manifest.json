@@ -1,0 +1,13 @@
+{
+  "name": "config-only change",
+  "expectedRisk": "low",
+  "expectedFindings": [],
+  "unexpectedFindings": [
+    "qa-auth-security-without-negative-test",
+    "qa-migration-without-db-test",
+    "release-github-actions-changed",
+    "release-migration-changed",
+    "security-hardcoded-secret",
+    "workflow-missing-required-check-npm-test"
+  ]
+}

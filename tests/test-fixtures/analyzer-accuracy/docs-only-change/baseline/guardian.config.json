@@ -1,0 +1,9 @@
+{
+  "projectName": "Analyzer Accuracy Docs Fixture",
+  "riskFolders": [],
+  "testFolders": [
+    "tests"
+  ],
+  "releaseSensitiveFiles": [],
+  "requiredChecks": []
+}
