@@ -1,6 +1,6 @@
 # ai-project-guardian
 
-`ai-project-guardian` is a TypeScript CLI for analyzing another repository and producing QA, release, and security risk reports that can be published from GitHub Actions.
+`ai-project-guardian` is a TypeScript CLI for analyzing another repository and producing QA, release, security, workflow, coverage, and external-scanner risk reports that can be published from GitHub Actions.
 
 This is not a SaaS app. It is a local and CI-friendly repository analysis tool.
 
@@ -13,19 +13,23 @@ AI-assisted projects can move quickly, but teams still need a repeatable way to 
 - What could block a release?
 - What security-sensitive areas deserve review?
 
-`ai-project-guardian` will provide a command-line workflow for generating those reports from repository state.
+`ai-project-guardian` provides a local command-line workflow for generating those reports from repository state and optional local scanner artifacts.
 
-## MVP scope
+## Current Capabilities
 
-The MVP will focus on:
+Guardian currently supports:
 
-- Running as a TypeScript-based CLI.
-- Reading configuration from CLI flags, environment variables, or a config file.
-- Inspecting a target repository path.
-- Producing Markdown reports for QA, release readiness, and security risk.
-- Running cleanly in GitHub Actions.
-
-The current project includes initial heuristic analyzers for changed files, QA coverage gaps, release-sensitive changes, and security review signals.
+- Changed-file classification across source, tests, migrations, config, CI, documentation, i18n, security, and Project Brain context files.
+- QA heuristics for missing nearby tests, API/integration tests, Cypress coverage, DB/integration tests, localization tests, and negative auth/security tests.
+- Release heuristics for migrations, package/dependency changes, environment config changes, and GitHub Actions changes.
+- Workflow validation for required GitHub Actions checks configured per repository.
+- Security heuristics for hardcoded secrets, API keys, JWT/default secret fallbacks, sensitive logs, SQL interpolation, auth bypasses, CORS wildcards, route auth, and rate limiting.
+- Optional coverage awareness from `coverage-final.json` or `lcov.info`.
+- Repository-defined business areas and custom deterministic rules.
+- Accepted-findings baselines through `.guardian-baseline.json`.
+- Risk scoring with critical escalation for high-risk combinations.
+- Markdown, JSON, SARIF, GitHub Actions summary, and PR-comment-style output.
+- Local Enterprise Risk Correlation by importing SARIF, CodeQL, Semgrep, and Snyk artifacts without calling external APIs.
 
 ## Non-goals
 
@@ -33,6 +37,7 @@ The current project includes initial heuristic analyzers for changed files, QA c
 - No SaaS backend.
 - No persistent user accounts.
 - No automatic code modification.
+- No GitHub API requirement for report generation or PR comment text generation.
 - No replacement for dedicated SAST, dependency scanning, or test coverage tools.
 
 ## Usage
@@ -50,15 +55,60 @@ Run the CLI against another repository:
 npm run guardian -- --repo ../AI-Restaurants --base origin/main --out guardian-report.md
 ```
 
+Write a full Markdown report:
+
+```sh
+npm run guardian -- --repo ../AI-Restaurants --base origin/main --out guardian-report.md --full-report
+```
+
+Write SARIF for GitHub code scanning:
+
+```sh
+npm run guardian -- --repo ../AI-Restaurants --base origin/main --format sarif --out guardian.sarif
+```
+
+Import local scanner artifacts and correlate them with Guardian findings:
+
+```sh
+npm run guardian -- \
+  --repo ../AI-Restaurants \
+  --base origin/main \
+  --full-report \
+  --sarif reports/generic.sarif \
+  --codeql reports/codeql.sarif \
+  --semgrep reports/semgrep.json \
+  --snyk reports/snyk.json \
+  --out guardian-report.md
+```
+
 Available flags:
 
 - `--repo <path>`: target repository to inspect. Defaults to `GUARDIAN_REPO_PATH` or `.`.
 - `--base <ref>`: base git ref for changed-file detection. Defaults to `origin/main`, then falls back to `HEAD~1` when the default ref is unavailable.
-- `--out <path>`: optional output file. Defaults to `GUARDIAN_OUTPUT_PATH` when set.
+- `--out <path>`: optional output file. Defaults to `GUARDIAN_OUTPUT_PATH` when set. Without `--out`, the report is written to stdout.
+- `--format <markdown|json|sarif>`: report format. Defaults to `markdown`.
+- `--sarif <path>`: import a local SARIF artifact. Can be repeated.
+- `--codeql <path>`: import a local CodeQL SARIF artifact. Can be repeated.
+- `--semgrep <path>`: import a local Semgrep JSON or SARIF artifact. Can be repeated.
+- `--snyk <path>`: import a local Snyk JSON or SARIF artifact. Can be repeated.
 - `--summary-only`: write a short overview for GitHub Actions summaries. This is the default.
 - `--full-report`: write the complete Markdown report with changed files, detailed findings, accepted findings, required actions, and suggested tests.
+- `--pr-comment`: write compact Markdown suitable for a GitHub PR comment. It does not call the GitHub API.
 - `--fail-on <high|critical>`: exit with code 1 when the calculated risk meets the threshold. Defaults to not failing the build.
 - `--help`: print CLI help.
+
+Equivalent environment variables:
+
+- `GUARDIAN_REPO_PATH`
+- `GUARDIAN_BASE_REF`
+- `GUARDIAN_OUTPUT_PATH`
+- `GUARDIAN_REPORT_FORMAT`
+- `GUARDIAN_SARIF_PATHS`
+- `GUARDIAN_CODEQL_PATHS`
+- `GUARDIAN_SEMGREP_PATHS`
+- `GUARDIAN_SNYK_PATHS`
+
+Multiple artifact paths in environment variables are comma-separated.
 
 ## Onboarding a New Repository
 
@@ -111,6 +161,8 @@ Add `guardian.config.json` at the target repository root:
 ```
 
 Coverage awareness is optional. When `coverage-final.json` or `lcov.info` exists at the repository root or under `coverage/`, Guardian flags changed source files below `coverageThreshold`.
+
+`customRules` are optional. They are deterministic path rules for repositories that need project-specific QA or release checks without changing Guardian source code.
 
 ### 2. Add Project Brain
 
@@ -293,11 +345,51 @@ Repositories can also define deterministic path-based QA and release rules in `g
 
 `requiresTest` creates a QA finding when matching files changed and no repository file matches the test glob. `requiredBeforeDeploy` creates a release finding and adds checklist items to the report. Glob matching supports `*` within one path segment and `**` across nested paths.
 
+Optional custom rule fields:
+
+- `title`: custom finding title.
+- `description`: custom finding description.
+- `whyItMatters`: release context for deploy reviewers.
+
 Example configs are available in:
 
 - `examples/ai-restaurants/guardian.config.json`
 - `examples/togetherly/guardian.config.json`
 - `examples/generic-saas/guardian.config.json`
+
+## Coverage Awareness
+
+Guardian reads coverage artifacts when they exist in the target repository:
+
+- `coverage-final.json`
+- `coverage/coverage-final.json`
+- `lcov.info`
+- `coverage/lcov.info`
+
+Changed source files below `coverageThreshold` create a medium-risk QA finding named `Changed code has low test coverage`. Coverage awareness is optional and local-only; Guardian does not run tests or generate coverage itself.
+
+## External Scanner Correlation
+
+Enterprise Risk Correlation imports local scanner artifacts and folds them into the report:
+
+- generic SARIF via `--sarif`
+- CodeQL SARIF via `--codeql`
+- Semgrep JSON or SARIF via `--semgrep`
+- Snyk JSON or SARIF via `--snyk`
+
+Guardian parses these files locally, deduplicates external findings, and correlates them with Guardian security findings by file, line, and normalized title. Correlations are reported as `single-tool` or `multi-tool`; multi-tool critical correlations can elevate overall risk.
+
+## Output Modes
+
+Guardian can render:
+
+- Markdown summary: default mode for GitHub Actions summaries.
+- Full Markdown report: `--full-report`.
+- PR comment Markdown: `--pr-comment`.
+- JSON: `--format json`.
+- SARIF: `--format sarif`.
+
+SARIF output includes QA, security, workflow, and external/correlated scanner findings. Release findings stay in Markdown/JSON reports because they are checklist-oriented rather than code-location-oriented.
 
 ## Risk baseline
 
@@ -315,6 +407,19 @@ Add `.guardian-baseline.json` to a target repository to accept known findings wi
 ```
 
 Accepted findings are matched by `type` and `title`. They still appear in the report under `Accepted Findings`, but only new active findings affect the risk score.
+
+## Analyzer Accuracy Baseline
+
+The repository includes integration fixtures under `tests/test-fixtures/analyzer-accuracy/` that run Guardian against simulated repositories for:
+
+- auth changes without tests
+- migration changes without DB tests
+- workflow changes
+- hardcoded secrets
+- docs-only changes
+- config-only changes
+
+The accuracy report lives at `.project-brain/metrics/ANALYZER_ACCURACY_REPORT.md`. These tests measure current analyzer behavior before new analyzer features are added.
 
 ## GitHub Actions
 
@@ -346,7 +451,7 @@ jobs:
           path: guardian-report.md
 ```
 
-The repository also includes `.github/workflows/guardian.yml` as a starting point.
+This repository also includes `.github/workflows/guardian-self-check.yml` to run Guardian against itself.
 
 ## Use from another GitHub repository
 
