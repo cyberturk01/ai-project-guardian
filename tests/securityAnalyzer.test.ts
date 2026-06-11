@@ -166,6 +166,22 @@ describe("analyzeSecurity", () => {
 
     assert.deepEqual(findings, []);
   });
+
+  it("does not flag route middleware findings from added test files", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [changedFile("tests/routes/publicRoutes.test.ts", "added")],
+      readFile: fakeReader({
+        "tests/routes/publicRoutes.test.ts": [
+          "import { Router } from 'express';",
+          "const router = Router();",
+          "router.get('/fixture-public-route', fixtureHandler);"
+        ].join("\n")
+      })
+    });
+
+    assert.deepEqual(findings, []);
+  });
 });
 
 function changedFile(path: string, status: ChangedFile["status"] = "modified"): ChangedFile {

@@ -70,7 +70,7 @@ const qaRules: QaRule[] = [
     title: "Route or API changed without API/integration test coverage",
     description: "A route, controller, handler, or API file changed without a matching API or integration test.",
     riskLevel: "high",
-    matches: (file) => isChangedCodeFile(file) && !isDocumentationContextFile(file) && apiPathPattern.test(normalizePath(file.path)),
+    matches: (file) => isProductionChangedCodeFile(file) && !isDocumentationContextFile(file) && apiPathPattern.test(normalizePath(file.path)),
     hasCoverage: (file, context) => hasTopicalTest(file.path, context.testFiles, apiTestPattern),
     suggestedTests: (file) => [`Add an API or integration test that exercises ${file.path}.`]
   },
@@ -79,7 +79,7 @@ const qaRules: QaRule[] = [
     title: "UI changed without Cypress coverage",
     description: "A UI-facing file changed, but no relevant Cypress test was found in the repository.",
     riskLevel: "medium",
-    matches: (file) => isChangedCodeFile(file) && !isDocumentationContextFile(file) && uiPathPattern.test(normalizePath(file.path)),
+    matches: (file) => isProductionChangedCodeFile(file) && !isDocumentationContextFile(file) && uiPathPattern.test(normalizePath(file.path)),
     hasCoverage: (file, context) => hasTopicalTest(file.path, context.cypressFiles, /cypress|\.cy\./i),
     suggestedTests: (file) => [`Add or update a Cypress test for the UI behavior touched by ${file.path}.`]
   },
@@ -88,7 +88,10 @@ const qaRules: QaRule[] = [
     title: "Migration changed without DB/integration test coverage",
     description: "A database migration or schema file changed without a matching database or integration test.",
     riskLevel: "high",
-    matches: (file) => isActiveFile(file) && !isDocumentationContextFile(file) && (file.category === "migration" || migrationPathPattern.test(normalizePath(file.path))),
+    matches: (file) =>
+      isProductionChangedFile(file) &&
+      !isDocumentationContextFile(file) &&
+      (file.category === "migration" || migrationPathPattern.test(normalizePath(file.path))),
     hasCoverage: (file, context) => hasTopicalTest(file.path, context.testFiles, dbTestPattern),
     suggestedTests: (file) => [`Add a DB or integration test that validates the migration path for ${file.path}.`]
   },
@@ -97,7 +100,7 @@ const qaRules: QaRule[] = [
     title: "i18n changed without localization test coverage",
     description: "Localization files changed without a matching localization test.",
     riskLevel: "low",
-    matches: (file) => isActiveFile(file) && (file.category === "i18n" || i18nPathPattern.test(normalizePath(file.path))),
+    matches: (file) => isProductionChangedFile(file) && (file.category === "i18n" || i18nPathPattern.test(normalizePath(file.path))),
     hasCoverage: (file, context) => hasTopicalTest(file.path, context.testFiles, localizationTestPattern),
     suggestedTests: (file) => [`Add a localization test that validates keys or rendering for ${file.path}.`]
   },
@@ -106,7 +109,10 @@ const qaRules: QaRule[] = [
     title: "Auth or security changed without negative test coverage",
     description: "Auth or security-sensitive code changed without a negative-path test for denied or invalid access.",
     riskLevel: "high",
-    matches: (file) => isActiveFile(file) && !isDocumentationContextFile(file) && (file.category === "security" || authSecurityPathPattern.test(normalizePath(file.path))),
+    matches: (file) =>
+      isProductionChangedFile(file) &&
+      !isDocumentationContextFile(file) &&
+      (file.category === "security" || authSecurityPathPattern.test(normalizePath(file.path))),
     hasCoverage: (file, context) => hasTopicalTest(file.path, context.testFiles, negativeSecurityTestPattern),
     suggestedTests: (file) => [`Add a negative test for invalid, forbidden, or unauthorized behavior around ${file.path}.`]
   }
@@ -212,6 +218,14 @@ function isGenericSourceFile(file: ChangedFile): boolean {
 
 function isChangedCodeFile(file: ChangedFile): boolean {
   return isActiveFile(file) && sourceExtensions.has(extname(file.path).toLowerCase());
+}
+
+function isProductionChangedCodeFile(file: ChangedFile): boolean {
+  return isChangedCodeFile(file) && !isTestFile(file.path);
+}
+
+function isProductionChangedFile(file: ChangedFile): boolean {
+  return isActiveFile(file) && !isTestFile(file.path);
 }
 
 function isDocumentationContextFile(file: ChangedFile): boolean {

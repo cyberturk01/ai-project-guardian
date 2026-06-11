@@ -101,4 +101,38 @@ describe("analyzeQa", () => {
 
     assert.ok(findings.some((finding) => finding.id === "qa-auth-security-without-negative-test"));
   });
+
+  it("does not treat changed test files as uncovered production QA surfaces", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "tests/auth/session.test.ts",
+          status: "modified",
+          category: "security",
+          riskLevel: "high"
+        },
+        {
+          path: "tests/db/migrations/accountMigration.test.ts",
+          status: "modified",
+          category: "test",
+          riskLevel: "low"
+        },
+        {
+          path: "tests/i18n/orders.test.ts",
+          status: "modified",
+          category: "test",
+          riskLevel: "low"
+        }
+      ],
+      repoFiles: [
+        "tests/auth/session.test.ts",
+        "tests/db/migrations/accountMigration.test.ts",
+        "tests/i18n/orders.test.ts"
+      ],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    assert.deepEqual(findings, []);
+  });
 });

@@ -283,6 +283,7 @@ function hasDisabledAuthCheck(line: string): boolean {
 function hasNewRouteWithoutAuthMiddleware(line: string, context: RuleContext): boolean {
   return (
     context.file.status === "added" &&
+    !isTestFile(context.file.path) &&
     routeFilePattern.test(normalizePath(context.file.path)) &&
     routeHandlerPattern.test(line) &&
     !authMiddlewareHintPattern.test(context.content)
@@ -300,6 +301,7 @@ function hasDisabledRateLimiting(line: string): boolean {
 function hasNewRouteWithoutRateLimit(line: string, context: RuleContext): boolean {
   return (
     context.file.status === "added" &&
+    !isTestFile(context.file.path) &&
     routeFilePattern.test(normalizePath(context.file.path)) &&
     routeHandlerPattern.test(line) &&
     !rateLimitHintPattern.test(context.content)
@@ -318,6 +320,10 @@ function isPotentialRealSecret(value: string): boolean {
 
 function isScannablePath(path: string): boolean {
   return textFilePattern.test(normalizePath(path));
+}
+
+function isTestFile(path: string): boolean {
+  return /(^|\/)(__tests__|tests?|spec|cypress|playwright)(\/|$)|(\.|-)(cy|spec|test)\.[^.]+$/i.test(normalizePath(path));
 }
 
 function isProjectBrainFile(file: ChangedFile): boolean {
