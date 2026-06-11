@@ -1,6 +1,6 @@
 import { readFileSync } from "fs";
 import { isAbsolute, join, relative, resolve } from "path";
-import type { BusinessArea, GuardianConfig } from "../core/types.js";
+import type { BusinessArea, CustomRule, GuardianConfig } from "../core/types.js";
 import { isRiskLevel } from "../core/types.js";
 
 export const guardianConfigFileName = "guardian.config.json";
@@ -11,7 +11,8 @@ export const defaultGuardianConfig: GuardianConfig = {
   testFolders: [],
   releaseSensitiveFiles: [],
   requiredChecks: [],
-  businessAreas: []
+  businessAreas: [],
+  customRules: []
 };
 
 export type GuardianConfigLoadResult = {
@@ -27,7 +28,8 @@ const allowedKeys = new Set<keyof GuardianConfig>([
   "testFolders",
   "releaseSensitiveFiles",
   "requiredChecks",
-  "businessAreas"
+  "businessAreas",
+  "customRules"
 ]);
 
 export function loadGuardianConfig(repoPath: string): GuardianConfigLoadResult {
@@ -82,6 +84,7 @@ export function validateGuardianConfig(value: unknown, repoPath?: string): Guard
   assignStringArray(config, value, "releaseSensitiveFiles", warnings, repoPath);
   assignStringArray(config, value, "requiredChecks", warnings);
   assignBusinessAreas(config, value, warnings, repoPath);
+  assignCustomRules(config, value, warnings, repoPath);
 
   return { config, warnings };
 }
@@ -145,6 +148,36 @@ function assignBusinessAreas(
   config.businessAreas = businessAreas;
 }
 
+function assignCustomRules(
+  config: GuardianConfig,
+  value: Record<string, unknown>,
+  warnings: string[],
+  repoPath?: string
+): void {
+  const fieldValue = value.customRules;
+
+  if (fieldValue === undefined) {
+    return;
+  }
+
+  if (!Array.isArray(fieldValue)) {
+    warnings.push('Guardian config field "customRules" must be an array; using default value.');
+    return;
+  }
+
+  const customRules: CustomRule[] = [];
+
+  fieldValue.forEach((item, index) => {
+    const customRule = validateCustomRule(item, index, warnings, repoPath);
+
+    if (customRule !== undefined) {
+      customRules.push(customRule);
+    }
+  });
+
+  config.customRules = customRules;
+}
+
 function validateBusinessArea(
   value: unknown,
   index: number,
@@ -198,12 +231,94 @@ function validateBusinessArea(
   };
 }
 
+function validateCustomRule(
+  value: unknown,
+  index: number,
+  warnings: string[],
+  repoPath?: string
+): CustomRule | undefined {
+  const prefix = `Guardian config customRules[${index}]`;
+
+  if (!isRecord(value)) {
+    warnings.push(`${prefix} must be an object; entry was ignored.`);
+    return undefined;
+  }
+
+  if (typeof value.id !== "string" || value.id.trim() === "") {
+    warnings.push(`${prefix}.id must be a non-empty string; entry was ignored.`);
+    return undefined;
+  }
+
+  if (typeof value.whenChanged !== "string" || value.whenChanged.trim() === "") {
+    warnings.push(`${prefix}.whenChanged must be a non-empty string; entry was ignored.`);
+    return undefined;
+  }
+
+  if (!isRiskLevel(value.risk)) {
+    warnings.push(`${prefix}.risk must be one of info, low, medium, high, critical; entry was ignored.`);
+    return undefined;
+  }
+
+  if (value.requiresTest !== undefined && (typeof value.requiresTest !== "string" || value.requiresTest.trim() === "")) {
+    warnings.push(`${prefix}.requiresTest must be a non-empty string when provided; entry was ignored.`);
+    return undefined;
+  }
+
+  if (value.requiredBeforeDeploy !== undefined && !isStringArray(value.requiredBeforeDeploy)) {
+    warnings.push(`${prefix}.requiredBeforeDeploy must be an array of strings when provided; entry was ignored.`);
+    return undefined;
+  }
+
+  if (value.requiresTest === undefined && value.requiredBeforeDeploy === undefined) {
+    warnings.push(`${prefix} must define requiresTest or requiredBeforeDeploy; entry was ignored.`);
+    return undefined;
+  }
+
+  if (value.title !== undefined && typeof value.title !== "string") {
+    warnings.push(`${prefix}.title must be a string when provided; entry was ignored.`);
+    return undefined;
+  }
+
+  if (value.description !== undefined && typeof value.description !== "string") {
+    warnings.push(`${prefix}.description must be a string when provided; entry was ignored.`);
+    return undefined;
+  }
+
+  if (value.whyItMatters !== undefined && typeof value.whyItMatters !== "string") {
+    warnings.push(`${prefix}.whyItMatters must be a string when provided; entry was ignored.`);
+    return undefined;
+  }
+
+  return {
+    id: value.id,
+    whenChanged: normalizeConfiguredGlob(repoPath, value.whenChanged),
+    requiresTest: value.requiresTest === undefined ? undefined : normalizeConfiguredGlob(repoPath, value.requiresTest),
+    risk: value.risk,
+    title: value.title,
+    description: value.description,
+    requiredBeforeDeploy: value.requiredBeforeDeploy,
+    whyItMatters: value.whyItMatters
+  };
+}
+
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeConfiguredGlob(repoPath: string | undefined, pattern: string): string {
+  if (repoPath === undefined) {
+    return normalizePathSeparators(pattern);
+  }
+
+  return normalizePathSeparators(normalizeRepoPath(repoPath, pattern));
+}
+
+function normalizePathSeparators(path: string): string {
+  return path.replaceAll("\\", "/");
 }
 
 function isMissingFileError(error: unknown): boolean {

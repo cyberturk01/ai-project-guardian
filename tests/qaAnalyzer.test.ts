@@ -135,4 +135,64 @@ describe("analyzeQa", () => {
 
     assert.deepEqual(findings, []);
   });
+
+  it("adds repository-defined QA findings when matching tests are missing", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/email/sendWelcome.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        }
+      ],
+      repoFiles: ["src/email/sendWelcome.ts", "tests/other.test.ts"],
+      config: {
+        ...guardianConfigFixture,
+        customRules: [
+          {
+            id: "email-change-requires-test",
+            whenChanged: "src/email/**",
+            requiresTest: "tests/email/**",
+            risk: "high"
+          }
+        ]
+      },
+      projectBrain: projectBrainFixture
+    });
+
+    const customFinding = findings.find((finding) => finding.id === "email-change-requires-test");
+
+    assert.equal(customFinding?.riskLevel, "high");
+    assert.deepEqual(customFinding?.affectedFiles, ["src/email/sendWelcome.ts"]);
+    assert.match(customFinding?.suggestedTests[0] ?? "", /tests\/email\/\*\*/);
+  });
+
+  it("suppresses repository-defined QA findings when matching tests exist", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/email/sendWelcome.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        }
+      ],
+      repoFiles: ["src/email/sendWelcome.ts", "tests/email/sendWelcome.test.ts"],
+      config: {
+        ...guardianConfigFixture,
+        customRules: [
+          {
+            id: "email-change-requires-test",
+            whenChanged: "src/email/**",
+            requiresTest: "tests/email/**",
+            risk: "high"
+          }
+        ]
+      },
+      projectBrain: projectBrainFixture
+    });
+
+    assert.ok(!findings.some((finding) => finding.id === "email-change-requires-test"));
+  });
 });

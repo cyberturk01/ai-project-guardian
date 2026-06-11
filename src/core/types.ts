@@ -11,6 +11,17 @@ export type BusinessArea = {
   requiredBeforeDeploy?: string[];
 };
 
+export type CustomRule = {
+  id: string;
+  whenChanged: string;
+  requiresTest?: string;
+  risk: RiskLevel;
+  title?: string;
+  description?: string;
+  requiredBeforeDeploy?: string[];
+  whyItMatters?: string;
+};
+
 export type GuardianConfig = {
   projectName: string;
   riskFolders: string[];
@@ -18,6 +29,7 @@ export type GuardianConfig = {
   releaseSensitiveFiles: string[];
   requiredChecks: string[];
   businessAreas?: BusinessArea[];
+  customRules?: CustomRule[];
 };
 
 export type ChangedFileStatus = "added" | "modified" | "deleted" | "renamed";

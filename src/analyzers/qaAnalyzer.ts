@@ -1,6 +1,7 @@
 import { basename, dirname, extname } from "node:path";
 import type { ChangedFile, GuardianConfig, QaFinding, RiskLevel } from "../core/types.js";
 import type { ProjectBrain } from "../project-brain/types.js";
+import { evaluateCustomQaRules } from "./customRuleEvaluator.js";
 
 export type AnalyzeQaInput = {
   changedFiles: ChangedFile[];
@@ -127,9 +128,18 @@ export function analyzeQa(input: AnalyzeQaInput): QaFinding[] {
     projectBrain: input.projectBrain
   };
 
-  return qaRules
+  const builtInFindings = qaRules
     .map((rule) => buildFinding(rule, input.changedFiles, context))
     .filter((finding): finding is QaFinding => finding !== undefined);
+
+  return [
+    ...builtInFindings,
+    ...evaluateCustomQaRules({
+      changedFiles: input.changedFiles,
+      repoFiles: input.repoFiles,
+      customRules: input.config.customRules
+    })
+  ];
 }
 
 function buildFinding(rule: QaRule, changedFiles: ChangedFile[], context: QaContext): QaFinding | undefined {

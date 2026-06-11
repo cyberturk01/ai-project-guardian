@@ -51,6 +51,20 @@ describe("loadGuardianConfig", () => {
         testFolders: ["tests"],
         releaseSensitiveFiles: ["package.json"],
         requiredChecks: ["npm test"],
+        customRules: [
+          {
+            id: "email-change-requires-test",
+            whenChanged: "src/email/**",
+            requiresTest: "tests/email/**",
+            risk: "high"
+          },
+          {
+            id: "deploy-config-review",
+            whenChanged: "config/deploy/**",
+            risk: "medium",
+            requiredBeforeDeploy: ["Review deploy config with release owner"]
+          }
+        ],
         businessAreas: [
           {
             name: "consent",
@@ -74,6 +88,28 @@ describe("loadGuardianConfig", () => {
         testFolders: ["tests"],
         releaseSensitiveFiles: ["package.json"],
         requiredChecks: ["npm test"],
+        customRules: [
+          {
+            id: "email-change-requires-test",
+            whenChanged: "src/email/**",
+            requiresTest: "tests/email/**",
+            risk: "high",
+            title: undefined,
+            description: undefined,
+            requiredBeforeDeploy: undefined,
+            whyItMatters: undefined
+          },
+          {
+            id: "deploy-config-review",
+            whenChanged: "config/deploy/**",
+            requiresTest: undefined,
+            risk: "medium",
+            title: undefined,
+            description: undefined,
+            requiredBeforeDeploy: ["Review deploy config with release owner"],
+            whyItMatters: undefined
+          }
+        ],
         businessAreas: [
           {
             name: "consent",
@@ -98,6 +134,14 @@ describe("loadGuardianConfig", () => {
         testFolders: ["tests"],
         releaseSensitiveFiles: ["../shared/package.json"],
         requiredChecks: ["npm test"],
+        customRules: [
+          {
+            id: "email-change-requires-test",
+            whenChanged: "./src/email/**",
+            requiresTest: "./tests/email/**",
+            risk: "high"
+          }
+        ],
         businessAreas: [
           {
             name: "privacy",
@@ -115,6 +159,8 @@ describe("loadGuardianConfig", () => {
     assert.deepEqual(result.config.testFolders, ["tests"]);
     assert.deepEqual(result.config.releaseSensitiveFiles, ["../shared/package.json"]);
     assert.deepEqual(result.config.requiredChecks, ["npm test"]);
+    assert.deepEqual(result.config.customRules?.[0].whenChanged, "src/email/**");
+    assert.deepEqual(result.config.customRules?.[0].requiresTest, "tests/email/**");
     assert.deepEqual(result.config.businessAreas?.[0].paths, ["src/privacy", "src/consent"]);
   });
 
@@ -124,6 +170,7 @@ describe("loadGuardianConfig", () => {
     assert.equal(result.config.projectName, "ai-project-guardian");
     assert.deepEqual(result.config.riskFolders, []);
     assert.deepEqual(result.config.businessAreas, []);
+    assert.deepEqual(result.config.customRules, []);
     assert.equal(result.warnings.length, 1);
     assert.match(result.warnings[0], /not found/);
   });
@@ -160,6 +207,31 @@ describe("loadGuardianConfig", () => {
             paths: "src/i18n"
           }
         ],
+        customRules: [
+          {
+            id: "email-change-requires-test",
+            whenChanged: "src/email/**",
+            requiresTest: "tests/email/**",
+            risk: "high"
+          },
+          {
+            id: "",
+            whenChanged: "src/billing/**",
+            requiresTest: "tests/billing/**",
+            risk: "high"
+          },
+          {
+            id: "release-review",
+            whenChanged: "config/release/**",
+            risk: "severe",
+            requiredBeforeDeploy: ["Review release config"]
+          },
+          {
+            id: "empty-rule",
+            whenChanged: "src/empty/**",
+            risk: "low"
+          }
+        ],
         extraField: true
       }),
       "utf8"
@@ -182,7 +254,19 @@ describe("loadGuardianConfig", () => {
         description: undefined
       }
     ]);
-    assert.equal(result.warnings.length, 7);
+    assert.deepEqual(result.config.customRules, [
+      {
+        id: "email-change-requires-test",
+        whenChanged: "src/email/**",
+        requiresTest: "tests/email/**",
+        risk: "high",
+        title: undefined,
+        description: undefined,
+        requiredBeforeDeploy: undefined,
+        whyItMatters: undefined
+      }
+    ]);
+    assert.equal(result.warnings.length, 10);
   });
 
   it("warns and continues when businessAreas is invalid", () => {
@@ -201,6 +285,24 @@ describe("loadGuardianConfig", () => {
     assert.deepEqual(result.config.businessAreas, []);
     assert.equal(result.warnings.length, 1);
     assert.match(result.warnings[0], /businessAreas/);
+  });
+
+  it("warns and continues when customRules is invalid", () => {
+    const repoPath = makeRepo();
+    writeFileSync(
+      join(repoPath, "guardian.config.json"),
+      JSON.stringify({
+        projectName: "Invalid Custom Rules",
+        customRules: "email"
+      }),
+      "utf8"
+    );
+
+    const result = loadGuardianConfig(repoPath);
+
+    assert.deepEqual(result.config.customRules, []);
+    assert.equal(result.warnings.length, 1);
+    assert.match(result.warnings[0], /customRules/);
   });
 });
 

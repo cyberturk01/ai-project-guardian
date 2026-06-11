@@ -97,6 +97,14 @@ Add `guardian.config.json` at the target repository root:
   "requiredChecks": [
     "npm test",
     "npm run lint"
+  ],
+  "customRules": [
+    {
+      "id": "email-change-requires-test",
+      "whenChanged": "src/email/**",
+      "requiresTest": "tests/email/**",
+      "risk": "high"
+    }
   ]
 }
 ```
@@ -254,6 +262,33 @@ When a changed file matches a business area path, Guardian can add:
 Path matching supports exact file paths, folder prefixes, and simple substring matches. Test hint matching is deterministic and checks test file paths from the existing repository file list and changed test files. Guardian does not make AI or LLM calls for this behavior.
 
 New projects only need a `guardian.config.json` to define their business areas. They can optionally add `.project-brain` files for extra human-readable context and team conventions.
+
+## Custom Rules
+
+Repositories can also define deterministic path-based QA and release rules in `guardian.config.json`:
+
+```json
+{
+  "customRules": [
+    {
+      "id": "email-change-requires-test",
+      "whenChanged": "src/email/**",
+      "requiresTest": "tests/email/**",
+      "risk": "high"
+    },
+    {
+      "id": "deploy-config-review",
+      "whenChanged": "config/deploy/**",
+      "risk": "high",
+      "requiredBeforeDeploy": [
+        "Review deploy config with release owner"
+      ]
+    }
+  ]
+}
+```
+
+`requiresTest` creates a QA finding when matching files changed and no repository file matches the test glob. `requiredBeforeDeploy` creates a release finding and adds checklist items to the report. Glob matching supports `*` within one path segment and `**` across nested paths.
 
 Example configs are available in:
 

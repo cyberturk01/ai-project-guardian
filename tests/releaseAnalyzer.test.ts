@@ -79,6 +79,31 @@ describe("analyzeRelease", () => {
 
     assert.deepEqual(findings, []);
   });
+
+  it("adds repository-defined release findings for matching files", () => {
+    const findings = analyzeRelease({
+      changedFiles: [changedFile("config/deploy/production.json", "config")],
+      config: {
+        ...config,
+        customRules: [
+          {
+            id: "deploy-config-review",
+            whenChanged: "config/deploy/**",
+            risk: "high",
+            requiredBeforeDeploy: ["Review deploy config with release owner"],
+            whyItMatters: "Deploy config changes can alter production behavior."
+          }
+        ]
+      }
+    });
+
+    const customFinding = findings.find((finding) => finding.id === "deploy-config-review");
+
+    assert.equal(customFinding?.riskLevel, "high");
+    assert.deepEqual(customFinding?.affectedFiles, ["config/deploy/production.json"]);
+    assert.deepEqual(customFinding?.requiredBeforeDeploy, ["Review deploy config with release owner"]);
+    assert.match(customFinding?.whyItMatters ?? "", /production behavior/);
+  });
 });
 
 function changedFile(path: string, category: ChangedFile["category"]): ChangedFile {

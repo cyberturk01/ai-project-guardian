@@ -1,4 +1,5 @@
 import type { ChangedFile, GuardianConfig, ReleaseFinding, RiskLevel } from "../core/types.js";
+import { evaluateCustomReleaseRules } from "./customRuleEvaluator.js";
 
 export type AnalyzeReleaseInput = {
   changedFiles: ChangedFile[];
@@ -101,9 +102,17 @@ export function analyzeRelease(input: AnalyzeReleaseInput): ReleaseFinding[] {
     changedPaths: releaseChangedFiles.map((file) => normalizePath(file.path))
   };
 
-  return releaseRules
+  const builtInFindings = releaseRules
     .map((rule) => buildFinding(rule, releaseChangedFiles, context))
     .filter((finding): finding is ReleaseFinding => finding !== undefined);
+
+  return [
+    ...builtInFindings,
+    ...evaluateCustomReleaseRules({
+      changedFiles: releaseChangedFiles,
+      customRules: input.config.customRules
+    })
+  ];
 }
 
 function buildFinding(rule: ReleaseRule, changedFiles: ChangedFile[], context: ReleaseContext): ReleaseFinding | undefined {
