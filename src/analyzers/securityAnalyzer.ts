@@ -54,35 +54,35 @@ const securityRules: SecurityRule[] = [
     title: "Possible hardcoded secret",
     riskLevel: "high",
     recommendation: "Move secrets to a managed secret store or environment variable, then rotate the exposed value if it is real.",
-    matches: (line) => hasHardcodedSecret(line)
+    matches: (line, context) => hasHardcodedSecret(line, context)
   },
   {
     id: "security-hardcoded-admin-password",
     title: "Possible hardcoded admin password",
     riskLevel: "high",
     recommendation: "Move admin credentials to secure configuration and rotate the password if the value is real.",
-    matches: (line) => hasHardcodedAdminPassword(line)
+    matches: (line, context) => hasHardcodedAdminPassword(line, context)
   },
   {
     id: "security-api-key",
     title: "Possible API key",
     riskLevel: "high",
     recommendation: "Verify whether the key is real. If it is, revoke it and replace it with secret-managed configuration.",
-    matches: (line) => hasApiKey(line)
+    matches: (line, context) => hasApiKey(line, context)
   },
   {
     id: "security-jwt-secret-default",
     title: "Possible JWT secret fallback",
     riskLevel: "high",
     recommendation: "Require JWT secrets to be provided by secure configuration and fail startup when they are missing.",
-    matches: (line) => hasJwtSecretDefault(line)
+    matches: (line, context) => hasJwtSecretDefault(line, context)
   },
   {
     id: "security-env-secret-default",
     title: "Possible secret default in environment config",
     riskLevel: "high",
     recommendation: "Avoid fallback defaults for secret-like environment variables. Fail startup when required secrets are missing.",
-    matches: (line) => hasSecretEnvDefault(line)
+    matches: (line, context) => hasSecretEnvDefault(line, context)
   },
   {
     id: "security-console-sensitive-value",
@@ -167,7 +167,7 @@ export async function analyzeSecurity(input: AnalyzeSecurityInput): Promise<Secu
     }
   }
 
-  return findings.sort(compareFindings);
+  return dedupeSameLineJwtSecretFindings(findings).sort(compareFindings);
 }
 
 async function readChangedTextFiles(input: AnalyzeSecurityInput): Promise<ScannedFile[]> {
@@ -193,21 +193,23 @@ async function readChangedTextFiles(input: AnalyzeSecurityInput): Promise<Scanne
   return scannedFiles;
 }
 
-function hasHardcodedSecret(line: string): boolean {
+function hasHardcodedSecret(line: string, context: RuleContext): boolean {
   const match = line.match(/\b[A-Za-z0-9_-]*(?:password|passwd|secret|client_secret|private_key|access_token|refresh_token)[A-Za-z0-9_-]*\b\s*[:=]\s*["']([^"']{8,})["']/i);
 
   if (match === null) {
     return false;
   }
 
-  return isPotentialRealSecret(match[1] ?? "");
+  const value = match[1] ?? "";
+  return !isObviousTestFixtureSecret(value, context) && isPotentialRealSecret(value);
 }
 
-function hasHardcodedAdminPassword(line: string): boolean {
+function hasHardcodedAdminPassword(line: string, context: RuleContext): boolean {
   const match = line.match(/\b(?:admin[A-Za-z0-9_-]*password|password[A-Za-z0-9_-]*admin|ADMIN_PASSWORD|adminPassword)\b\s*[:=]\s*["']([^"']{6,})["']/i);
 
   if (match !== null) {
-    return isPotentialRealSecret(match[1] ?? "");
+    const value = match[1] ?? "";
+    return !isObviousTestFixtureSecret(value, context) && isPotentialRealSecret(value);
   }
 
   const adminObjectMatch = line.match(/\badmin\b[^;\n]{0,80}\bpassword\b\s*[:=]\s*["']([^"']{6,})["']/i);
@@ -216,10 +218,15 @@ function hasHardcodedAdminPassword(line: string): boolean {
     return false;
   }
 
-  return isPotentialRealSecret(adminObjectMatch[1] ?? "");
+  const value = adminObjectMatch[1] ?? "";
+  return !isObviousTestFixtureSecret(value, context) && isPotentialRealSecret(value);
 }
 
-function hasApiKey(line: string): boolean {
+function hasApiKey(line: string, context: RuleContext): boolean {
+  if (hasTestFixtureSecretAssignment(line, context)) {
+    return false;
+  }
+
   return (
     /\b[A-Za-z0-9_-]*(?:api[_-]?key|apikey)[A-Za-z0-9_-]*\b\s*[:=]\s*["'][A-Za-z0-9_\-]{16,}["']/i.test(line) ||
     /\b(?:sk_live|sk_test|pk_live|ghp|github_pat|xoxb|xoxp|AIza)[A-Za-z0-9_\-]{10,}/.test(line) ||
@@ -227,8 +234,12 @@ function hasApiKey(line: string): boolean {
   );
 }
 
-function hasJwtSecretDefault(line: string): boolean {
+function hasJwtSecretDefault(line: string, context: RuleContext): boolean {
   const normalized = line.trim();
+
+  if (hasTestFixtureSecretAssignment(normalized, context)) {
+    return false;
+  }
 
   return (
     /\b[A-Za-z0-9_.-]*(?:JWT_SECRET|JWT_PRIVATE_KEY|JWT_SIGNING_KEY|jwtSecret|jwtPrivateKey|jwtSigningKey)[A-Za-z0-9_.-]*\b.*(?:\|\||\?\?)\s*["'][^"']{4,}["']/i.test(normalized) ||
@@ -237,7 +248,7 @@ function hasJwtSecretDefault(line: string): boolean {
   );
 }
 
-function hasSecretEnvDefault(line: string): boolean {
+function hasSecretEnvDefault(line: string, context: RuleContext): boolean {
   const match = line.match(/\bprocess\.env\.([A-Za-z0-9_]+)\b\s*(?:\|\||\?\?)\s*["']([^"']{4,})["']/);
 
   if (match === null) {
@@ -245,7 +256,7 @@ function hasSecretEnvDefault(line: string): boolean {
   }
 
   const [, envName = "", defaultValue = ""] = match;
-  return secretNamePattern.test(envName) && (isPotentialRealSecret(defaultValue) || isKnownWeakSecretDefault(defaultValue));
+  return secretNamePattern.test(envName) && !isObviousTestFixtureSecret(defaultValue, context) && (isPotentialRealSecret(defaultValue) || isKnownWeakSecretDefault(defaultValue));
 }
 
 function isKnownWeakSecretDefault(value: string): boolean {
@@ -253,7 +264,20 @@ function isKnownWeakSecretDefault(value: string): boolean {
 }
 
 function hasSensitiveConsoleLog(line: string): boolean {
-  return /\bconsole\.(?:log|info|warn|error|debug)\s*\([^)]*\b(?:token|password|secret|authorization(?:\s*header)?|authorizationHeader|authHeader)\b[^)]*\)/i.test(line);
+  const match = line.match(/\bconsole\.(?:log|info|warn|error|debug)\s*\((.*)\)\s*;?\s*$/i);
+
+  if (match === null) {
+    return false;
+  }
+
+  const args = match[1] ?? "";
+  const withoutQuotedStrings = args.replace(/(["'])(?:\\.|(?!\1).)*\1/g, "");
+
+  return (
+    /\b[A-Za-z0-9_$.-]*(?:token|password|secret|authorizationHeader|authHeader)[A-Za-z0-9_$.-]*\b/i.test(withoutQuotedStrings) ||
+    /\bauthorization\b/i.test(withoutQuotedStrings) ||
+    /`[^`]*\$\{[^}]*(?:token|password|secret|authorization|authHeader)[^}]*}/i.test(args)
+  );
 }
 
 function hasCorsWildcard(line: string): boolean {
@@ -265,11 +289,11 @@ function hasCorsWildcard(line: string): boolean {
 }
 
 function hasSqlStringInterpolation(line: string): boolean {
-  return (
-    /`[^`]*(?:select|insert|update|delete|where|from)\b[^`]*\$\{[^`]+`/i.test(line) ||
-    /["'][^"']*(?:select|insert|update|delete|where|from)\b[^"']*["']\s*\+\s*[A-Za-z_$]/i.test(line) ||
-    /\b(?:query|execute|raw|sql)\s*\(\s*`[^`]*(?:select|insert|update|delete|where|from)\b[^`]*\$\{[^`]+`/i.test(line)
-  );
+  if (!isLikelySqlContext(line)) {
+    return false;
+  }
+
+  return /`[^`]*\b(?:select|insert|update|delete|merge|upsert)\b[^`]*\$\{[^`]+`/i.test(line) || /["'][^"']*\b(?:select|insert|update|delete|merge|upsert)\b[^"']*["']\s*\+\s*[A-Za-z_$]/i.test(line);
 }
 
 function hasDisabledAuthCheck(line: string): boolean {
@@ -318,6 +342,37 @@ function isPotentialRealSecret(value: string): boolean {
   return /[A-Za-z]/.test(value) && /[0-9]/.test(value);
 }
 
+function hasTestFixtureSecretAssignment(line: string, context: RuleContext): boolean {
+  const match = line.match(/\b(?:process\.env\.)?[A-Za-z0-9_-]*(?:password|passwd|secret|client_secret|private_key|access_token|refresh_token|token|api[_-]?key|apikey|authorization)[A-Za-z0-9_-]*\b\s*[:=]\s*["']([^"']{4,})["']/i);
+
+  return match !== null && isObviousTestFixtureSecret(match[1] ?? "", context);
+}
+
+function isObviousTestFixtureSecret(value: string, context: RuleContext): boolean {
+  if (!isTestFile(context.file.path) || isRealisticLookingSecret(value)) {
+    return false;
+  }
+
+  return /\b(?:test|fake|mock|dummy|fixture|example|sample|local|dev)\b/i.test(value);
+}
+
+function isRealisticLookingSecret(value: string): boolean {
+  return (
+    /\b(?:sk_live|sk_test|pk_live|ghp|github_pat|xoxb|xoxp|AIza)[A-Za-z0-9_-]{10,}/.test(value) ||
+    /\bAKIA[0-9A-Z]{16}\b/.test(value) ||
+    (/^[A-Za-z0-9_./+=-]{24,}$/.test(value) && /[A-Z]/.test(value) && /[a-z]/.test(value) && /[0-9]/.test(value))
+  );
+}
+
+function isLikelySqlContext(line: string): boolean {
+  return (
+    /\b(?:query|execute|raw|sql)\s*\(/i.test(line) ||
+    /\.\s*(?:query|execute|raw|sql)\s*\(/i.test(line) ||
+    /\b(?:sql|query|statement)\b\s*[:=]/i.test(line) ||
+    /\b(?:db|pool|client|connection|knex|sequelize|prisma)\b/i.test(line)
+  );
+}
+
 function isScannablePath(path: string): boolean {
   return textFilePattern.test(normalizePath(path));
 }
@@ -338,6 +393,22 @@ function compareFindings(left: SecurityFinding, right: SecurityFinding): number 
   }
 
   return left.id.localeCompare(right.id);
+}
+
+function dedupeSameLineJwtSecretFindings(findings: SecurityFinding[]): SecurityFinding[] {
+  const jwtSecretLocations = new Set(
+    findings
+      .filter((finding) => finding.id === "security-jwt-secret-default")
+      .map((finding) => `${finding.filePath ?? ""}:${finding.lineNumber ?? ""}`)
+  );
+
+  return findings.filter((finding) => {
+    if (finding.id !== "security-hardcoded-secret") {
+      return true;
+    }
+
+    return !jwtSecretLocations.has(`${finding.filePath ?? ""}:${finding.lineNumber ?? ""}`);
+  });
 }
 
 function normalizePath(path: string): string {

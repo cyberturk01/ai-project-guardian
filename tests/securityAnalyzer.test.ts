@@ -132,6 +132,95 @@ describe("analyzeSecurity", () => {
     assert.deepEqual(findings, []);
   });
 
+  it("only flags console logs when a sensitive expression is logged", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [changedFile("src/auth/csrf.ts")],
+      readFile: fakeReader({
+        "src/auth/csrf.ts": [
+          "console.warn('CSRF token unavailable');",
+          "console.warn('authorization header', req.headers.authorization);"
+        ].join("\n")
+      })
+    });
+
+    assert.deepEqual(
+      findings.map((finding) => finding.id),
+      ["security-console-sensitive-value"]
+    );
+    assert.equal(findings[0]?.lineNumber, 2);
+  });
+
+  it("does not flag static console messages containing sensitive words", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [changedFile("src/auth/csrf.ts")],
+      readFile: fakeReader({
+        "src/auth/csrf.ts": "console.warn('CSRF token unavailable');"
+      })
+    });
+
+    assert.deepEqual(findings, []);
+  });
+
+  it("only flags SQL interpolation in likely query contexts", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [
+        changedFile("src/email/reservationEmail.ts"),
+        changedFile("src/db/reservations.ts")
+      ],
+      readFile: fakeReader({
+        "src/email/reservationEmail.ts": "const body = `Your reservation changed from ${oldTime} to ${newTime}`;",
+        "src/db/reservations.ts": "await db.query(`select * from reservations where id = ${reservationId}`);"
+      })
+    });
+
+    assert.deepEqual(
+      findings.map((finding) => finding.id),
+      ["security-sql-string-interpolation"]
+    );
+    assert.equal(findings[0]?.filePath, "src/db/reservations.ts");
+  });
+
+  it("suppresses obvious test fixture secrets while keeping realistic-looking test secrets", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [
+        changedFile("tests/envFixture.test.ts"),
+        changedFile("tests/realisticSecret.test.ts")
+      ],
+      readFile: fakeReader({
+        "tests/envFixture.test.ts": [
+          "process.env.JWT_SECRET = 'test-secret-key-12345';",
+          "process.env.INTERNAL_API_KEY = 'test-internal-key';"
+        ].join("\n"),
+        "tests/realisticSecret.test.ts": "process.env.INTERNAL_API_KEY = 'A1b2C3d4E5f6G7h8I9j0K1l2';"
+      })
+    });
+
+    assert.deepEqual(
+      findings.map((finding) => finding.id),
+      ["security-api-key"]
+    );
+    assert.equal(findings[0]?.filePath, "tests/realisticSecret.test.ts");
+  });
+
+  it("deduplicates hardcoded-secret when jwt-secret-default triggers on the same line", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [changedFile("src/auth/jwt.ts")],
+      readFile: fakeReader({
+        "src/auth/jwt.ts": "const jwtSecret = 'RealJwtSecret12345';"
+      })
+    });
+
+    assert.deepEqual(
+      findings.map((finding) => finding.id),
+      ["security-jwt-secret-default"]
+    );
+  });
+
   it("ignores unreadable changed files", async () => {
     const findings = await analyzeSecurity({
       repoPath,
