@@ -13,6 +13,7 @@ import { getChangedFiles } from "../repo/getChangedFiles.js";
 import type { GuardianReport } from "./types.js";
 import { listRepoFiles } from "../repo/listRepoFiles.js";
 import { applyBaseline, loadBaseline } from "./baseline.js";
+import { buildActionableGuidance, buildRequiredDeployActions } from "./actionableGuidance.js";
 
 export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
   const changedFiles = await getChangedFiles({
@@ -82,6 +83,13 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     artifacts: config.externalArtifacts,
     securityFindings: activeSecurityFindings
   });
+  const requiredDeployActions = buildRequiredDeployActions(activeReleaseFindings);
+  const actionableGuidance = buildActionableGuidance([
+    ...activeReleaseFindings,
+    ...activeQaFindings,
+    ...activeSecurityFindings,
+    ...activeWorkflowFindings
+  ]);
   const riskScore = scoreRisk({
     changedFiles,
     qaFindings: activeQaFindings,
@@ -104,7 +112,9 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     workflowFindings: activeWorkflowFindings,
     enterpriseRiskCorrelation,
     acceptedFindings: baselineApplied.acceptedFindings,
-    requiredActions: activeReleaseFindings.flatMap((finding) => finding.requiredBeforeDeploy),
+    requiredDeployActions,
+    actionableGuidance,
+    requiredActions: requiredDeployActions,
     warnings: [...config.warnings, ...projectBrainResult.warnings, ...baselineResult.warnings, ...enterpriseRiskCorrelation.warnings]
   };
 }

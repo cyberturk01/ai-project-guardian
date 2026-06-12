@@ -20,7 +20,8 @@ export function renderMarkdownSummary(report: GuardianReport): string {
 | Active findings | ${activeFindings} |
 | External scanner findings | ${report.enterpriseRiskCorrelation.externalFindings.length} |
 | Multi-tool correlations | ${report.enterpriseRiskCorrelation.correlatedFindings.filter((finding) => finding.confidence === "multi-tool").length} |
-| Required actions | ${report.requiredActions.length} |
+| Required deploy actions | ${report.requiredDeployActions.length} |
+| Actionable guidance items | ${report.actionableGuidance.length} |
 | Accepted findings | ${report.acceptedFindings.length} |
 
 ## Findings
@@ -31,9 +32,11 @@ export function renderMarkdownSummary(report: GuardianReport): string {
 - Workflow: ${report.workflowFindings.length}
 - External scanners: ${report.enterpriseRiskCorrelation.externalFindings.length}
 
-## Required Actions
+## Required Deploy Actions
 
-${renderShortTaskList(report.requiredActions)}
+${renderShortTaskList(report.requiredDeployActions, "No deploy-specific required actions.")}
+
+${renderGuidanceSection(report)}
 
 ## Notes
 
@@ -42,9 +45,9 @@ ${renderWarnings(report.warnings)}
 `;
 }
 
-function renderShortTaskList(items: string[]): string {
+function renderShortTaskList(items: string[], emptyText = "No required actions."): string {
   if (items.length === 0) {
-    return "No required actions.";
+    return emptyText;
   }
 
   const visibleItems = items.slice(0, 5).map((item) => `- [ ] ${item}`);
@@ -55,6 +58,31 @@ function renderShortTaskList(items: string[]): string {
   }
 
   return [...visibleItems, `- ${hiddenCount} more action(s) in the full report.`].join("\n");
+}
+
+function renderGuidanceSection(report: GuardianReport): string {
+  if (report.overallRisk !== "high" && report.overallRisk !== "critical") {
+    return "";
+  }
+
+  return `## Actionable Guidance
+
+${renderShortGuidanceList(report)}`;
+}
+
+function renderShortGuidanceList(report: GuardianReport): string {
+  if (report.actionableGuidance.length === 0) {
+    return "No actionable guidance.";
+  }
+
+  const visibleItems = report.actionableGuidance.slice(0, 5).map((item) => `- [ ] **${item.riskLevel}** ${item.area}: ${item.action}`);
+  const hiddenCount = report.actionableGuidance.length - visibleItems.length;
+
+  if (hiddenCount === 0) {
+    return visibleItems.join("\n");
+  }
+
+  return [...visibleItems, `- ${hiddenCount} more guidance item(s) in the full report.`].join("\n");
 }
 
 function renderWarnings(warnings: string[]): string {

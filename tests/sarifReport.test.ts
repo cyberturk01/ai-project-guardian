@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildActionableGuidance, buildRequiredDeployActions } from "../src/core/actionableGuidance.js";
 import type { GuardianReport } from "../src/core/types.js";
 import { renderReport } from "../src/renderers/renderReport.js";
 import { renderSarifReport } from "../src/renderers/sarifReport.js";
@@ -77,7 +78,7 @@ describe("renderSarifReport", () => {
 });
 
 function makeReport(): GuardianReport {
-  return {
+  const report: GuardianReport = {
     projectName: "AI Restaurants",
     generatedAt: "2026-06-10T12:00:00.000Z",
     riskScore: 72,
@@ -137,9 +138,22 @@ function makeReport(): GuardianReport {
       warnings: []
     },
     acceptedFindings: [],
+    requiredDeployActions: [],
+    actionableGuidance: [],
     requiredActions: [],
     warnings: []
   };
+
+  report.requiredDeployActions = buildRequiredDeployActions(report.releaseFindings);
+  report.actionableGuidance = buildActionableGuidance([
+    ...report.releaseFindings,
+    ...report.qaFindings,
+    ...report.securityFindings,
+    ...report.workflowFindings
+  ]);
+  report.requiredActions = report.requiredDeployActions;
+
+  return report;
 }
 
 function readSchema(fileName: string): JsonSchema {

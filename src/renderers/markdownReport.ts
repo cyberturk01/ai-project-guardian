@@ -39,9 +39,13 @@ ${renderEnterpriseRiskCorrelation(report)}
 
 ${renderAcceptedFindings(report.acceptedFindings)}
 
-## Required Actions
+## Required Deploy Actions
 
-${renderTaskList(report.requiredActions)}
+${renderTaskList(report.requiredDeployActions, "No deploy-specific required actions.")}
+
+## Actionable Guidance
+
+${renderActionableGuidance(report)}
 
 ## Suggested Tests
 
@@ -92,7 +96,8 @@ function renderExecutiveSummary(report: GuardianReport): string {
 | External scanner findings | ${report.enterpriseRiskCorrelation.externalFindings.length} |
 | Multi-tool correlations | ${report.enterpriseRiskCorrelation.correlatedFindings.filter((finding) => finding.confidence === "multi-tool").length} |
 | Accepted findings | ${report.acceptedFindings.length} |
-| Required actions | ${report.requiredActions.length} |
+| Required deploy actions | ${report.requiredDeployActions.length} |
+| Actionable guidance items | ${report.actionableGuidance.length} |
 
 ${renderFindingSummary(totalFindings, report.acceptedFindings.length)}
 
@@ -301,6 +306,19 @@ function renderSuggestedTests(report: GuardianReport): string {
   return renderTaskList(tests);
 }
 
+function renderActionableGuidance(report: GuardianReport): string {
+  if (report.actionableGuidance.length === 0) {
+    return "No actionable guidance.";
+  }
+
+  return report.actionableGuidance
+    .map((item) => {
+      const files = item.affectedFiles === undefined || item.affectedFiles.length === 0 ? "" : ` (${renderInlineList(item.affectedFiles)})`;
+      return `- [ ] ${renderRiskLabel(item.riskLevel)} ${item.area}: ${item.action}${files}`;
+    })
+    .join("\n");
+}
+
 function renderNotes(report: GuardianReport): string {
   const notes = [
     "This report is generated from repository heuristics and should support, not replace, human review.",
@@ -318,9 +336,9 @@ function renderList(items: string[]): string {
   return items.map((item) => `- ${item}`).join("\n");
 }
 
-function renderTaskList(items: string[]): string {
+function renderTaskList(items: string[], emptyText = "No required actions."): string {
   if (items.length === 0) {
-    return "No required actions.";
+    return emptyText;
   }
 
   return items.map((item) => `- [ ] ${item}`).join("\n");

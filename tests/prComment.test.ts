@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { buildActionableGuidance, buildRequiredDeployActions } from "../src/core/actionableGuidance.js";
 import type { GuardianReport, RiskLevel } from "../src/core/types.js";
 import { renderPrComment } from "../src/renderers/prComment.js";
 
@@ -20,7 +21,8 @@ describe("renderPrComment", () => {
 
 - 0 changed files
 - 3 active findings
-- 0 required actions
+- 2 required deploy actions
+- 3 actionable guidance items
 
 **Top Findings**
 
@@ -28,10 +30,15 @@ describe("renderPrComment", () => {
 - **high** qa: Missing integration test (src/example.ts)
 - **medium** release: Package dependency changed (src/example.ts)
 
-**Required Actions**
+**Actionable Guidance**
+
+- [ ] **high** release: Validate workflow triggers
+- [ ] **high** qa: Add integration coverage
+- [ ] **medium** release: Review dependency lockfile changes
+
+**Required Deploy Actions**
 
 - [ ] Validate workflow triggers
-- [ ] Add integration coverage
 - [ ] Review dependency lockfile changes
 `
     );
@@ -44,7 +51,8 @@ describe("renderPrComment", () => {
     assert.match(actual, /\| Risk score \| 72\/100 \|/);
     assert.match(actual, /\| Overall risk \| \*\*high\*\* \|/);
     assert.match(actual, /\*\*Top Findings\*\*/);
-    assert.match(actual, /\*\*Required Actions\*\*/);
+    assert.match(actual, /\*\*Required Deploy Actions\*\*/);
+    assert.match(actual, /\*\*Actionable Guidance\*\*/);
     assert.match(actual, /- \[ \] Validate workflow triggers/);
   });
 
@@ -74,7 +82,14 @@ describe("renderPrComment", () => {
     );
     report.qaFindings = Array.from({ length: 12 }, (_, index) => qaFinding(`QA finding ${index + 1}`, "high"));
     report.securityFindings = Array.from({ length: 12 }, (_, index) => securityFinding(`Security finding ${index + 1}`, "high"));
-    report.requiredActions = Array.from({ length: 12 }, (_, index) => `Required action ${index + 1}`);
+    report.requiredDeployActions = Array.from({ length: 12 }, (_, index) => `Required action ${index + 1}`);
+    report.actionableGuidance = buildActionableGuidance([
+      ...report.releaseFindings,
+      ...report.qaFindings,
+      ...report.securityFindings,
+      ...report.workflowFindings
+    ]);
+    report.requiredActions = report.requiredDeployActions;
 
     const lines = renderPrComment(report).trimEnd().split("\n");
 
@@ -83,7 +98,7 @@ describe("renderPrComment", () => {
 });
 
 function makeReport(): GuardianReport {
-  return {
+  const report: GuardianReport = {
     projectName: "AI Restaurants",
     generatedAt: "2026-06-10T12:00:00.000Z",
     riskScore: 72,
@@ -103,9 +118,22 @@ function makeReport(): GuardianReport {
       warnings: []
     },
     acceptedFindings: [],
+    requiredDeployActions: [],
+    actionableGuidance: [],
     requiredActions: [],
     warnings: []
   };
+
+  report.requiredDeployActions = buildRequiredDeployActions(report.releaseFindings);
+  report.actionableGuidance = buildActionableGuidance([
+    ...report.releaseFindings,
+    ...report.qaFindings,
+    ...report.securityFindings,
+    ...report.workflowFindings
+  ]);
+  report.requiredActions = report.requiredDeployActions;
+
+  return report;
 }
 
 function qaFinding(title: string, riskLevel: RiskLevel, suggestedTests = [`Test ${title}`]): GuardianReport["qaFindings"][number] {

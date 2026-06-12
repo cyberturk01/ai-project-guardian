@@ -19,7 +19,8 @@
 | External scanner findings | 0 |
 | Multi-tool correlations | 0 |
 | Accepted findings | 1 |
-| Required actions | 2 |
+| Required deploy actions | 2 |
+| Actionable guidance items | 4 |
 
 3 finding(s) need review before release.
 
@@ -101,10 +102,17 @@ These findings matched `.guardian-baseline.json` and are shown for visibility, b
 | --- | --- | --- | --- |
 | release | GitHub Actions changed | **high** | .github/workflows/release.yml |
 
-## Required Actions
+## Required Deploy Actions
 
 - [ ] Review workflow triggers, permissions, environments, and secrets usage.
 - [ ] Confirm required checks still run before deployment.
+
+## Actionable Guidance
+
+- [ ] **high** release: Confirm required checks still run before deployment. (.github/workflows/release.yml)
+- [ ] **high** release: Review workflow triggers, permissions, environments, and secrets usage. (.github/workflows/release.yml)
+- [ ] **high** security: Move secrets to a managed secret store or environment variable, then rotate the exposed value if it is real.
+- [ ] **high** qa: Add an API or integration test that exercises src/api/reservations.ts. (src/api/reservations.ts)
 
 ## Suggested Tests
 

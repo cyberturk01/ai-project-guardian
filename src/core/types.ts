@@ -91,6 +91,16 @@ export type WorkflowFinding = FindingBase & {
 
 export type GuardianFinding = QaFinding | ReleaseFinding | SecurityFinding | WorkflowFinding;
 
+export type ActionableGuidanceItem = {
+  id: string;
+  sourceFindingId: string;
+  area: "qa" | "release" | "security" | "workflow";
+  riskLevel: RiskLevel;
+  title: string;
+  action: string;
+  affectedFiles?: string[];
+};
+
 export type ExternalScanner = "sarif" | "codeql" | "semgrep" | "snyk";
 
 export type ExternalFinding = {
@@ -135,6 +145,8 @@ export type GuardianReport = {
   workflowFindings: WorkflowFinding[];
   enterpriseRiskCorrelation: EnterpriseRiskCorrelation;
   acceptedFindings: GuardianFinding[];
+  requiredDeployActions: string[];
+  actionableGuidance: ActionableGuidanceItem[];
   requiredActions: string[];
   warnings: string[];
 };

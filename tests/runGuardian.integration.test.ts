@@ -72,7 +72,8 @@ describe("runGuardianCli integration", () => {
       assert.match(report, /\| Risk score \| \d+\/100 \|/);
       assert.match(report, /\| Overall risk \| \*\*critical\*\* \|/);
       assert.match(report, /\*\*Top Findings\*\*/);
-      assert.match(report, /\*\*Required Actions\*\*/);
+      assert.match(report, /\*\*Actionable Guidance\*\*/);
+      assert.match(report, /\*\*Required Deploy Actions\*\*/);
       assert.match(report, /- \[ \] /);
       assert.doesNotMatch(report, /## Changed Files/);
     });
@@ -108,7 +109,8 @@ describe("runGuardianCli integration", () => {
 
       assert.match(report, /Business area changed with required deploy checks: order fulfillment/);
       assert.match(report, /- \[ \] Confirm fulfillment queue processing before deploy/);
-      assert.match(report, /## Required Actions[\s\S]*Confirm fulfillment queue processing before deploy/);
+      assert.match(report, /## Required Deploy Actions[\s\S]*Confirm fulfillment queue processing before deploy/);
+      assert.match(report, /## Actionable Guidance[\s\S]*Confirm fulfillment queue processing before deploy/);
     });
   });
 

@@ -1,8 +1,9 @@
-import type { GuardianFinding, GuardianReport, RiskLevel } from "../core/types.js";
+import type { ActionableGuidanceItem, GuardianFinding, GuardianReport, RiskLevel } from "../core/types.js";
 
 const maxLines = 30;
-const maxTopFindings = 8;
-const maxActions = 8;
+const maxTopFindings = 4;
+const maxDeployActions = 5;
+const maxGuidanceItems = 3;
 const riskWeights: Record<RiskLevel, number> = {
   info: 0,
   low: 1,
@@ -13,7 +14,6 @@ const riskWeights: Record<RiskLevel, number> = {
 
 export function renderPrComment(report: GuardianReport): string {
   const findings = prioritizedFindings(report);
-  const actions = requiredActions(report, findings);
   const lines = [
     "### AI Project Guardian",
     "",
@@ -26,15 +26,18 @@ export function renderPrComment(report: GuardianReport): string {
     "",
     `- ${formatCount(report.changedFiles.length, "changed file")}`,
     `- ${formatCount(totalActiveFindings(report), "active finding")}`,
-    `- ${formatCount(report.requiredActions.length, "required action")}`,
+    `- ${formatCount(report.requiredDeployActions.length, "required deploy action")}`,
+    `- ${formatCount(report.actionableGuidance.length, "actionable guidance item")}`,
     "",
     "**Top Findings**",
     "",
     ...listItems(findings.slice(0, maxTopFindings).map(renderFindingItem)),
     "",
-    "**Required Actions**",
+    ...guidanceLines(report),
     "",
-    ...taskItems(actions.slice(0, maxActions))
+    "**Required Deploy Actions**",
+    "",
+    ...taskItems(report.requiredDeployActions.slice(0, maxDeployActions), "No deploy-specific required actions.")
   ];
 
   return `${lines.slice(0, maxLines).join("\n")}\n`;
@@ -46,23 +49,6 @@ function prioritizedFindings(report: GuardianReport): GuardianFinding[] {
   );
 }
 
-function requiredActions(report: GuardianReport, findings: GuardianFinding[]): string[] {
-  return unique([
-    ...report.requiredActions,
-    ...findings.flatMap((finding) => {
-      if (finding.area === "release") {
-        return finding.requiredBeforeDeploy;
-      }
-
-      if (finding.area === "qa") {
-        return finding.suggestedTests;
-      }
-
-      return finding.recommendation === undefined ? [] : [finding.recommendation];
-    })
-  ]);
-}
-
 function listItems(items: string[]): string[] {
   if (items.length === 0) {
     return ["- None"];
@@ -71,12 +57,32 @@ function listItems(items: string[]): string[] {
   return items.map((item) => `- ${item}`);
 }
 
-function taskItems(items: string[]): string[] {
+function taskItems(items: string[], emptyText = "No required actions."): string[] {
   if (items.length === 0) {
-    return ["- [ ] No required actions."];
+    return [`- [ ] ${emptyText}`];
   }
 
   return items.map((item) => `- [ ] ${item}`);
+}
+
+function guidanceLines(report: GuardianReport): string[] {
+  if (report.overallRisk !== "high" && report.overallRisk !== "critical") {
+    return [];
+  }
+
+  return [
+    "**Actionable Guidance**",
+    "",
+    ...guidanceItems(report.actionableGuidance.slice(0, maxGuidanceItems))
+  ];
+}
+
+function guidanceItems(items: ActionableGuidanceItem[]): string[] {
+  if (items.length === 0) {
+    return ["- [ ] No actionable guidance."];
+  }
+
+  return items.map((item) => `- [ ] **${item.riskLevel}** ${item.area}: ${item.action}`);
 }
 
 function renderFindingItem(finding: GuardianFinding): string {
@@ -107,20 +113,6 @@ function findingLocation(finding: GuardianFinding): string | undefined {
 
 function totalActiveFindings(report: GuardianReport): number {
   return report.qaFindings.length + report.releaseFindings.length + report.securityFindings.length + report.workflowFindings.length;
-}
-
-function unique(items: string[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-
-  for (const item of items) {
-    if (!seen.has(item)) {
-      seen.add(item);
-      result.push(item);
-    }
-  }
-
-  return result;
 }
 
 function formatCount(count: number, label: string): string {

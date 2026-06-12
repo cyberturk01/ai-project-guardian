@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildActionableGuidance, buildRequiredDeployActions } from "../src/core/actionableGuidance.js";
 import type { GuardianReport } from "../src/core/types.js";
 import { renderMarkdownReport } from "../src/renderers/markdownReport.js";
 import { renderMarkdownSummary } from "../src/renderers/markdownSummary.js";
@@ -48,7 +49,7 @@ describe("renderMarkdownReport", () => {
 });
 
 function makeReport(): GuardianReport {
-  return {
+  const report: GuardianReport = {
     projectName: "AI Restaurants",
     generatedAt: "2026-06-10T12:00:00.000Z",
     riskScore: 72,
@@ -132,12 +133,28 @@ function makeReport(): GuardianReport {
         accepted: true
       }
     ],
+    requiredDeployActions: [
+      "Review workflow triggers, permissions, environments, and secrets usage.",
+      "Confirm required checks still run before deployment."
+    ],
+    actionableGuidance: [],
     requiredActions: [
       "Review workflow triggers, permissions, environments, and secrets usage.",
       "Confirm required checks still run before deployment."
     ],
     warnings: ["guardian.config.json was not found; using safe defaults."]
   };
+
+  report.requiredDeployActions = buildRequiredDeployActions(report.releaseFindings);
+  report.actionableGuidance = buildActionableGuidance([
+    ...report.releaseFindings,
+    ...report.qaFindings,
+    ...report.securityFindings,
+    ...report.workflowFindings
+  ]);
+  report.requiredActions = report.requiredDeployActions;
+
+  return report;
 }
 
 function readSnapshot(fileName: string): string {
