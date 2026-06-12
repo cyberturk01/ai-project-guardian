@@ -221,6 +221,44 @@ describe("analyzeSecurity", () => {
     );
   });
 
+  it("deduplicates generated asset findings when source content is effectively identical", async () => {
+    const duplicateContent = [
+      "// generated from src/templates/secretSnippet.ts",
+      "const PAYMENT_SECRET = 'RealSecret12345';"
+    ].join("\n");
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [
+        changedFile("src/templates/secretSnippet.ts"),
+        changedFile("public/secretSnippet.js")
+      ],
+      readFile: fakeReader({
+        "src/templates/secretSnippet.ts": "const PAYMENT_SECRET = 'RealSecret12345';",
+        "public/secretSnippet.js": duplicateContent
+      })
+    });
+
+    assert.deepEqual(
+      findings.map((finding) => `${finding.id}:${finding.filePath}`),
+      ["security-hardcoded-secret:src/templates/secretSnippet.ts"]
+    );
+  });
+
+  it("keeps generated asset findings when no source duplicate exists", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [changedFile("public/checkout.js")],
+      readFile: fakeReader({
+        "public/checkout.js": "const PAYMENT_SECRET = 'RealSecret12345';"
+      })
+    });
+
+    assert.deepEqual(
+      findings.map((finding) => `${finding.id}:${finding.filePath}`),
+      ["security-hardcoded-secret:public/checkout.js"]
+    );
+  });
+
   it("ignores unreadable changed files", async () => {
     const findings = await analyzeSecurity({
       repoPath,
