@@ -32,6 +32,24 @@ Highest detected risk: **high**.
 
 Review required actions before release and confirm owners for unresolved risk.
 
+## Score Breakdown
+
+| Component | Value |
+| --- | ---: |
+| Selected band | security |
+| Band base | 70 |
+| Band max | 100 |
+| Band factor | 2 |
+| Weighted signal | 52 |
+| Changed files | 18 |
+| QA findings | 8 |
+| Release findings | 8 |
+| Security findings | 18 |
+| Workflow findings | 0 |
+| External scanner findings | 0 |
+| Multi-tool correlations | 0 |
+| Critical floor applied | No |
+
 ## Changed Files
 
 | Status | Path | Category | Risk |

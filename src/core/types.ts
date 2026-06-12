@@ -101,6 +101,26 @@ export type ActionableGuidanceItem = {
   affectedFiles?: string[];
 };
 
+export type ScoreBreakdown = {
+  selectedBand: string;
+  bandBase: number;
+  bandMax: number;
+  bandFactor: number;
+  weightedSignal: number;
+  changedFileScore: number;
+  qaFindingScore: number;
+  releaseFindingScore: number;
+  securityFindingScore: number;
+  workflowFindingScore: number;
+  externalFindingScore: number;
+  correlatedFindingScore: number;
+  criticalFloorApplied?: {
+    applied: boolean;
+    floor?: number;
+    reason?: string;
+  };
+};
+
 export type ExternalScanner = "sarif" | "codeql" | "semgrep" | "snyk";
 
 export type ExternalFinding = {
@@ -138,6 +158,7 @@ export type GuardianReport = {
   generatedAt: string;
   riskScore: number;
   overallRisk: RiskLevel;
+  scoreBreakdown: ScoreBreakdown;
   changedFiles: ChangedFile[];
   qaFindings: QaFinding[];
   releaseFindings: ReleaseFinding[];

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { riskLevelForScore, scoreRisk } from "../src/analyzers/riskScorer.js";
+import { calculateRiskScore, riskLevelForScore, scoreRisk } from "../src/analyzers/riskScorer.js";
 import type { ChangedFile, QaFinding, ReleaseFinding, SecurityFinding, WorkflowFinding } from "../src/core/types.js";
 
 describe("riskLevelForScore", () => {
@@ -383,6 +383,63 @@ describe("scoreRisk", () => {
 
     assert.equal(result.score, 100);
     assert.equal(result.overallRisk, "critical");
+  });
+
+  it("returns a score breakdown without changing the calculated score", () => {
+    const input = {
+      changedFiles: [
+        changedFile({
+          path: "src/api/reservations.ts",
+          category: "source",
+          riskLevel: "medium"
+        })
+      ],
+      qaFindings: [qaFinding({ riskLevel: "high" })],
+      releaseFindings: [releaseFinding({ riskLevel: "medium" })],
+      securityFindings: [securityFinding({ riskLevel: "high" })],
+      workflowFindings: [workflowFinding({ riskLevel: "high" })]
+    };
+    const legacyResult = scoreRisk(input);
+    const breakdownResult = calculateRiskScore(input);
+
+    assert.equal(breakdownResult.score, legacyResult.score);
+    assert.equal(breakdownResult.overallRisk, legacyResult.overallRisk);
+    assert.equal(breakdownResult.scoreBreakdown.selectedBand, "security");
+    assert.equal(breakdownResult.scoreBreakdown.changedFileScore, 6);
+    assert.equal(breakdownResult.scoreBreakdown.qaFindingScore, 8);
+    assert.equal(breakdownResult.scoreBreakdown.releaseFindingScore, 5);
+    assert.equal(breakdownResult.scoreBreakdown.securityFindingScore, 18);
+    assert.equal(breakdownResult.scoreBreakdown.workflowFindingScore, 10);
+    assert.equal(breakdownResult.scoreBreakdown.externalFindingScore, 0);
+    assert.equal(breakdownResult.scoreBreakdown.correlatedFindingScore, 0);
+    assert.equal(breakdownResult.scoreBreakdown.weightedSignal, 47);
+  });
+
+  it("explains the critical floor when a critical combination elevates the score", () => {
+    const result = calculateRiskScore({
+      changedFiles: [
+        changedFile({
+          path: "src/db/migrations/001_create_users.sql",
+          category: "migration",
+          riskLevel: "high"
+        })
+      ],
+      qaFindings: [
+        qaFinding({
+          id: "qa-migration-without-db-test",
+          riskLevel: "high"
+        })
+      ],
+      releaseFindings: [],
+      securityFindings: []
+    });
+
+    assert.equal(result.score, 91);
+    assert.deepEqual(result.scoreBreakdown.criticalFloorApplied, {
+      applied: true,
+      floor: 91,
+      reason: "Migration changed without DB/integration test coverage"
+    });
   });
 });
 

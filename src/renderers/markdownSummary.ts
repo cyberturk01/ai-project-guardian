@@ -32,6 +32,8 @@ export function renderMarkdownSummary(report: GuardianReport): string {
 - Workflow: ${report.workflowFindings.length}
 - External scanners: ${report.enterpriseRiskCorrelation.externalFindings.length}
 
+${renderScoreBreakdownSection(report)}
+
 ## Required Deploy Actions
 
 ${renderShortTaskList(report.requiredDeployActions, "No deploy-specific required actions.")}
@@ -58,6 +60,22 @@ function renderShortTaskList(items: string[], emptyText = "No required actions."
   }
 
   return [...visibleItems, `- ${hiddenCount} more action(s) in the full report.`].join("\n");
+}
+
+function renderScoreBreakdownSection(report: GuardianReport): string {
+  if (report.overallRisk !== "high" && report.overallRisk !== "critical") {
+    return "";
+  }
+
+  const breakdown = report.scoreBreakdown;
+  const floor = breakdown.criticalFloorApplied;
+  const floorText = floor?.applied === true ? ` Critical floor: ${floor.floor}/100 (${floor.reason}).` : "";
+
+  return `## Score Breakdown
+
+Band: **${breakdown.selectedBand}** (${breakdown.bandBase}-${breakdown.bandMax}, factor ${breakdown.bandFactor}). Weighted signal: **${breakdown.weightedSignal}**.${floorText}
+
+Contributors: changed files ${breakdown.changedFileScore}, QA ${breakdown.qaFindingScore}, release ${breakdown.releaseFindingScore}, security ${breakdown.securityFindingScore}, workflow ${breakdown.workflowFindingScore}, external ${breakdown.externalFindingScore}, correlations ${breakdown.correlatedFindingScore}.`;
 }
 
 function renderGuidanceSection(report: GuardianReport): string {

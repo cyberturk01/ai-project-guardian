@@ -28,13 +28,13 @@ export function renderPrComment(report: GuardianReport): string {
     `- ${formatCount(totalActiveFindings(report), "active finding")}`,
     `- ${formatCount(report.requiredDeployActions.length, "required deploy action")}`,
     `- ${formatCount(report.actionableGuidance.length, "actionable guidance item")}`,
+    ...scoreBreakdownLines(report),
     "",
     "**Top Findings**",
     "",
     ...listItems(findings.slice(0, maxTopFindings).map(renderFindingItem)),
     "",
     ...guidanceLines(report),
-    "",
     "**Required Deploy Actions**",
     "",
     ...taskItems(report.requiredDeployActions.slice(0, maxDeployActions), "No deploy-specific required actions.")
@@ -83,6 +83,18 @@ function guidanceItems(items: ActionableGuidanceItem[]): string[] {
   }
 
   return items.map((item) => `- [ ] **${item.riskLevel}** ${item.area}: ${item.action}`);
+}
+
+function scoreBreakdownLines(report: GuardianReport): string[] {
+  if (report.overallRisk !== "high" && report.overallRisk !== "critical") {
+    return [];
+  }
+
+  const breakdown = report.scoreBreakdown;
+  const floor = breakdown.criticalFloorApplied;
+  const floorText = floor?.applied === true ? `; floor ${floor.floor}` : "";
+
+  return [`- Score band: ${breakdown.selectedBand}, signal ${breakdown.weightedSignal}${floorText}`];
 }
 
 function renderFindingItem(finding: GuardianFinding): string {

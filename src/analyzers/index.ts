@@ -8,5 +8,5 @@ export { analyzeSecurity } from "./securityAnalyzer.js";
 export type { AnalyzeSecurityInput } from "./securityAnalyzer.js";
 export { analyzeWorkflows } from "./workflowAnalyzer.js";
 export type { AnalyzeWorkflowsInput } from "./workflowAnalyzer.js";
-export { riskLevelForScore, scoreRisk } from "./riskScorer.js";
+export { calculateRiskScore, riskLevelForScore, scoreRisk } from "./riskScorer.js";
 export type { RiskScoreInput, RiskScoreResult } from "./riskScorer.js";

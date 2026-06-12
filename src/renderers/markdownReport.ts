@@ -11,6 +11,10 @@ ${renderExecutiveSummary(report)}
 
 ${renderOverallRisk(report)}
 
+## Score Breakdown
+
+${renderScoreBreakdown(report)}
+
 ## Changed Files
 
 ${renderChangedFiles(report.changedFiles)}
@@ -108,6 +112,31 @@ function renderOverallRisk(report: GuardianReport): string {
   return `${renderRiskLabel(report.overallRisk)} with score **${report.riskScore}/100**.
 
 ${riskGuidance(report.overallRisk)}`;
+}
+
+function renderScoreBreakdown(report: GuardianReport): string {
+  const breakdown = report.scoreBreakdown;
+  const floor = breakdown.criticalFloorApplied;
+  const criticalFloorText =
+    floor === undefined || !floor.applied
+      ? "No"
+      : `Yes (${floor.floor}/100: ${floor.reason})`;
+
+  return `| Component | Value |
+| --- | ---: |
+| Selected band | ${escapeTableCell(breakdown.selectedBand)} |
+| Band base | ${breakdown.bandBase} |
+| Band max | ${breakdown.bandMax} |
+| Band factor | ${breakdown.bandFactor} |
+| Weighted signal | ${breakdown.weightedSignal} |
+| Changed files | ${breakdown.changedFileScore} |
+| QA findings | ${breakdown.qaFindingScore} |
+| Release findings | ${breakdown.releaseFindingScore} |
+| Security findings | ${breakdown.securityFindingScore} |
+| Workflow findings | ${breakdown.workflowFindingScore} |
+| External scanner findings | ${breakdown.externalFindingScore} |
+| Multi-tool correlations | ${breakdown.correlatedFindingScore} |
+| Critical floor applied | ${criticalFloorText} |`;
 }
 
 function renderFindingSummary(activeFindings: number, acceptedFindings: number): string {

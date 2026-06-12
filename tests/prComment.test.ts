@@ -23,6 +23,7 @@ describe("renderPrComment", () => {
 - 3 active findings
 - 2 required deploy actions
 - 3 actionable guidance items
+- Score band: source, signal 21
 
 **Top Findings**
 
@@ -35,7 +36,6 @@ describe("renderPrComment", () => {
 - [ ] **high** release: Validate workflow triggers
 - [ ] **high** qa: Add integration coverage
 - [ ] **medium** release: Review dependency lockfile changes
-
 **Required Deploy Actions**
 
 - [ ] Validate workflow triggers
@@ -103,6 +103,21 @@ function makeReport(): GuardianReport {
     generatedAt: "2026-06-10T12:00:00.000Z",
     riskScore: 72,
     overallRisk: "high",
+    scoreBreakdown: {
+      selectedBand: "source",
+      bandBase: 32,
+      bandMax: 60,
+      bandFactor: 2,
+      weightedSignal: 21,
+      changedFileScore: 0,
+      qaFindingScore: 8,
+      releaseFindingScore: 13,
+      securityFindingScore: 0,
+      workflowFindingScore: 0,
+      externalFindingScore: 0,
+      correlatedFindingScore: 0,
+      criticalFloorApplied: { applied: false }
+    },
     changedFiles: [],
     qaFindings: [qaFinding("Missing integration test", "high", ["Add integration coverage"])],
     releaseFindings: [

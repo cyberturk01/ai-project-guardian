@@ -5,6 +5,7 @@ import type {
   QaFinding,
   ReleaseFinding,
   RiskLevel,
+  ScoreBreakdown,
   SecurityFinding,
   WorkflowFinding
 } from "../core/types.js";
@@ -22,6 +23,7 @@ export type RiskScoreInput = {
 export type RiskScoreResult = {
   score: number;
   overallRisk: RiskLevel;
+  scoreBreakdown: ScoreBreakdown;
 };
 
 type RiskBandName = "documentation" | "config" | "workflow" | "source" | "migration" | "auth" | "security";
@@ -99,21 +101,44 @@ const securityFindingWeights: Record<RiskLevel, number> = {
 const criticalCombinationMinimumScore = 91;
 
 export function scoreRisk(input: RiskScoreInput): RiskScoreResult {
+  return calculateRiskScore(input);
+}
+
+export function calculateRiskScore(input: RiskScoreInput): RiskScoreResult {
   if (hasNoRiskSignals(input)) {
     return {
       score: 0,
-      overallRisk: "info"
+      overallRisk: "info",
+      scoreBreakdown: emptyScoreBreakdown()
     };
   }
 
   const band = selectRiskBand(input);
-  const weightedSignal = scoreWeightedSignals(input, band.name);
+  const componentScores = scoreWeightedSignals(input, band.name);
+  const weightedSignal = totalWeightedSignal(componentScores);
   const bandedScore = Math.min(band.max, band.base + Math.ceil(Math.sqrt(weightedSignal) * band.factor));
-  const score = clampScore(applyCriticalCombinations(bandedScore, input));
+  const criticalFloor = criticalCombination(input);
+  const scoreBeforeClamp = criticalFloor === undefined ? bandedScore : Math.max(bandedScore, criticalFloor.floor);
+  const score = clampScore(scoreBeforeClamp);
 
   return {
     score,
-    overallRisk: overallRiskForScore(score, input)
+    overallRisk: overallRiskForScore(score, input),
+    scoreBreakdown: {
+      selectedBand: band.name,
+      bandBase: band.base,
+      bandMax: band.max,
+      bandFactor: band.factor,
+      weightedSignal,
+      ...componentScores,
+      criticalFloorApplied: criticalFloor === undefined
+        ? { applied: false }
+        : {
+            applied: scoreBeforeClamp > bandedScore,
+            floor: criticalFloor.floor,
+            reason: criticalFloor.reason
+          }
+    }
   };
 }
 
@@ -169,16 +194,19 @@ function selectRiskBand(input: RiskScoreInput): RiskBand {
   return riskBands.source;
 }
 
-function scoreWeightedSignals(input: RiskScoreInput, bandName: RiskBandName): number {
-  return (
-    scoreChangedFiles(input.changedFiles, bandName) +
-    scoreQaFindings(input.qaFindings) +
-    scoreReleaseFindings(input.releaseFindings) +
-    scoreWorkflowFindings(input.workflowFindings ?? []) +
-    scoreSecurityFindings(input.securityFindings) +
-    scoreExternalFindings(input.externalFindings ?? []) +
-    scoreCorrelatedFindings(input.correlatedFindings ?? [])
-  );
+function scoreWeightedSignals(input: RiskScoreInput, bandName: RiskBandName): Omit<
+  ScoreBreakdown,
+  "selectedBand" | "bandBase" | "bandMax" | "bandFactor" | "weightedSignal" | "criticalFloorApplied"
+> {
+  return {
+    changedFileScore: scoreChangedFiles(input.changedFiles, bandName),
+    qaFindingScore: scoreQaFindings(input.qaFindings),
+    releaseFindingScore: scoreReleaseFindings(input.releaseFindings),
+    workflowFindingScore: scoreWorkflowFindings(input.workflowFindings ?? []),
+    securityFindingScore: scoreSecurityFindings(input.securityFindings),
+    externalFindingScore: scoreExternalFindings(input.externalFindings ?? []),
+    correlatedFindingScore: scoreCorrelatedFindings(input.correlatedFindings ?? [])
+  };
 }
 
 function scoreChangedFiles(changedFiles: ChangedFile[], bandName: RiskBandName): number {
@@ -224,12 +252,41 @@ function scoreCorrelatedFindings(findings: CorrelatedFinding[]): number {
   );
 }
 
-function applyCriticalCombinations(score: number, input: RiskScoreInput): number {
-  if (hasScoreElevatingCriticalCombination(input)) {
-    return Math.max(score, criticalCombinationMinimumScore);
+function totalWeightedSignal(scores: ReturnType<typeof scoreWeightedSignals>): number {
+  return (
+    scores.changedFileScore +
+    scores.qaFindingScore +
+    scores.releaseFindingScore +
+    scores.workflowFindingScore +
+    scores.securityFindingScore +
+    scores.externalFindingScore +
+    scores.correlatedFindingScore
+  );
+}
+
+function criticalCombination(input: RiskScoreInput): { floor: number; reason: string } | undefined {
+  if (hasMigrationWithoutDbTest(input)) {
+    return {
+      floor: criticalCombinationMinimumScore,
+      reason: "Migration changed without DB/integration test coverage"
+    };
   }
 
-  return score;
+  if (hasAuthChangeWithoutNegativeTest(input)) {
+    return {
+      floor: criticalCombinationMinimumScore,
+      reason: "Auth or security changed without negative test coverage"
+    };
+  }
+
+  if (hasPaymentChangeWithoutIntegrationTest(input)) {
+    return {
+      floor: criticalCombinationMinimumScore,
+      reason: "Payment code changed without API/integration test coverage"
+    };
+  }
+
+  return undefined;
 }
 
 function overallRiskForScore(score: number, input: RiskScoreInput): RiskLevel {
@@ -248,6 +305,24 @@ function hasCriticalPrerequisite(input: RiskScoreInput): boolean {
 
 function hasScoreElevatingCriticalCombination(input: RiskScoreInput): boolean {
   return hasMigrationWithoutDbTest(input) || hasAuthChangeWithoutNegativeTest(input) || hasPaymentChangeWithoutIntegrationTest(input);
+}
+
+function emptyScoreBreakdown(): ScoreBreakdown {
+  return {
+    selectedBand: "none",
+    bandBase: 0,
+    bandMax: 0,
+    bandFactor: 0,
+    weightedSignal: 0,
+    changedFileScore: 0,
+    qaFindingScore: 0,
+    releaseFindingScore: 0,
+    securityFindingScore: 0,
+    workflowFindingScore: 0,
+    externalFindingScore: 0,
+    correlatedFindingScore: 0,
+    criticalFloorApplied: { applied: false }
+  };
 }
 
 function hasMultiToolCriticalCorrelation(input: RiskScoreInput): boolean {

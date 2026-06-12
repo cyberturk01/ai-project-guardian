@@ -105,6 +105,7 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     generatedAt: new Date().toISOString(),
     riskScore: riskScore.score,
     overallRisk: riskScore.overallRisk,
+    scoreBreakdown: riskScore.scoreBreakdown,
     changedFiles,
     qaFindings: activeQaFindings,
     releaseFindings: activeReleaseFindings,

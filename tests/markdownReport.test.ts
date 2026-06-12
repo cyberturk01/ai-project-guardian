@@ -54,6 +54,21 @@ function makeReport(): GuardianReport {
     generatedAt: "2026-06-10T12:00:00.000Z",
     riskScore: 72,
     overallRisk: "high",
+    scoreBreakdown: {
+      selectedBand: "security",
+      bandBase: 70,
+      bandMax: 100,
+      bandFactor: 2,
+      weightedSignal: 52,
+      changedFileScore: 18,
+      qaFindingScore: 8,
+      releaseFindingScore: 8,
+      securityFindingScore: 18,
+      workflowFindingScore: 0,
+      externalFindingScore: 0,
+      correlatedFindingScore: 0,
+      criticalFloorApplied: { applied: false }
+    },
     changedFiles: [
       {
         path: "src/api/reservations.ts",
