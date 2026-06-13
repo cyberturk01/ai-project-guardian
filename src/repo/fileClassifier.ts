@@ -77,6 +77,10 @@ export function classifyFileCategory(path: string, config: GuardianConfig): Chan
     return classifyReleaseSensitiveFile(path);
   }
 
+  if (matchesConfiguredPath(path, config.testFolders) || isTestFile(path)) {
+    return "test";
+  }
+
   if (matchesConfiguredPath(path, config.riskFolders) || isSecurityFile(path)) {
     return "security";
   }
@@ -91,10 +95,6 @@ export function classifyFileCategory(path: string, config: GuardianConfig): Chan
 
   if (isConfigFile(path)) {
     return "config";
-  }
-
-  if (matchesConfiguredPath(path, config.testFolders) || isTestFile(path)) {
-    return "test";
   }
 
   if (isDocumentationFile(path)) {
@@ -117,6 +117,10 @@ export function classifyRiskLevel(path: string, category: ChangedFileCategory, c
     return "info";
   }
 
+  if (category === "test") {
+    return "low";
+  }
+
   if (matchesConfiguredPath(path, config.releaseSensitiveFiles) || matchesConfiguredPath(path, config.riskFolders)) {
     return "high";
   }
@@ -127,10 +131,6 @@ export function classifyRiskLevel(path: string, category: ChangedFileCategory, c
 
   if (category === "ci") {
     return isHighRiskCiFile(path) ? "high" : "medium";
-  }
-
-  if (category === "test") {
-    return "low";
   }
 
   if (category === "documentation" || category === "project-brain" || category === "generated-report") {

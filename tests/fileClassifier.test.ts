@@ -29,6 +29,11 @@ describe("classifyFile", () => {
     assertClassification("src/server.ts", "source", "high");
   });
 
+  it("keeps auth and security tests as low-risk test files", () => {
+    assertClassification("tests/auth/session.negative.test.ts", "test", "low");
+    assertClassification("src/auth/__tests__/session.test.ts", "test", "low");
+  });
+
   it("classifies common repository support files", () => {
     assertClassification("README.md", "documentation", "info");
     assertClassification("locales/tr.json", "i18n", "low");
