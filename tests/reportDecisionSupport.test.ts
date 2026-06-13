@@ -111,6 +111,42 @@ describe("buildReportDecisionSupport", () => {
     assert.equal(decisionSupport.mergeRecommendation, "blocked");
     assert.equal(decisionSupport.riskReason, "Auth/security changed without negative test coverage.");
   });
+
+  it("keeps covered auth/security changes elevated after blocking findings clear", () => {
+    const decisionSupport = buildReportDecisionSupport({
+      overallRisk: "medium",
+      scoreBreakdown: scoreBreakdown({ selectedBand: "auth" }),
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: [],
+      workflowFindings: [],
+      externalFindings: [],
+      correlatedFindings: []
+    });
+
+    assert.equal(decisionSupport.blockingFindingsCount, 0);
+    assert.equal(decisionSupport.mergeRecommendation, "safe");
+    assert.equal(decisionSupport.codeRisk, "medium");
+    assert.equal(decisionSupport.riskReason, "No blocking findings remain.");
+  });
+
+  it("keeps actual security findings blocking even when the score band is calibrated", () => {
+    const decisionSupport = buildReportDecisionSupport({
+      overallRisk: "high",
+      scoreBreakdown: scoreBreakdown({ selectedBand: "auth" }),
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: [securityFinding("high")],
+      workflowFindings: [],
+      externalFindings: [],
+      correlatedFindings: []
+    });
+
+    assert.equal(decisionSupport.blockingFindingsCount, 1);
+    assert.equal(decisionSupport.mergeRecommendation, "blocked");
+    assert.equal(decisionSupport.codeRisk, "high");
+    assert.equal(decisionSupport.riskReason, "Security findings require review.");
+  });
 });
 
 function scoreBreakdown(overrides: Partial<ScoreBreakdown> = {}): ScoreBreakdown {

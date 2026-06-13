@@ -49,7 +49,10 @@ export function buildReportDecisionSupport(input: ReportDecisionSupportInput): R
   const checklistFindings = input.releaseFindings;
   const blockingFindingsCount = blockingFindings.length;
   const checklistFindingsCount = checklistFindings.length;
-  const codeRisk = highestRisk(blockingFindings.map((finding) => finding.riskLevel));
+  const codeRisk = codeRiskFrom({
+    blockingRiskLevels: blockingFindings.map((finding) => finding.riskLevel),
+    selectedBand: input.scoreBreakdown.selectedBand
+  });
   const releaseChecklistRisk = highestRisk(checklistFindings.map((finding) => finding.riskLevel));
 
   return {
@@ -104,6 +107,20 @@ function recommendMerge(input: {
 
 function highestRisk(risks: RiskLevel[]): RiskLevel {
   return risks.reduce<RiskLevel>((highest, risk) => (riskRank[risk] > riskRank[highest] ? risk : highest), "info");
+}
+
+function codeRiskFrom(input: { blockingRiskLevels: RiskLevel[]; selectedBand: string }): RiskLevel {
+  const blockingRisk = highestRisk(input.blockingRiskLevels);
+
+  if (blockingRisk !== "info") {
+    return blockingRisk;
+  }
+
+  if (input.selectedBand === "auth" || input.selectedBand === "security") {
+    return "medium";
+  }
+
+  return "info";
 }
 
 function buildRiskReason(input: {

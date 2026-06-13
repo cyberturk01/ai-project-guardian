@@ -139,6 +139,67 @@ describe("runGuardianCli integration", () => {
     });
   });
 
+  it("blocks auth changes when negative test coverage is missing", async () => {
+    await withAuthFixtureRepo({ hasNegativeTest: false, changeReleaseFile: false }, async (repoPath) => {
+      const stdout = new MemoryWritable();
+
+      await runGuardianCli({
+        argv: ["--repo", repoPath, "--base", "origin/main", "--format", "json"],
+        stdout
+      });
+
+      const report = JSON.parse(stdout.value) as GuardianReport;
+
+      assert.equal(report.overallRisk, "critical");
+      assert.equal(report.mergeRecommendation, "blocked");
+      assert.equal(report.codeRisk, "high");
+      assert.equal(report.riskReason, "Auth/security changed without negative test coverage.");
+      assert.ok(report.qaFindings.some((finding) => finding.id === "qa-auth-security-without-negative-test"));
+      assert.equal(report.securityFindings.length, 0);
+    });
+  });
+
+  it("calibrates auth changes after negative test coverage exists", async () => {
+    await withAuthFixtureRepo({ hasNegativeTest: true, changeReleaseFile: true }, async (repoPath) => {
+      const stdout = new MemoryWritable();
+
+      await runGuardianCli({
+        argv: ["--repo", repoPath, "--base", "origin/main", "--format", "json"],
+        stdout
+      });
+
+      const report = JSON.parse(stdout.value) as GuardianReport;
+
+      assert.equal(report.blockingFindingsCount, 0);
+      assert.ok(report.checklistFindingsCount > 0);
+      assert.equal(report.mergeRecommendation, "safe_after_checklist");
+      assert.equal(report.codeRisk, "medium");
+      assert.equal(report.riskReason, "Only release checklist items remain.");
+      assert.equal(report.qaFindings.length, 0);
+      assert.equal(report.securityFindings.length, 0);
+      assert.equal(report.workflowFindings.length, 0);
+    });
+  });
+
+  it("keeps actual security findings blocked even when negative tests exist", async () => {
+    await withAuthFixtureRepo({ hasNegativeTest: true, changeReleaseFile: false, introduceSecurityFinding: true }, async (repoPath) => {
+      const stdout = new MemoryWritable();
+
+      await runGuardianCli({
+        argv: ["--repo", repoPath, "--base", "origin/main", "--format", "json"],
+        stdout
+      });
+
+      const report = JSON.parse(stdout.value) as GuardianReport;
+
+      assert.equal(report.mergeRecommendation, "blocked");
+      assert.equal(report.codeRisk, "high");
+      assert.equal(report.riskReason, "Security findings require review.");
+      assert.equal(report.qaFindings.length, 0);
+      assert.ok(report.securityFindings.length > 0);
+    });
+  });
+
   it("reports required checks missing from GitHub Actions workflows", async () => {
     await withFixtureRepo(async (repoPath) => {
       await writeFile(
@@ -383,6 +444,20 @@ async function withBusinessAreaFixtureRepo(test: (repoPath: string) => Promise<v
   }
 }
 
+async function withAuthFixtureRepo(
+  options: { hasNegativeTest: boolean; changeReleaseFile: boolean; introduceSecurityFinding?: boolean },
+  test: (repoPath: string) => Promise<void>
+): Promise<void> {
+  const repoPath = await mkdtemp(join(tmpdir(), "guardian-auth-fixture-"));
+
+  try {
+    await createAuthFixtureRepo(repoPath, options);
+    await test(repoPath);
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+}
+
 async function withReleaseOnlyFixtureRepo(test: (repoPath: string) => Promise<void>): Promise<void> {
   const repoPath = await mkdtemp(join(tmpdir(), "guardian-release-only-fixture-"));
 
@@ -495,6 +570,69 @@ async function createBusinessAreaFixtureRepo(repoPath: string): Promise<void> {
   await writeFile(join(repoPath, "src", "fulfillment", "queue.ts"), "export const queue = ['changed'];\n", "utf8");
   await git(repoPath, "add", ".");
   await git(repoPath, "commit", "-m", "Change fulfillment queue");
+}
+
+async function createAuthFixtureRepo(
+  repoPath: string,
+  options: { hasNegativeTest: boolean; changeReleaseFile: boolean; introduceSecurityFinding?: boolean }
+): Promise<void> {
+  await git(repoPath, "init");
+  await git(repoPath, "config", "user.email", "guardian@example.com");
+  await git(repoPath, "config", "user.name", "Guardian Test");
+  await mkdir(join(repoPath, "src", "auth"), { recursive: true });
+  await mkdir(join(repoPath, "tests", "auth"), { recursive: true });
+  await writeFile(
+    join(repoPath, "guardian.config.json"),
+    JSON.stringify(
+      {
+        projectName: "Auth Fixture",
+        riskFolders: ["src/auth"],
+        testFolders: ["tests"],
+        releaseSensitiveFiles: ["package.json"],
+        requiredChecks: []
+      },
+      null,
+      2
+    ),
+    "utf8"
+  );
+  await writeFile(join(repoPath, "package.json"), JSON.stringify({ name: "auth-fixture", version: "1.0.0" }, null, 2), "utf8");
+  await writeFile(
+    join(repoPath, "src", "auth", "session.ts"),
+    ["export function canAccessSession(userRole: string) {", "  return userRole === 'admin';", "}", ""].join("\n"),
+    "utf8"
+  );
+
+  if (options.hasNegativeTest) {
+    await writeFile(
+      join(repoPath, "tests", "auth", "session.unauthorized.test.ts"),
+      ["import { test } from 'node:test';", "test('denies unauthorized session access', () => {});", ""].join("\n"),
+      "utf8"
+    );
+  }
+
+  await git(repoPath, "add", ".");
+  await git(repoPath, "commit", "-m", "Initial auth fixture");
+  await git(repoPath, "update-ref", "refs/remotes/origin/main", "HEAD");
+
+  await writeFile(
+    join(repoPath, "src", "auth", "session.ts"),
+    [
+      "export function canAccessSession(userRole: string) {",
+      options.introduceSecurityFinding === true ? "  const authOptions = { requireAuth: false };" : "  return userRole === 'admin' || userRole === 'support';",
+      options.introduceSecurityFinding === true ? "  return authOptions.requireAuth;" : undefined,
+      "}",
+      ""
+    ].filter((line): line is string => line !== undefined).join("\n"),
+    "utf8"
+  );
+
+  if (options.changeReleaseFile) {
+    await writeFile(join(repoPath, "package.json"), JSON.stringify({ name: "auth-fixture", version: "1.0.1" }, null, 2), "utf8");
+  }
+
+  await git(repoPath, "add", ".");
+  await git(repoPath, "commit", "-m", "Change auth fixture");
 }
 
 async function createReleaseOnlyFixtureRepo(repoPath: string): Promise<void> {
