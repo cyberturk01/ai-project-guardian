@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { Writable } from "node:stream";
 import { promisify } from "node:util";
 import { runGuardianCli, shouldFailBuild } from "../src/cli/runGuardian.js";
+import type { GuardianReport } from "../src/core/types.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -111,6 +112,30 @@ describe("runGuardianCli integration", () => {
       assert.match(report, /- \[ \] Confirm fulfillment queue processing before deploy/);
       assert.match(report, /## Required Deploy Actions[\s\S]*Confirm fulfillment queue processing before deploy/);
       assert.match(report, /## Actionable Guidance[\s\S]*Confirm fulfillment queue processing before deploy/);
+    });
+  });
+
+  it("keeps release-only findings as checklist items in the generated report object", async () => {
+    await withReleaseOnlyFixtureRepo(async (repoPath) => {
+      const stdout = new MemoryWritable();
+
+      await runGuardianCli({
+        argv: ["--repo", repoPath, "--base", "origin/main", "--format", "json"],
+        stdout
+      });
+
+      const report = JSON.parse(stdout.value) as GuardianReport;
+
+      assert.equal(report.blockingFindingsCount, 0);
+      assert.ok(report.checklistFindingsCount > 0);
+      assert.equal(report.mergeRecommendation, "safe_after_checklist");
+      assert.equal(report.riskReason, "Only release checklist items remain.");
+      assert.ok(report.releaseFindings.length > 0);
+      assert.ok(report.requiredDeployActions.length > 0);
+      assert.ok(report.actionableGuidance.some((item) => item.area === "release"));
+      assert.equal(report.qaFindings.length, 0);
+      assert.equal(report.securityFindings.length, 0);
+      assert.equal(report.workflowFindings.length, 0);
     });
   });
 
@@ -358,6 +383,17 @@ async function withBusinessAreaFixtureRepo(test: (repoPath: string) => Promise<v
   }
 }
 
+async function withReleaseOnlyFixtureRepo(test: (repoPath: string) => Promise<void>): Promise<void> {
+  const repoPath = await mkdtemp(join(tmpdir(), "guardian-release-only-fixture-"));
+
+  try {
+    await createReleaseOnlyFixtureRepo(repoPath);
+    await test(repoPath);
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+}
+
 async function createFixtureRepo(repoPath: string): Promise<void> {
   await git(repoPath, "init");
   await git(repoPath, "config", "user.email", "guardian@example.com");
@@ -459,6 +495,35 @@ async function createBusinessAreaFixtureRepo(repoPath: string): Promise<void> {
   await writeFile(join(repoPath, "src", "fulfillment", "queue.ts"), "export const queue = ['changed'];\n", "utf8");
   await git(repoPath, "add", ".");
   await git(repoPath, "commit", "-m", "Change fulfillment queue");
+}
+
+async function createReleaseOnlyFixtureRepo(repoPath: string): Promise<void> {
+  await git(repoPath, "init");
+  await git(repoPath, "config", "user.email", "guardian@example.com");
+  await git(repoPath, "config", "user.name", "Guardian Test");
+  await writeFile(
+    join(repoPath, "guardian.config.json"),
+    JSON.stringify(
+      {
+        projectName: "Release Only Fixture",
+        riskFolders: [],
+        testFolders: ["tests"],
+        releaseSensitiveFiles: ["package.json"],
+        requiredChecks: []
+      },
+      null,
+      2
+    ),
+    "utf8"
+  );
+  await writeFile(join(repoPath, "package.json"), JSON.stringify({ name: "release-only", version: "1.0.0" }, null, 2), "utf8");
+  await git(repoPath, "add", ".");
+  await git(repoPath, "commit", "-m", "Initial release-only fixture");
+  await git(repoPath, "update-ref", "refs/remotes/origin/main", "HEAD");
+
+  await writeFile(join(repoPath, "package.json"), JSON.stringify({ name: "release-only", version: "1.0.1" }, null, 2), "utf8");
+  await git(repoPath, "add", ".");
+  await git(repoPath, "commit", "-m", "Release-only package change");
 }
 
 async function git(cwd: string, ...args: string[]): Promise<void> {
