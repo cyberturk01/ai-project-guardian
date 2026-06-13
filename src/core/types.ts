@@ -146,7 +146,7 @@ export type CorrelatedFinding = {
   confidence: "single-tool" | "multi-tool";
 };
 
-export type MergeRecommendation = "merge" | "review-checklist" | "block";
+export type MergeRecommendation = "blocked" | "safe_after_checklist" | "safe" | "review_required";
 
 export type EnterpriseRiskCorrelation = {
   externalFindings: ExternalFinding[];

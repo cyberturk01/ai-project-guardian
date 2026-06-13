@@ -7,6 +7,7 @@ import type {
   QaFinding,
   ReleaseFinding,
   RiskLevel,
+  ScoreBreakdown,
   SecurityFinding,
   WorkflowFinding
 } from "../src/core/types.js";
@@ -15,6 +16,7 @@ describe("buildReportDecisionSupport", () => {
   it("classifies release findings as checklist findings", () => {
     const decisionSupport = buildReportDecisionSupport({
       overallRisk: "high",
+      scoreBreakdown: scoreBreakdown(),
       qaFindings: [],
       releaseFindings: [releaseFinding("high"), releaseFinding("medium")],
       securityFindings: [],
@@ -25,15 +27,16 @@ describe("buildReportDecisionSupport", () => {
 
     assert.equal(decisionSupport.blockingFindingsCount, 0);
     assert.equal(decisionSupport.checklistFindingsCount, 2);
-    assert.equal(decisionSupport.mergeRecommendation, "review-checklist");
+    assert.equal(decisionSupport.mergeRecommendation, "safe_after_checklist");
     assert.equal(decisionSupport.codeRisk, "info");
     assert.equal(decisionSupport.releaseChecklistRisk, "high");
-    assert.match(decisionSupport.riskReason, /2 release checklist finding\(s\)/);
+    assert.equal(decisionSupport.riskReason, "Only release checklist items remain.");
   });
 
   it("classifies QA, security, workflow, external, and correlated findings as blocking findings", () => {
     const decisionSupport = buildReportDecisionSupport({
       overallRisk: "critical",
+      scoreBreakdown: scoreBreakdown(),
       qaFindings: [qaFinding("medium")],
       releaseFindings: [releaseFinding("critical")],
       securityFindings: [securityFinding("high")],
@@ -44,15 +47,16 @@ describe("buildReportDecisionSupport", () => {
 
     assert.equal(decisionSupport.blockingFindingsCount, 5);
     assert.equal(decisionSupport.checklistFindingsCount, 1);
-    assert.equal(decisionSupport.mergeRecommendation, "block");
+    assert.equal(decisionSupport.mergeRecommendation, "blocked");
     assert.equal(decisionSupport.codeRisk, "critical");
     assert.equal(decisionSupport.releaseChecklistRisk, "critical");
-    assert.match(decisionSupport.riskReason, /5 blocking finding\(s\)/);
+    assert.equal(decisionSupport.riskReason, "Security findings require review.");
   });
 
-  it("recommends merge when there are no active findings", () => {
+  it("recommends safe when there are no active findings and the score risk is low or medium", () => {
     const decisionSupport = buildReportDecisionSupport({
-      overallRisk: "info",
+      overallRisk: "medium",
+      scoreBreakdown: scoreBreakdown(),
       qaFindings: [],
       releaseFindings: [],
       securityFindings: [],
@@ -63,12 +67,70 @@ describe("buildReportDecisionSupport", () => {
 
     assert.equal(decisionSupport.blockingFindingsCount, 0);
     assert.equal(decisionSupport.checklistFindingsCount, 0);
-    assert.equal(decisionSupport.mergeRecommendation, "merge");
+    assert.equal(decisionSupport.mergeRecommendation, "safe");
     assert.equal(decisionSupport.codeRisk, "info");
     assert.equal(decisionSupport.releaseChecklistRisk, "info");
-    assert.match(decisionSupport.riskReason, /No active blocking or release checklist findings/);
+    assert.equal(decisionSupport.riskReason, "No blocking findings remain.");
+  });
+
+  it("requires review for lower-severity blocking findings", () => {
+    const decisionSupport = buildReportDecisionSupport({
+      overallRisk: "medium",
+      scoreBreakdown: scoreBreakdown(),
+      qaFindings: [qaFinding("medium")],
+      releaseFindings: [],
+      securityFindings: [],
+      workflowFindings: [],
+      externalFindings: [],
+      correlatedFindings: []
+    });
+
+    assert.equal(decisionSupport.blockingFindingsCount, 1);
+    assert.equal(decisionSupport.mergeRecommendation, "review_required");
+    assert.match(decisionSupport.riskReason, /1 blocking finding\(s\) require review/);
+  });
+
+  it("blocks when the auth/security critical floor applies", () => {
+    const decisionSupport = buildReportDecisionSupport({
+      overallRisk: "critical",
+      scoreBreakdown: scoreBreakdown({
+        criticalFloorApplied: {
+          applied: true,
+          floor: 91,
+          reason: "Auth or security changed without negative test coverage"
+        }
+      }),
+      qaFindings: [qaFinding("high")],
+      releaseFindings: [],
+      securityFindings: [],
+      workflowFindings: [],
+      externalFindings: [],
+      correlatedFindings: []
+    });
+
+    assert.equal(decisionSupport.mergeRecommendation, "blocked");
+    assert.equal(decisionSupport.riskReason, "Auth/security changed without negative test coverage.");
   });
 });
+
+function scoreBreakdown(overrides: Partial<ScoreBreakdown> = {}): ScoreBreakdown {
+  return {
+    selectedBand: "source",
+    bandBase: 32,
+    bandMax: 60,
+    bandFactor: 2,
+    weightedSignal: 0,
+    changedFileScore: 0,
+    qaFindingScore: 0,
+    releaseFindingScore: 0,
+    securityFindingScore: 0,
+    workflowFindingScore: 0,
+    externalFindingScore: 0,
+    correlatedFindingScore: 0,
+    criticalFloorApplied: { applied: false },
+    ...overrides
+  };
+}
 
 function qaFinding(riskLevel: RiskLevel): QaFinding {
   return {

@@ -85,10 +85,10 @@ function makeReport(): GuardianReport {
     overallRisk: "high",
     blockingFindingsCount: 3,
     checklistFindingsCount: 1,
-    mergeRecommendation: "block",
+    mergeRecommendation: "blocked",
     codeRisk: "high",
     releaseChecklistRisk: "high",
-    riskReason: "3 blocking finding(s) require review before merge. Code risk: high. Current overall risk remains high.",
+    riskReason: "Security findings require review.",
     scoreBreakdown: {
       selectedBand: "security",
       bandBase: 70,

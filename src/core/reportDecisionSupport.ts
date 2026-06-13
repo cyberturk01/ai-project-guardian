@@ -5,12 +5,14 @@ import type {
   QaFinding,
   ReleaseFinding,
   RiskLevel,
+  ScoreBreakdown,
   SecurityFinding,
   WorkflowFinding
 } from "./types.js";
 
 export type ReportDecisionSupportInput = {
   overallRisk: RiskLevel;
+  scoreBreakdown: ScoreBreakdown;
   qaFindings: QaFinding[];
   releaseFindings: ReleaseFinding[];
   securityFindings: SecurityFinding[];
@@ -53,7 +55,13 @@ export function buildReportDecisionSupport(input: ReportDecisionSupportInput): R
   return {
     blockingFindingsCount,
     checklistFindingsCount,
-    mergeRecommendation: recommendMerge(blockingFindingsCount, checklistFindingsCount),
+    mergeRecommendation: recommendMerge({
+      blockingFindingsCount,
+      checklistFindingsCount,
+      codeRisk,
+      overallRisk: input.overallRisk,
+      authSecurityCriticalFloorApplied: hasAuthSecurityCriticalFloor(input.scoreBreakdown)
+    }),
     codeRisk,
     releaseChecklistRisk,
     riskReason: buildRiskReason({
@@ -61,21 +69,37 @@ export function buildReportDecisionSupport(input: ReportDecisionSupportInput): R
       blockingFindingsCount,
       checklistFindingsCount,
       codeRisk,
-      releaseChecklistRisk
+      releaseChecklistRisk,
+      hasSecurityFindings: input.securityFindings.length > 0 || input.externalFindings.length > 0 || input.correlatedFindings.length > 0,
+      criticalFloorReason: input.scoreBreakdown.criticalFloorApplied?.reason
     })
   };
 }
 
-function recommendMerge(blockingFindingsCount: number, checklistFindingsCount: number): MergeRecommendation {
-  if (blockingFindingsCount > 0) {
-    return "block";
+function recommendMerge(input: {
+  blockingFindingsCount: number;
+  checklistFindingsCount: number;
+  codeRisk: RiskLevel;
+  overallRisk: RiskLevel;
+  authSecurityCriticalFloorApplied: boolean;
+}): MergeRecommendation {
+  if (input.authSecurityCriticalFloorApplied) {
+    return "blocked";
   }
 
-  if (checklistFindingsCount > 0) {
-    return "review-checklist";
+  if (input.blockingFindingsCount > 0) {
+    return input.codeRisk === "high" || input.codeRisk === "critical" ? "blocked" : "review_required";
   }
 
-  return "merge";
+  if (input.checklistFindingsCount > 0) {
+    return "safe_after_checklist";
+  }
+
+  if (input.overallRisk === "info" || input.overallRisk === "low" || input.overallRisk === "medium") {
+    return "safe";
+  }
+
+  return "review_required";
 }
 
 function highestRisk(risks: RiskLevel[]): RiskLevel {
@@ -88,14 +112,31 @@ function buildRiskReason(input: {
   checklistFindingsCount: number;
   codeRisk: RiskLevel;
   releaseChecklistRisk: RiskLevel;
+  hasSecurityFindings: boolean;
+  criticalFloorReason?: string;
 }): string {
+  if (input.criticalFloorReason === "Auth or security changed without negative test coverage") {
+    return "Auth/security changed without negative test coverage.";
+  }
+
+  if (input.hasSecurityFindings) {
+    return "Security findings require review.";
+  }
+
   if (input.blockingFindingsCount > 0) {
     return `${input.blockingFindingsCount} blocking finding(s) require review before merge. Code risk: ${input.codeRisk}. Current overall risk remains ${input.overallRisk}.`;
   }
 
   if (input.checklistFindingsCount > 0) {
-    return `${input.checklistFindingsCount} release checklist finding(s) require deploy readiness review. Release checklist risk: ${input.releaseChecklistRisk}. Current overall risk remains ${input.overallRisk}.`;
+    return "Only release checklist items remain.";
   }
 
-  return `No active blocking or release checklist findings. Current overall risk remains ${input.overallRisk}.`;
+  return "No blocking findings remain.";
+}
+
+function hasAuthSecurityCriticalFloor(scoreBreakdown: ScoreBreakdown): boolean {
+  return (
+    scoreBreakdown.criticalFloorApplied?.applied === true &&
+    scoreBreakdown.criticalFloorApplied.reason === "Auth or security changed without negative test coverage"
+  );
 }

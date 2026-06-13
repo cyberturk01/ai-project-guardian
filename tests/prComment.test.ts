@@ -105,7 +105,7 @@ function makeReport(): GuardianReport {
     overallRisk: "high",
     blockingFindingsCount: 1,
     checklistFindingsCount: 2,
-    mergeRecommendation: "block",
+    mergeRecommendation: "blocked",
     codeRisk: "high",
     releaseChecklistRisk: "high",
     riskReason: "1 blocking finding(s) require review before merge. Code risk: high. Current overall risk remains high.",

@@ -102,6 +102,7 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
   });
   const decisionSupport = buildReportDecisionSupport({
     overallRisk: riskScore.overallRisk,
+    scoreBreakdown: riskScore.scoreBreakdown,
     qaFindings: activeQaFindings,
     releaseFindings: activeReleaseFindings,
     securityFindings: activeSecurityFindings,
