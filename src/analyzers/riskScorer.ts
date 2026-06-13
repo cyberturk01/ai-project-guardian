@@ -53,6 +53,7 @@ const categoryWeights: Record<ChangedFile["category"], number> = {
   ci: 8,
   documentation: 0,
   "project-brain": 0,
+  "generated-report": 0,
   i18n: 1,
   security: 10,
   unknown: 1
@@ -99,6 +100,7 @@ const securityFindingWeights: Record<RiskLevel, number> = {
 };
 
 const criticalCombinationMinimumScore = 91;
+const changedFileOnlyScoreCap = 60;
 
 export function scoreRisk(input: RiskScoreInput): RiskScoreResult {
   return calculateRiskScore(input);
@@ -118,7 +120,8 @@ export function calculateRiskScore(input: RiskScoreInput): RiskScoreResult {
   const weightedSignal = totalWeightedSignal(componentScores);
   const bandedScore = Math.min(band.max, band.base + Math.ceil(Math.sqrt(weightedSignal) * band.factor));
   const criticalFloor = criticalCombination(input);
-  const scoreBeforeClamp = criticalFloor === undefined ? bandedScore : Math.max(bandedScore, criticalFloor.floor);
+  const cappedBandedScore = capChangedFileOnlyScore(bandedScore, input);
+  const scoreBeforeClamp = criticalFloor === undefined ? cappedBandedScore : Math.max(cappedBandedScore, criticalFloor.floor);
   const score = clampScore(scoreBeforeClamp);
 
   return {
@@ -211,6 +214,10 @@ function scoreWeightedSignals(input: RiskScoreInput, bandName: RiskBandName): Om
 
 function scoreChangedFiles(changedFiles: ChangedFile[], bandName: RiskBandName): number {
   return changedFiles.reduce((score, file) => {
+    if (isNonProductionContextFile(file)) {
+      return score;
+    }
+
     if (isDocumentationFile(file) && bandName !== "documentation") {
       return score;
     }
@@ -371,7 +378,7 @@ function hasWorkflowChange(input: RiskScoreInput): boolean {
 function hasOnlyDocumentationChanges(input: RiskScoreInput): boolean {
   return (
     input.changedFiles.length > 0 &&
-    input.changedFiles.every((file) => isDocumentationFile(file)) &&
+    input.changedFiles.every((file) => isDocumentationFile(file) || isNonProductionContextFile(file)) &&
     input.qaFindings.length === 0 &&
     input.releaseFindings.length === 0 &&
     input.securityFindings.length === 0 &&
@@ -396,7 +403,7 @@ function hasConfigChange(input: RiskScoreInput): boolean {
 
 function hasNoRiskSignals(input: RiskScoreInput): boolean {
   return (
-    input.changedFiles.length === 0 &&
+    input.changedFiles.filter((file) => !isNonProductionContextFile(file)).length === 0 &&
     input.qaFindings.length === 0 &&
     input.releaseFindings.length === 0 &&
     input.securityFindings.length === 0 &&
@@ -428,6 +435,33 @@ function isDeployConfigPath(path: string): boolean {
 
 function isDocumentationFile(file: ChangedFile): boolean {
   return file.category === "documentation" || file.category === "project-brain";
+}
+
+function isNonProductionContextFile(file: ChangedFile): boolean {
+  return file.category === "project-brain" || file.category === "generated-report" || isGeneratedGuardianReportPath(file.path);
+}
+
+function hasFindingSignals(input: RiskScoreInput): boolean {
+  return (
+    input.qaFindings.length > 0 ||
+    input.releaseFindings.length > 0 ||
+    input.securityFindings.length > 0 ||
+    (input.workflowFindings ?? []).length > 0 ||
+    (input.externalFindings ?? []).length > 0 ||
+    (input.correlatedFindings ?? []).length > 0
+  );
+}
+
+function capChangedFileOnlyScore(score: number, input: RiskScoreInput): number {
+  if (hasFindingSignals(input)) {
+    return score;
+  }
+
+  return Math.min(score, changedFileOnlyScoreCap);
+}
+
+function isGeneratedGuardianReportPath(path: string): boolean {
+  return /(^|\/)guardian-report\.md$/i.test(normalizePath(path));
 }
 
 function normalizePath(path: string): string {

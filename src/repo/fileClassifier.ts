@@ -48,9 +48,10 @@ const testPathPattern = /(^|\/)(__tests__|tests?|spec|cypress|playwright)(\/|$)|
 const migrationPathPattern = /(^|\/)(migrations?|schema|prisma\/migrations)(\/|$)/i;
 const ciPathPattern = /(^|\/)(\.github\/workflows|\.github\/actions|\.gitlab-ci\.yml|circleci|\.circleci|jenkinsfile|buildkite|\.buildkite)(\/|$)/i;
 const documentationPathPattern = /(^|\/)(docs?|documentation|adr|readme)(\/|$)|(^|\/)(readme|changelog|contributing|license)(\.[^.]+)?$/i;
-const projectBrainPathPattern = /(^|\/)\.project-brain(\/|$)/i;
+const projectBrainPathPattern = /(^|\/)(\.project-brain|docs\/ai-context)(\/|$)/i;
 const projectBrainExtensions = new Set([".json", ".md"]);
 const i18nPathPattern = /(^|\/)(i18n|l10n|locales?|translations?|lang|messages)(\/|$)/i;
+const generatedGuardianReportPattern = /(^|\/)guardian-report\.md$/i;
 
 export function classifyFile(path: string, config: GuardianConfig): ClassifiedFile {
   const normalizedPath = normalizePath(path);
@@ -64,6 +65,10 @@ export function classifyFile(path: string, config: GuardianConfig): ClassifiedFi
 }
 
 export function classifyFileCategory(path: string, config: GuardianConfig): ChangedFileCategory {
+  if (isGeneratedGuardianReport(path)) {
+    return "generated-report";
+  }
+
   if (isProjectBrainFile(path)) {
     return "project-brain";
   }
@@ -108,7 +113,7 @@ export function classifyFileCategory(path: string, config: GuardianConfig): Chan
 }
 
 export function classifyRiskLevel(path: string, category: ChangedFileCategory, config: GuardianConfig): RiskLevel {
-  if (isProjectBrainFile(path)) {
+  if (isGeneratedGuardianReport(path) || isProjectBrainFile(path)) {
     return "info";
   }
 
@@ -128,7 +133,7 @@ export function classifyRiskLevel(path: string, category: ChangedFileCategory, c
     return "low";
   }
 
-  if (category === "documentation" || category === "project-brain") {
+  if (category === "documentation" || category === "project-brain" || category === "generated-report") {
     return "info";
   }
 
@@ -200,6 +205,10 @@ function isDocumentationFile(path: string): boolean {
 
 function isProjectBrainFile(path: string): boolean {
   return projectBrainPathPattern.test(path) && projectBrainExtensions.has(extname(path).toLowerCase());
+}
+
+function isGeneratedGuardianReport(path: string): boolean {
+  return generatedGuardianReportPattern.test(path);
 }
 
 function isI18nFile(path: string): boolean {

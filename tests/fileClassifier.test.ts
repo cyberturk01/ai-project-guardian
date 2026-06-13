@@ -39,6 +39,12 @@ describe("classifyFile", () => {
   it("classifies Project Brain markdown and JSON files as informational context", () => {
     assertClassification(".project-brain/security-rules.md", "project-brain", "info");
     assertClassification(".project-brain/module-map.json", "project-brain", "info");
+    assertClassification("docs/ai-context/CHANGE_LOG.md", "project-brain", "info");
+  });
+
+  it("classifies generated Guardian reports as informational generated output", () => {
+    assertClassification("guardian-report.md", "generated-report", "info");
+    assertClassification("reports/guardian-report.md", "generated-report", "info");
   });
 });
 

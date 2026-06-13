@@ -117,7 +117,7 @@ describe("scoreRisk", () => {
     assert.equal(result.overallRisk, "medium");
   });
 
-  it("keeps auth changes in the 60-90 range when negative tests are not missing", () => {
+  it("caps auth changed-file-only risk below high when negative tests are not missing", () => {
     const result = scoreRisk({
       changedFiles: [
         changedFile({
@@ -131,8 +131,8 @@ describe("scoreRisk", () => {
       securityFindings: []
     });
 
-    assert.equal(result.score, 68);
-    assert.equal(result.overallRisk, "high");
+    assert.ok(result.score <= 60);
+    assert.equal(result.overallRisk, "medium");
   });
 
   it("keeps security findings in the 70-100 range", () => {
@@ -288,8 +288,100 @@ describe("scoreRisk", () => {
       securityFindings: []
     });
 
-    assert.equal(result.score, 90);
-    assert.equal(result.overallRisk, "high");
+    assert.ok(result.score <= 60);
+    assert.equal(result.overallRisk, "medium");
+  });
+
+  it("does not let many test and documentation files inflate production risk heavily", () => {
+    const result = scoreRisk({
+      changedFiles: [
+        changedFile({
+          path: "src/api/reservations.ts",
+          category: "source",
+          riskLevel: "medium"
+        }),
+        ...Array.from({ length: 25 }, (_, index) =>
+          changedFile({
+            path: `tests/generated-${index}.test.ts`,
+            category: "test",
+            riskLevel: "low"
+          })
+        ),
+        ...Array.from({ length: 25 }, (_, index) =>
+          changedFile({
+            path: `docs/page-${index}.md`,
+            category: "documentation",
+            riskLevel: "info"
+          })
+        ),
+        changedFile({
+          path: "docs/ai-context/CHANGE_LOG.md",
+          category: "project-brain",
+          riskLevel: "info"
+        })
+      ],
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: []
+    });
+
+    assert.ok(result.score <= 60);
+    assert.equal(result.overallRisk, "medium");
+  });
+
+  it("ignores generated Guardian reports in changed-file scoring", () => {
+    const withReport = scoreRisk({
+      changedFiles: [
+        changedFile({
+          path: "guardian-report.md",
+          category: "generated-report",
+          riskLevel: "info"
+        })
+      ],
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: []
+    });
+    const withoutReport = scoreRisk({
+      changedFiles: [],
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: []
+    });
+
+    assert.equal(withReport.score, withoutReport.score);
+    assert.equal(withReport.overallRisk, withoutReport.overallRisk);
+  });
+
+  it("keeps production auth source files meaningful without findings", () => {
+    const authResult = scoreRisk({
+      changedFiles: [
+        changedFile({
+          path: "src/auth/session.ts",
+          category: "security",
+          riskLevel: "high"
+        })
+      ],
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: []
+    });
+    const docsResult = scoreRisk({
+      changedFiles: [
+        changedFile({
+          path: "README.md",
+          category: "documentation",
+          riskLevel: "info"
+        })
+      ],
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: []
+    });
+
+    assert.ok(authResult.score > docsResult.score);
+    assert.equal(authResult.score, 60);
+    assert.equal(authResult.overallRisk, "medium");
   });
 
   it("marks migration plus missing DB test coverage as critical", () => {

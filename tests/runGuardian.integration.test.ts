@@ -337,7 +337,7 @@ describe("runGuardianCli integration", () => {
       const report = await readFile(outputPath, "utf8");
 
       assert.equal(result.exitCode, 0);
-      assert.equal(result.overallRisk, "high");
+      assert.equal(result.overallRisk, "medium");
       assert.match(report, /## Accepted Findings/);
       assert.match(report, /Possible hardcoded secret/);
       assert.match(report, /These findings matched `\.guardian-baseline\.json`/);
