@@ -7,6 +7,8 @@ Guardian has two Markdown output modes:
 - `--summary-only`: short overview for `GITHUB_STEP_SUMMARY`. This is the default.
 - `--full-report`: complete report with changed files and detailed findings.
 
+The summary includes Guardian's decision-support fields: `mergeRecommendation`, `blockingFindingsCount`, `checklistFindingsCount`, `codeRisk`, `releaseChecklistRisk`, and `riskReason`. These fields separate merge blockers from deploy checklist work without changing the existing `riskScore`, `overallRisk`, or `--fail-on` behavior. See `docs/report-decision-model.md` for examples.
+
 Replace `your-org/ai-project-guardian` with the actual GitHub owner and repository for this tool.
 
 ```yaml

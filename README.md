@@ -28,6 +28,7 @@ Guardian currently supports:
 - Repository-defined business areas and custom deterministic rules.
 - Accepted-findings baselines through `.guardian-baseline.json`.
 - Risk scoring with critical escalation for high-risk combinations.
+- Decision-support fields that separate blocking findings from release checklist items.
 - Markdown, JSON, SARIF, GitHub Actions summary, and PR-comment-style output.
 - Local Enterprise Risk Correlation by importing SARIF, CodeQL, Semgrep, and Snyk artifacts without calling external APIs.
 
@@ -378,6 +379,27 @@ Enterprise Risk Correlation imports local scanner artifacts and folds them into 
 - Snyk JSON or SARIF via `--snyk`
 
 Guardian parses these files locally, deduplicates external findings, and correlates them with Guardian security findings by file, line, and normalized title. Correlations are reported as `single-tool` or `multi-tool`; multi-tool critical correlations can elevate overall risk.
+
+## Report Decision Model
+
+Guardian keeps the existing `riskScore` and `overallRisk` scoring behavior, then adds decision-support fields to make release decisions easier to read:
+
+- `codeRisk`: highest active blocking code/test/security/workflow/external/correlated risk. Auth/security score bands can keep this elevated even after blocking findings clear.
+- `releaseChecklistRisk`: highest active release checklist risk.
+- `blockingFindingsCount`: active QA, security, workflow, external scanner, and correlated findings. These represent work that can block merge or require review.
+- `checklistFindingsCount`: active release findings. These are deploy-readiness checklist items, not code-location blockers.
+- `mergeRecommendation`: one of `blocked`, `review_required`, `safe_after_checklist`, or `safe`.
+- `riskReason`: short explanation for the recommendation, such as missing negative auth tests, security findings, checklist-only risk, or no remaining blockers.
+
+Examples:
+
+| Scenario | Blocking findings | Checklist findings | Merge recommendation | Risk reason |
+| --- | ---: | ---: | --- | --- |
+| Auth/security code changed without negative tests | 1+ | any | `blocked` | `Auth/security changed without negative test coverage.` |
+| Auth/security code changed with negative tests, and only release checklist items remain | 0 | 1+ | `safe_after_checklist` | `Only release checklist items remain.` |
+| Real secret or security finding | 1+ | any | `blocked` for high/critical code risk, `review_required` for lower-severity blocking risk | `Security findings require review.` |
+
+See `docs/report-decision-model.md` for a longer explanation of how these fields should be used in CI and PR review.
 
 ## Output Modes
 
