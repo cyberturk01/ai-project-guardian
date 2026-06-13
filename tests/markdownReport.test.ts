@@ -54,6 +54,12 @@ function makeReport(): GuardianReport {
     generatedAt: "2026-06-10T12:00:00.000Z",
     riskScore: 72,
     overallRisk: "high",
+    blockingFindingsCount: 2,
+    checklistFindingsCount: 1,
+    mergeRecommendation: "block",
+    codeRisk: "high",
+    releaseChecklistRisk: "high",
+    riskReason: "2 blocking finding(s) require review before merge. Code risk: high. Current overall risk remains high.",
     scoreBreakdown: {
       selectedBand: "security",
       bandBase: 70,

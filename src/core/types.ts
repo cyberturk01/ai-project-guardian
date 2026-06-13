@@ -146,6 +146,8 @@ export type CorrelatedFinding = {
   confidence: "single-tool" | "multi-tool";
 };
 
+export type MergeRecommendation = "merge" | "review-checklist" | "block";
+
 export type EnterpriseRiskCorrelation = {
   externalFindings: ExternalFinding[];
   correlatedFindings: CorrelatedFinding[];
@@ -158,6 +160,12 @@ export type GuardianReport = {
   generatedAt: string;
   riskScore: number;
   overallRisk: RiskLevel;
+  blockingFindingsCount: number;
+  checklistFindingsCount: number;
+  mergeRecommendation: MergeRecommendation;
+  codeRisk: RiskLevel;
+  releaseChecklistRisk: RiskLevel;
+  riskReason: string;
   scoreBreakdown: ScoreBreakdown;
   changedFiles: ChangedFile[];
   qaFindings: QaFinding[];

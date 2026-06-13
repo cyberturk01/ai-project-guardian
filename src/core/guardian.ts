@@ -14,6 +14,7 @@ import type { GuardianReport } from "./types.js";
 import { listRepoFiles } from "../repo/listRepoFiles.js";
 import { applyBaseline, loadBaseline } from "./baseline.js";
 import { buildActionableGuidance, buildRequiredDeployActions } from "./actionableGuidance.js";
+import { buildReportDecisionSupport } from "./reportDecisionSupport.js";
 
 export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
   const changedFiles = await getChangedFiles({
@@ -99,12 +100,22 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     externalFindings: enterpriseRiskCorrelation.externalFindings,
     correlatedFindings: enterpriseRiskCorrelation.correlatedFindings
   });
+  const decisionSupport = buildReportDecisionSupport({
+    overallRisk: riskScore.overallRisk,
+    qaFindings: activeQaFindings,
+    releaseFindings: activeReleaseFindings,
+    securityFindings: activeSecurityFindings,
+    workflowFindings: activeWorkflowFindings,
+    externalFindings: enterpriseRiskCorrelation.externalFindings,
+    correlatedFindings: enterpriseRiskCorrelation.correlatedFindings
+  });
 
   return {
     projectName: config.guardian.projectName,
     generatedAt: new Date().toISOString(),
     riskScore: riskScore.score,
     overallRisk: riskScore.overallRisk,
+    ...decisionSupport,
     scoreBreakdown: riskScore.scoreBreakdown,
     changedFiles,
     qaFindings: activeQaFindings,
