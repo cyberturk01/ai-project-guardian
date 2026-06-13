@@ -19,21 +19,13 @@ ${renderScoreBreakdown(report)}
 
 ${renderChangedFiles(report.changedFiles)}
 
-## QA Findings
+## Blocking Findings
 
-${renderQaFindings(report.qaFindings)}
+${renderBlockingFindings(report)}
 
-## Release Findings
+## Release Checklist
 
 ${renderReleaseFindings(report.releaseFindings)}
-
-## Security Findings
-
-${renderSecurityFindings(report.securityFindings)}
-
-## Workflow Findings
-
-${renderWorkflowFindings(report.workflowFindings)}
 
 ## Enterprise Risk Correlation
 
@@ -93,6 +85,8 @@ function renderExecutiveSummary(report: GuardianReport): string {
   return `| Metric | Count |
 | --- | ---: |
 | Changed files | ${report.changedFiles.length} |
+| Blocking findings | ${report.blockingFindingsCount} |
+| Release checklist findings | ${report.checklistFindingsCount} |
 | QA findings | ${report.qaFindings.length} |
 | Release findings | ${report.releaseFindings.length} |
 | Security findings | ${report.securityFindings.length} |
@@ -103,7 +97,15 @@ function renderExecutiveSummary(report: GuardianReport): string {
 | Required deploy actions | ${report.requiredDeployActions.length} |
 | Actionable guidance items | ${report.actionableGuidance.length} |
 
-${renderFindingSummary(totalFindings, report.acceptedFindings.length)}
+| Decision field | Value |
+| --- | --- |
+| Merge recommendation | ${escapeTableCell(report.mergeRecommendation)} |
+| Code risk | ${renderRiskLabel(report.codeRisk)} |
+| Release checklist risk | ${renderRiskLabel(report.releaseChecklistRisk)} |
+| Overall/combined risk | ${renderRiskLabel(report.overallRisk)} |
+| Risk reason | ${escapeTableCell(report.riskReason)} |
+
+${renderDecisionSummary(report, totalFindings, report.acceptedFindings.length)}
 
 Highest detected risk: **${highestRisk}**.`;
 }
@@ -151,6 +153,18 @@ function renderFindingSummary(activeFindings: number, acceptedFindings: number):
   return "No findings were detected by the current Guardian rules.";
 }
 
+function renderDecisionSummary(report: GuardianReport, activeFindings: number, acceptedFindings: number): string {
+  if (report.blockingFindingsCount === 0 && report.checklistFindingsCount > 0) {
+    return "No blocking code/test/security findings remain. Release checklist items still require human approval before deploy.";
+  }
+
+  if (report.blockingFindingsCount > 0) {
+    return `Merge blocked because ${blockingReason(report)}.`;
+  }
+
+  return renderFindingSummary(activeFindings, acceptedFindings);
+}
+
 function renderChangedFiles(changedFiles: ChangedFile[]): string {
   if (changedFiles.length === 0) {
     return "No changed files detected.";
@@ -188,6 +202,26 @@ ${finding.description}
 ${renderList(finding.suggestedTests)}`;
     })
     .join("\n\n");
+}
+
+function renderBlockingFindings(report: GuardianReport): string {
+  const sections = [
+    `### QA Findings\n\n${renderQaFindings(report.qaFindings)}`,
+    `### Security Findings\n\n${renderSecurityFindings(report.securityFindings)}`,
+    `### Workflow Findings\n\n${renderWorkflowFindings(report.workflowFindings)}`
+  ];
+
+  if (
+    report.qaFindings.length === 0 &&
+    report.securityFindings.length === 0 &&
+    report.workflowFindings.length === 0 &&
+    report.enterpriseRiskCorrelation.externalFindings.length === 0 &&
+    report.enterpriseRiskCorrelation.correlatedFindings.length === 0
+  ) {
+    return "No blocking code/test/security findings.";
+  }
+
+  return sections.join("\n\n");
 }
 
 function renderReleaseFindings(findings: GuardianReport["releaseFindings"]): string {
@@ -410,6 +444,24 @@ function riskGuidance(riskLevel: RiskLevel): string {
     case "info":
       return "Informational risk only. Continue with standard review and CI checks.";
   }
+}
+
+function blockingReason(report: GuardianReport): string {
+  const floorReason = report.scoreBreakdown.criticalFloorApplied?.reason;
+
+  if (floorReason === "Auth or security changed without negative test coverage") {
+    return "auth/security code changed without negative-path test coverage";
+  }
+
+  if (floorReason !== undefined) {
+    return lowercaseFirst(floorReason);
+  }
+
+  return `${report.blockingFindingsCount} blocking code/test/security finding(s) require review`;
+}
+
+function lowercaseFirst(value: string): string {
+  return value.length === 0 ? value : `${value[0].toLowerCase()}${value.slice(1)}`;
 }
 
 function highestRiskLevel(riskLevels: RiskLevel[]): RiskLevel {

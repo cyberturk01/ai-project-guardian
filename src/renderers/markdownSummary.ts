@@ -1,28 +1,28 @@
 import type { GuardianReport, RiskLevel } from "../core/types.js";
 
 export function renderMarkdownSummary(report: GuardianReport): string {
-  const activeFindings =
-    report.qaFindings.length +
-    report.releaseFindings.length +
-    report.securityFindings.length +
-    report.workflowFindings.length +
-    report.enterpriseRiskCorrelation.externalFindings.length;
-
   return `# AI Project Guardian Summary
 
 | Field | Value |
 | --- | --- |
 | Project | ${escapeTableCell(report.projectName)} |
 | Generated | ${escapeTableCell(report.generatedAt)} |
-| Overall risk | ${renderRiskLabel(report.overallRisk)} |
+| Merge recommendation | ${escapeTableCell(report.mergeRecommendation)} |
+| Blocking findings | ${report.blockingFindingsCount} |
+| Checklist findings | ${report.checklistFindingsCount} |
+| Code risk | ${renderRiskLabel(report.codeRisk)} |
+| Release checklist risk | ${renderRiskLabel(report.releaseChecklistRisk)} |
+| Overall/combined risk | ${renderRiskLabel(report.overallRisk)} |
 | Risk score | ${report.riskScore}/100 |
+| Risk reason | ${escapeTableCell(report.riskReason)} |
 | Changed files | ${report.changedFiles.length} |
-| Active findings | ${activeFindings} |
 | External scanner findings | ${report.enterpriseRiskCorrelation.externalFindings.length} |
 | Multi-tool correlations | ${report.enterpriseRiskCorrelation.correlatedFindings.filter((finding) => finding.confidence === "multi-tool").length} |
 | Required deploy actions | ${report.requiredDeployActions.length} |
 | Actionable guidance items | ${report.actionableGuidance.length} |
 | Accepted findings | ${report.acceptedFindings.length} |
+
+${renderDecisionSummary(report)}
 
 ## Findings
 
@@ -88,6 +88,32 @@ function renderGuidanceSection(report: GuardianReport): string {
 ${renderShortGuidanceList(report)}`;
 }
 
+function renderDecisionSummary(report: GuardianReport): string {
+  if (report.blockingFindingsCount === 0 && report.checklistFindingsCount > 0) {
+    return "No blocking code/test/security findings remain. Release checklist items still require human approval before deploy.";
+  }
+
+  if (report.blockingFindingsCount > 0) {
+    return `Merge blocked because ${blockingReason(report)}.`;
+  }
+
+  return "No blocking code/test/security findings remain. No release checklist items require approval.";
+}
+
+function blockingReason(report: GuardianReport): string {
+  const floorReason = report.scoreBreakdown.criticalFloorApplied?.reason;
+
+  if (floorReason === "Auth or security changed without negative test coverage") {
+    return "auth/security code changed without negative-path test coverage";
+  }
+
+  if (floorReason !== undefined) {
+    return lowercaseFirst(floorReason);
+  }
+
+  return `${report.blockingFindingsCount} blocking code/test/security finding(s) require review`;
+}
+
 function renderShortGuidanceList(report: GuardianReport): string {
   if (report.actionableGuidance.length === 0) {
     return "No actionable guidance.";
@@ -117,4 +143,8 @@ function renderRiskLabel(riskLevel: RiskLevel): string {
 
 function escapeTableCell(value: string): string {
   return value.replaceAll("|", "\\|").replaceAll("\n", " ");
+}
+
+function lowercaseFirst(value: string): string {
+  return value.length === 0 ? value : `${value[0].toLowerCase()}${value.slice(1)}`;
 }

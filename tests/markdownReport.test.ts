@@ -28,8 +28,11 @@ describe("renderMarkdownReport", () => {
     const actual = renderMarkdownSummary(makeReport());
 
     assert.match(actual, /# AI Project Guardian Summary/);
-    assert.match(actual, /\| Overall risk \| \*\*high\*\* \|/);
-    assert.match(actual, /\| Active findings \| 3 \|/);
+    assert.match(actual, /\| Overall\/combined risk \| \*\*high\*\* \|/);
+    assert.match(actual, /\| Merge recommendation \| blocked \|/);
+    assert.match(actual, /\| Blocking findings \| 2 \|/);
+    assert.match(actual, /\| Checklist findings \| 1 \|/);
+    assert.doesNotMatch(actual, /Active findings/);
     assert.match(actual, /Run with `--full-report`/);
     assert.doesNotMatch(actual, /## Changed Files/);
     assert.doesNotMatch(actual, /src\/api\/reservations\.ts:18/);

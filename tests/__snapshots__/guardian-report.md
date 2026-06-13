@@ -12,6 +12,8 @@
 | Metric | Count |
 | --- | ---: |
 | Changed files | 3 |
+| Blocking findings | 2 |
+| Release checklist findings | 1 |
 | QA findings | 1 |
 | Release findings | 1 |
 | Security findings | 1 |
@@ -22,7 +24,15 @@
 | Required deploy actions | 2 |
 | Actionable guidance items | 4 |
 
-3 finding(s) need review before release.
+| Decision field | Value |
+| --- | --- |
+| Merge recommendation | blocked |
+| Code risk | **high** |
+| Release checklist risk | **high** |
+| Overall/combined risk | **high** |
+| Risk reason | Security findings require review. |
+
+Merge blocked because 2 blocking code/test/security finding(s) require review.
 
 Highest detected risk: **high**.
 
@@ -58,7 +68,9 @@ Review required actions before release and confirm owners for unresolved risk.
 | added | tests/reservations.test.ts | test | **low** |
 | renamed | .github/workflows/deploy.yml -> .github/workflows/release.yml | ci | **medium** |
 
-## QA Findings
+## Blocking Findings
+
+### QA Findings
 
 ### Route or API changed without API/integration test coverage
 
@@ -73,7 +85,24 @@ A route, controller, handler, or API file changed without a matching API or inte
 
 - Add an API or integration test that exercises src/api/reservations.ts.
 
-## Release Findings
+### Security Findings
+
+### Possible hardcoded secret
+
+| Field | Value |
+| --- | --- |
+| Risk | **high** |
+| Location | src/api/reservations.ts:18 |
+
+Possible hardcoded secret detected in a changed file. This is a possible risk based on heuristic matching, not a confirmed vulnerability.
+
+**Recommendation:** Move secrets to a managed secret store or environment variable, then rotate the exposed value if it is real.
+
+### Workflow Findings
+
+No workflow findings.
+
+## Release Checklist
 
 ### GitHub Actions changed
 
@@ -90,23 +119,6 @@ A GitHub Actions workflow or local action changed.
 
 - [ ] Review workflow triggers, permissions, environments, and secrets usage.
 - [ ] Confirm required checks still run before deployment.
-
-## Security Findings
-
-### Possible hardcoded secret
-
-| Field | Value |
-| --- | --- |
-| Risk | **high** |
-| Location | src/api/reservations.ts:18 |
-
-Possible hardcoded secret detected in a changed file. This is a possible risk based on heuristic matching, not a confirmed vulnerability.
-
-**Recommendation:** Move secrets to a managed secret store or environment variable, then rotate the exposed value if it is real.
-
-## Workflow Findings
-
-No workflow findings.
 
 ## Enterprise Risk Correlation
 

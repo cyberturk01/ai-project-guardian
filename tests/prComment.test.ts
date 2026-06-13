@@ -15,12 +15,15 @@ describe("renderPrComment", () => {
 | Metric | Value |
 | --- | --- |
 | Risk score | 72/100 |
-| Overall risk | **high** |
+| Overall/combined risk | **high** |
+| Merge recommendation | blocked |
 
 **Summary**
 
+- Merge blocked because 1 blocking code/test/security finding(s) require review.
 - 0 changed files
-- 3 active findings
+- 1 blocking finding
+- 2 release checklist findings
 - 2 required deploy actions
 - 3 actionable guidance items
 - Score band: source, signal 21
@@ -34,10 +37,7 @@ describe("renderPrComment", () => {
 **Actionable Guidance**
 
 - [ ] **high** release: Validate workflow triggers
-- [ ] **high** qa: Add integration coverage
-- [ ] **medium** release: Review dependency lockfile changes
 **Required Deploy Actions**
-
 - [ ] Validate workflow triggers
 - [ ] Review dependency lockfile changes
 `
@@ -49,7 +49,8 @@ describe("renderPrComment", () => {
 
     assert.match(actual, /^### AI Project Guardian/);
     assert.match(actual, /\| Risk score \| 72\/100 \|/);
-    assert.match(actual, /\| Overall risk \| \*\*high\*\* \|/);
+    assert.match(actual, /\| Overall\/combined risk \| \*\*high\*\* \|/);
+    assert.doesNotMatch(actual, /active finding/);
     assert.match(actual, /\*\*Top Findings\*\*/);
     assert.match(actual, /\*\*Required Deploy Actions\*\*/);
     assert.match(actual, /\*\*Actionable Guidance\*\*/);

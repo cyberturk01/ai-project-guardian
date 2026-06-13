@@ -28,7 +28,7 @@ describe("runGuardianCli integration", () => {
       assert.equal(result.overallRisk, "critical");
       assert.match(stdout.value, /Guardian report written to/);
       assert.match(report, /# AI Project Guardian Summary/);
-      assert.match(report, /\| Overall risk \| \*\*critical\*\* \|/);
+      assert.match(report, /\| Overall\/combined risk \| \*\*critical\*\* \|/);
       assert.match(report, /Run with `--full-report`/);
       assert.doesNotMatch(report, /## Changed Files/);
     });
@@ -49,7 +49,7 @@ describe("runGuardianCli integration", () => {
       assert.equal(result.exitCode, 0);
       assert.equal(result.overallRisk, "critical");
       assert.match(report, /# AI Project Guardian Report/);
-      assert.match(report, /\| Overall risk \| \*\*critical\*\* \|/);
+      assert.match(report, /\| Overall\/combined risk \| \*\*critical\*\* \|/);
       assert.match(report, /src\/auth\/session.ts/);
       assert.match(report, /db\/migrations\/001_add_sessions.sql/);
     });
@@ -71,7 +71,7 @@ describe("runGuardianCli integration", () => {
       assert.equal(result.overallRisk, "critical");
       assert.match(report, /^### AI Project Guardian/);
       assert.match(report, /\| Risk score \| \d+\/100 \|/);
-      assert.match(report, /\| Overall risk \| \*\*critical\*\* \|/);
+      assert.match(report, /\| Overall\/combined risk \| \*\*critical\*\* \|/);
       assert.match(report, /\*\*Top Findings\*\*/);
       assert.match(report, /\*\*Actionable Guidance\*\*/);
       assert.match(report, /\*\*Required Deploy Actions\*\*/);

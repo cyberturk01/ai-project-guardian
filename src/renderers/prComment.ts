@@ -3,7 +3,7 @@ import type { ActionableGuidanceItem, GuardianFinding, GuardianReport, RiskLevel
 const maxLines = 30;
 const maxTopFindings = 4;
 const maxDeployActions = 5;
-const maxGuidanceItems = 3;
+const maxGuidanceItems = 1;
 const riskWeights: Record<RiskLevel, number> = {
   info: 0,
   low: 1,
@@ -20,12 +20,15 @@ export function renderPrComment(report: GuardianReport): string {
     "| Metric | Value |",
     "| --- | --- |",
     `| Risk score | ${report.riskScore}/100 |`,
-    `| Overall risk | **${report.overallRisk}** |`,
+    `| Overall/combined risk | **${report.overallRisk}** |`,
+    `| Merge recommendation | ${report.mergeRecommendation} |`,
     "",
     "**Summary**",
     "",
+    `- ${decisionSummary(report)}`,
     `- ${formatCount(report.changedFiles.length, "changed file")}`,
-    `- ${formatCount(totalActiveFindings(report), "active finding")}`,
+    `- ${formatCount(report.blockingFindingsCount, "blocking finding")}`,
+    `- ${formatCount(report.checklistFindingsCount, "release checklist finding")}`,
     `- ${formatCount(report.requiredDeployActions.length, "required deploy action")}`,
     `- ${formatCount(report.actionableGuidance.length, "actionable guidance item")}`,
     ...scoreBreakdownLines(report),
@@ -36,7 +39,6 @@ export function renderPrComment(report: GuardianReport): string {
     "",
     ...guidanceLines(report),
     "**Required Deploy Actions**",
-    "",
     ...taskItems(report.requiredDeployActions.slice(0, maxDeployActions), "No deploy-specific required actions.")
   ];
 
@@ -123,10 +125,32 @@ function findingLocation(finding: GuardianFinding): string | undefined {
   return undefined;
 }
 
-function totalActiveFindings(report: GuardianReport): number {
-  return report.qaFindings.length + report.releaseFindings.length + report.securityFindings.length + report.workflowFindings.length;
-}
-
 function formatCount(count: number, label: string): string {
   return `${count} ${label}${count === 1 ? "" : "s"}`;
+}
+
+function decisionSummary(report: GuardianReport): string {
+  if (report.blockingFindingsCount === 0 && report.checklistFindingsCount > 0) {
+    return "No blocking code/test/security findings remain. Release checklist items still require human approval before deploy.";
+  }
+
+  if (report.blockingFindingsCount > 0) {
+    return `Merge blocked because ${blockingReason(report)}.`;
+  }
+
+  return "No blocking code/test/security findings remain. No release checklist items require approval.";
+}
+
+function blockingReason(report: GuardianReport): string {
+  const floorReason = report.scoreBreakdown.criticalFloorApplied?.reason;
+
+  if (floorReason === "Auth or security changed without negative test coverage") {
+    return "auth/security code changed without negative-path test coverage";
+  }
+
+  if (floorReason !== undefined) {
+    return `${floorReason[0].toLowerCase()}${floorReason.slice(1)}`;
+  }
+
+  return `${report.blockingFindingsCount} blocking code/test/security finding(s) require review`;
 }
