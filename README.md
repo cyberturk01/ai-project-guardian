@@ -91,6 +91,8 @@ npm run guardian -- --repo ../AI-Restaurants --base origin/main --out guardian-r
 
 Local runs include committed branch changes compared to the resolved base ref, plus staged, unstaged, and untracked files in the target repository. When local working tree changes are included, Guardian adds a note to the report.
 
+Guardian ignores its own generated reports and common local build/package artifacts by default, including `guardian-*.md`, `*.tgz`, `*.tar.gz`, `dist/`, `coverage/`, `.next/`, and `node_modules/`. Add project-specific generated files to the target repository's `.gitignore` so local tools and reviews stay clean too.
+
 Write a full Markdown report:
 
 ```sh

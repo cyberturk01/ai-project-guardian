@@ -10,6 +10,7 @@ import { scoreRisk } from "../analyzers/riskScorer.js";
 import { loadProjectBrain } from "../project-brain/loadProjectBrain.js";
 import { classifyFile } from "../repo/fileClassifier.js";
 import { getChangedFilesWithWarnings } from "../repo/getChangedFiles.js";
+import { filterIgnoredChangedFiles } from "../repo/ignoredChangedFiles.js";
 import type { GuardianReport } from "./types.js";
 import { listRepoFiles } from "../repo/listRepoFiles.js";
 import { applyBaseline, loadBaseline } from "./baseline.js";
@@ -21,7 +22,7 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     repoPath: config.repoPath,
     baseRef: config.baseRef
   });
-  const changedFiles = changedFileResult.changedFiles.map((file) => {
+  const changedFiles = filterIgnoredChangedFiles(changedFileResult.changedFiles).map((file) => {
     const classification = classifyFile(file.path, config.guardian);
 
     return {
