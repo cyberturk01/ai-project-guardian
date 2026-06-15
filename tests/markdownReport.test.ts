@@ -91,6 +91,16 @@ describe("renderMarkdownReport", () => {
       assert.match(renderPrComment(report), new RegExp(`- ${escapeRegExp(testCase.expected)}`));
     }
   });
+
+  it("uses review_required wording that starts with Merge requires review", () => {
+    const report = makeReportForRecommendation({
+      recommendation: "review_required",
+      blockingFindingsCount: 1,
+      checklistFindingsCount: 0
+    });
+
+    assert.match(renderMarkdownSummary(report), /Merge requires review because 1 code\/test\/security finding\(s\) need attention before merge\./);
+  });
 });
 
 function makeReport(): GuardianReport {
