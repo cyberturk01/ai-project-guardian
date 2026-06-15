@@ -32,7 +32,7 @@
 | Overall/combined risk | **high** |
 | Risk reason | Security findings require review. |
 
-Merge blocked because 2 blocking code/test/security finding(s) require review.
+Merge blocked because 2 blocking code/test/security finding(s) require attention.
 
 Highest detected risk: **high**.
 
@@ -151,4 +151,5 @@ These findings matched `.guardian-baseline.json` and are shown for visibility, b
 ## Notes
 
 - This report is generated from repository heuristics and should support, not replace, human review.
+- Tip: Run `npx ai-project-guardian init` to generate config, Project Brain templates, and GitHub Actions workflow.
 - guardian.config.json was not found; using safe defaults.

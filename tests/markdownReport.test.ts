@@ -4,9 +4,13 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildActionableGuidance, buildRequiredDeployActions } from "../src/core/actionableGuidance.js";
-import type { GuardianReport } from "../src/core/types.js";
+import type { GuardianReport, MergeRecommendation } from "../src/core/types.js";
 import { renderMarkdownReport } from "../src/renderers/markdownReport.js";
 import { renderMarkdownSummary } from "../src/renderers/markdownSummary.js";
+import {
+  missingConfigOnboardingNote,
+  missingProjectBrainOnboardingNote
+} from "../src/renderers/onboardingGuidance.js";
 import { renderPrComment } from "../src/renderers/prComment.js";
 import { renderReport } from "../src/renderers/renderReport.js";
 
@@ -48,6 +52,112 @@ describe("renderMarkdownReport", () => {
     const report = makeReport();
 
     assert.equal(renderReport(report, "markdown", "pr-comment"), renderPrComment(report));
+  });
+
+  it("renders decision wording that matches each merge recommendation state", () => {
+    const cases: Array<{
+      recommendation: MergeRecommendation;
+      blockingFindingsCount: number;
+      checklistFindingsCount: number;
+      expected: string;
+    }> = [
+      {
+        recommendation: "blocked",
+        blockingFindingsCount: 2,
+        checklistFindingsCount: 1,
+        expected: "Merge blocked because 2 blocking code/test/security finding(s) require attention."
+      },
+      {
+        recommendation: "review_required",
+        blockingFindingsCount: 1,
+        checklistFindingsCount: 0,
+        expected: "Merge requires review because 1 code/test/security finding(s) need attention before merge."
+      },
+      {
+        recommendation: "safe_after_checklist",
+        blockingFindingsCount: 0,
+        checklistFindingsCount: 2,
+        expected: "Merge is safe after completing the remaining release checklist items."
+      },
+      {
+        recommendation: "safe",
+        blockingFindingsCount: 0,
+        checklistFindingsCount: 0,
+        expected: "No blocking findings remain. Merge is considered safe."
+      }
+    ];
+
+    for (const testCase of cases) {
+      const report = makeReportForRecommendation(testCase);
+
+      assert.match(renderMarkdownSummary(report), new RegExp(escapeRegExp(testCase.expected)));
+      assert.match(renderMarkdownReport(report), new RegExp(escapeRegExp(testCase.expected)));
+      assert.match(renderPrComment(report), new RegExp(`- ${escapeRegExp(testCase.expected)}`));
+    }
+  });
+
+  it("uses review_required wording that starts with Merge requires review", () => {
+    const report = makeReportForRecommendation({
+      recommendation: "review_required",
+      blockingFindingsCount: 1,
+      checklistFindingsCount: 0
+    });
+
+    assert.match(renderMarkdownSummary(report), /Merge requires review because 1 code\/test\/security finding\(s\) need attention before merge\./);
+  });
+
+  it("adds missing config onboarding guidance to Markdown reports", () => {
+    const report = {
+      ...makeReport(),
+      warnings: ['guardian.config.json was not found; using default config for project "demo".']
+    };
+
+    assert.match(renderMarkdownReport(report), new RegExp(escapeRegExp(missingConfigOnboardingNote)));
+    assert.match(renderMarkdownSummary(report), new RegExp(escapeRegExp(missingConfigOnboardingNote)));
+  });
+
+  it("adds missing Project Brain onboarding guidance to Markdown reports", () => {
+    const report = {
+      ...makeReport(),
+      warnings: ["Project Brain context was not found; continuing without repository-specific context."]
+    };
+
+    assert.match(renderMarkdownReport(report), new RegExp(escapeRegExp(missingProjectBrainOnboardingNote)));
+    assert.match(renderMarkdownSummary(report), new RegExp(escapeRegExp(missingProjectBrainOnboardingNote)));
+  });
+
+  it("renders each onboarding guidance item only once per Markdown report", () => {
+    const report = {
+      ...makeReport(),
+      warnings: [
+        'guardian.config.json was not found; using default config for project "demo".',
+        "guardian.config.json was not found; using safe defaults.",
+        "Project Brain context was not found; continuing without repository-specific context.",
+        "Project Brain context was not found; continuing without repository-specific context."
+      ]
+    };
+
+    assert.equal(countOccurrences(renderMarkdownReport(report), missingConfigOnboardingNote), 1);
+    assert.equal(countOccurrences(renderMarkdownReport(report), missingProjectBrainOnboardingNote), 1);
+    assert.equal(countOccurrences(renderMarkdownSummary(report), missingConfigOnboardingNote), 1);
+    assert.equal(countOccurrences(renderMarkdownSummary(report), missingProjectBrainOnboardingNote), 1);
+  });
+
+  it("keeps onboarding guidance out of PR comments, JSON reports, and SARIF reports", () => {
+    const report = {
+      ...makeReport(),
+      warnings: [
+        'guardian.config.json was not found; using default config for project "demo".',
+        "Project Brain context was not found; continuing without repository-specific context."
+      ]
+    };
+
+    assert.doesNotMatch(renderPrComment(report), new RegExp(escapeRegExp(missingConfigOnboardingNote)));
+    assert.doesNotMatch(renderPrComment(report), new RegExp(escapeRegExp(missingProjectBrainOnboardingNote)));
+    assert.doesNotMatch(renderReport(report, "json"), new RegExp(escapeRegExp(missingConfigOnboardingNote)));
+    assert.doesNotMatch(renderReport(report, "json"), new RegExp(escapeRegExp(missingProjectBrainOnboardingNote)));
+    assert.doesNotMatch(renderReport(report, "sarif"), new RegExp(escapeRegExp(missingConfigOnboardingNote)));
+    assert.doesNotMatch(renderReport(report, "sarif"), new RegExp(escapeRegExp(missingProjectBrainOnboardingNote)));
   });
 });
 
@@ -184,4 +294,25 @@ function makeReport(): GuardianReport {
 function readSnapshot(fileName: string): string {
   const compiledTestDir = dirname(fileURLToPath(import.meta.url));
   return readFileSync(join(compiledTestDir, "../../tests/__snapshots__", fileName), "utf8");
+}
+
+function makeReportForRecommendation(options: {
+  recommendation: MergeRecommendation;
+  blockingFindingsCount: number;
+  checklistFindingsCount: number;
+}): GuardianReport {
+  return {
+    ...makeReport(),
+    mergeRecommendation: options.recommendation,
+    blockingFindingsCount: options.blockingFindingsCount,
+    checklistFindingsCount: options.checklistFindingsCount
+  };
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function countOccurrences(value: string, search: string): number {
+  return value.split(search).length - 1;
 }

@@ -1,4 +1,6 @@
 import type { ChangedFile, GuardianReport, RiskLevel } from "../core/types.js";
+import { renderDecisionSummary } from "./decisionSummary.js";
+import { buildOnboardingGuidance } from "./onboardingGuidance.js";
 
 export function renderMarkdownReport(report: GuardianReport): string {
   return `${renderHeader(report)}
@@ -65,12 +67,6 @@ function renderHeader(report: GuardianReport): string {
 }
 
 function renderExecutiveSummary(report: GuardianReport): string {
-  const totalFindings =
-    report.qaFindings.length +
-    report.releaseFindings.length +
-    report.securityFindings.length +
-    report.workflowFindings.length +
-    report.enterpriseRiskCorrelation.externalFindings.length;
   const highestRisk = highestRiskLevel([
     report.overallRisk,
     ...report.changedFiles.map((file) => file.riskLevel),
@@ -105,7 +101,7 @@ function renderExecutiveSummary(report: GuardianReport): string {
 | Overall/combined risk | ${renderRiskLabel(report.overallRisk)} |
 | Risk reason | ${escapeTableCell(report.riskReason)} |
 
-${renderDecisionSummary(report, totalFindings, report.acceptedFindings.length)}
+${renderDecisionSummary(report)}
 
 Highest detected risk: **${highestRisk}**.`;
 }
@@ -139,30 +135,6 @@ function renderScoreBreakdown(report: GuardianReport): string {
 | External scanner findings | ${breakdown.externalFindingScore} |
 | Multi-tool correlations | ${breakdown.correlatedFindingScore} |
 | Critical floor applied | ${criticalFloorText} |`;
-}
-
-function renderFindingSummary(activeFindings: number, acceptedFindings: number): string {
-  if (activeFindings > 0) {
-    return `${activeFindings} finding(s) need review before release.`;
-  }
-
-  if (acceptedFindings > 0) {
-    return "No new findings need review before release. Accepted findings are listed separately.";
-  }
-
-  return "No findings were detected by the current Guardian rules.";
-}
-
-function renderDecisionSummary(report: GuardianReport, activeFindings: number, acceptedFindings: number): string {
-  if (report.blockingFindingsCount === 0 && report.checklistFindingsCount > 0) {
-    return "No blocking code/test/security findings remain. Release checklist items still require human approval before deploy.";
-  }
-
-  if (report.blockingFindingsCount > 0) {
-    return `Merge blocked because ${blockingReason(report)}.`;
-  }
-
-  return renderFindingSummary(activeFindings, acceptedFindings);
 }
 
 function renderChangedFiles(changedFiles: ChangedFile[]): string {
@@ -385,6 +357,7 @@ function renderActionableGuidance(report: GuardianReport): string {
 function renderNotes(report: GuardianReport): string {
   const notes = [
     "This report is generated from repository heuristics and should support, not replace, human review.",
+    ...buildOnboardingGuidance(report.warnings),
     ...report.warnings
   ];
 
@@ -444,24 +417,6 @@ function riskGuidance(riskLevel: RiskLevel): string {
     case "info":
       return "Informational risk only. Continue with standard review and CI checks.";
   }
-}
-
-function blockingReason(report: GuardianReport): string {
-  const floorReason = report.scoreBreakdown.criticalFloorApplied?.reason;
-
-  if (floorReason === "Auth or security changed without negative test coverage") {
-    return "auth/security code changed without negative-path test coverage";
-  }
-
-  if (floorReason !== undefined) {
-    return lowercaseFirst(floorReason);
-  }
-
-  return `${report.blockingFindingsCount} blocking code/test/security finding(s) require review`;
-}
-
-function lowercaseFirst(value: string): string {
-  return value.length === 0 ? value : `${value[0].toLowerCase()}${value.slice(1)}`;
 }
 
 function highestRiskLevel(riskLevels: RiskLevel[]): RiskLevel {

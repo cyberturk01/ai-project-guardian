@@ -30,14 +30,12 @@ type QaContext = {
 
 const sourceExtensions = new Set([
   ".cjs",
-  ".css",
   ".cts",
   ".html",
   ".js",
   ".jsx",
   ".mjs",
   ".mts",
-  ".scss",
   ".ts",
   ".tsx",
   ".vue"
@@ -154,7 +152,29 @@ function buildFinding(rule: QaRule, changedFiles: ChangedFile[], context: QaCont
     return undefined;
   }
 
-  const suggestedTests = uniqueSorted(
+  const suggestedTests = suggestedTestsForAffectedFiles(rule, affectedFiles, context);
+
+  return {
+    id: rule.id,
+    area: "qa",
+    title: rule.title,
+    description: rule.description,
+    riskLevel: rule.riskLevel,
+    affectedFiles,
+    suggestedTests
+  };
+}
+
+function suggestedTestsForAffectedFiles(rule: QaRule, affectedFiles: string[], context: QaContext): string[] {
+  if (rule.id === "qa-source-without-nearby-test") {
+    return [`Add or update nearby unit tests for affected source files: ${affectedFiles.join(", ")}.`];
+  }
+
+  if (rule.id === "qa-ui-without-cypress-test") {
+    return [`Add or update Cypress coverage for affected UI files: ${affectedFiles.join(", ")}.`];
+  }
+
+  return uniqueSorted(
     affectedFiles.flatMap((path) =>
       rule.suggestedTests(
         {
@@ -167,16 +187,6 @@ function buildFinding(rule: QaRule, changedFiles: ChangedFile[], context: QaCont
       )
     )
   );
-
-  return {
-    id: rule.id,
-    area: "qa",
-    title: rule.title,
-    description: rule.description,
-    riskLevel: rule.riskLevel,
-    affectedFiles,
-    suggestedTests
-  };
 }
 
 function hasNearbyTest(path: string, testFiles: string[], config: GuardianConfig): boolean {

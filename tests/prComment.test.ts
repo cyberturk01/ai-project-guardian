@@ -20,7 +20,7 @@ describe("renderPrComment", () => {
 
 **Summary**
 
-- Merge blocked because 1 blocking code/test/security finding(s) require review.
+- Merge blocked because 1 blocking code/test/security finding(s) require attention.
 - 0 changed files
 - 1 blocking finding
 - 2 release checklist findings

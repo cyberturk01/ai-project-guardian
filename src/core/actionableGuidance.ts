@@ -44,6 +44,12 @@ function guidanceItemsForFinding(finding: GuardianFinding): ActionableGuidanceIt
   }
 
   if (finding.area === "qa") {
+    const groupedAction = groupedQaGuidanceAction(finding);
+
+    if (groupedAction !== undefined) {
+      return [baseGuidanceItem(finding, groupedAction, 0)];
+    }
+
     return finding.suggestedTests.map((action, index) => baseGuidanceItem(finding, action, index));
   }
 
@@ -52,6 +58,18 @@ function guidanceItemsForFinding(finding: GuardianFinding): ActionableGuidanceIt
   }
 
   return [baseGuidanceItem(finding, finding.recommendation, 0)];
+}
+
+function groupedQaGuidanceAction(finding: Extract<GuardianFinding, { area: "qa" }>): string | undefined {
+  if (finding.id === "qa-ui-without-cypress-test" && finding.affectedFiles.length > 1) {
+    return "Add or update Cypress coverage for touched UI components.";
+  }
+
+  if (finding.id === "qa-source-without-nearby-test" && finding.affectedFiles.length > 1) {
+    return "Add or update nearby unit/component tests for touched source files.";
+  }
+
+  return undefined;
 }
 
 function baseGuidanceItem(finding: GuardianFinding, action: string, index: number): ActionableGuidanceItem {

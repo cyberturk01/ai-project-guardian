@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { analyzeQa } from "../src/analyzers/qaAnalyzer.js";
+import { buildActionableGuidance } from "../src/core/actionableGuidance.js";
 import {
   coveredChangedFiles,
   coveredRepoFiles,
@@ -82,6 +83,118 @@ describe("analyzeQa", () => {
     });
 
     assert.deepEqual(findings, []);
+  });
+
+  it("does not require nearby tests for CSS-only changes", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/components/MenuCard.module.css",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        },
+        {
+          path: "src/styles/theme.scss",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        },
+        {
+          path: "src/styles/legacy.less",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        }
+      ],
+      repoFiles: ["src/components/MenuCard.module.css", "src/styles/theme.scss", "src/styles/legacy.less"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    assert.deepEqual(findings, []);
+  });
+
+  it("groups repeated Cypress guidance for many affected UI files", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/components/MenuCard.tsx",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        },
+        {
+          path: "src/components/OrderPanel.tsx",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        },
+        {
+          path: "src/pages/CheckoutPage.tsx",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        }
+      ],
+      repoFiles: ["src/components/MenuCard.tsx", "src/components/OrderPanel.tsx", "src/pages/CheckoutPage.tsx"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const uiFinding = findings.find((finding) => finding.id === "qa-ui-without-cypress-test");
+    const guidance = buildActionableGuidance(findings);
+
+    assert.deepEqual(uiFinding?.affectedFiles, [
+      "src/components/MenuCard.tsx",
+      "src/components/OrderPanel.tsx",
+      "src/pages/CheckoutPage.tsx"
+    ]);
+    assert.deepEqual(uiFinding?.suggestedTests, [
+      "Add or update Cypress coverage for affected UI files: src/components/MenuCard.tsx, src/components/OrderPanel.tsx, src/pages/CheckoutPage.tsx."
+    ]);
+    assert.equal(guidance.filter((item) => item.sourceFindingId === "qa-ui-without-cypress-test").length, 1);
+  });
+
+  it("groups repeated nearby-unit-test guidance for many affected source files", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/services/menuService.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        },
+        {
+          path: "src/services/orderService.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        },
+        {
+          path: "src/domain/pricing.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        }
+      ],
+      repoFiles: ["src/services/menuService.ts", "src/services/orderService.ts", "src/domain/pricing.ts"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const sourceFinding = findings.find((finding) => finding.id === "qa-source-without-nearby-test");
+    const guidance = buildActionableGuidance(findings);
+
+    assert.deepEqual(sourceFinding?.affectedFiles, [
+      "src/domain/pricing.ts",
+      "src/services/menuService.ts",
+      "src/services/orderService.ts"
+    ]);
+    assert.deepEqual(sourceFinding?.suggestedTests, [
+      "Add or update nearby unit tests for affected source files: src/domain/pricing.ts, src/services/menuService.ts, src/services/orderService.ts."
+    ]);
+    assert.equal(guidance.filter((item) => item.sourceFindingId === "qa-source-without-nearby-test").length, 1);
   });
 
   it("still reports missing negative tests for real auth and security code", () => {

@@ -1,4 +1,5 @@
 import type { ActionableGuidanceItem, GuardianFinding, GuardianReport, RiskLevel } from "../core/types.js";
+import { renderDecisionSummary } from "./decisionSummary.js";
 
 const maxLines = 30;
 const maxTopFindings = 4;
@@ -25,7 +26,7 @@ export function renderPrComment(report: GuardianReport): string {
     "",
     "**Summary**",
     "",
-    `- ${decisionSummary(report)}`,
+    `- ${renderDecisionSummary(report)}`,
     `- ${formatCount(report.changedFiles.length, "changed file")}`,
     `- ${formatCount(report.blockingFindingsCount, "blocking finding")}`,
     `- ${formatCount(report.checklistFindingsCount, "release checklist finding")}`,
@@ -127,30 +128,4 @@ function findingLocation(finding: GuardianFinding): string | undefined {
 
 function formatCount(count: number, label: string): string {
   return `${count} ${label}${count === 1 ? "" : "s"}`;
-}
-
-function decisionSummary(report: GuardianReport): string {
-  if (report.blockingFindingsCount === 0 && report.checklistFindingsCount > 0) {
-    return "No blocking code/test/security findings remain. Release checklist items still require human approval before deploy.";
-  }
-
-  if (report.blockingFindingsCount > 0) {
-    return `Merge blocked because ${blockingReason(report)}.`;
-  }
-
-  return "No blocking code/test/security findings remain. No release checklist items require approval.";
-}
-
-function blockingReason(report: GuardianReport): string {
-  const floorReason = report.scoreBreakdown.criticalFloorApplied?.reason;
-
-  if (floorReason === "Auth or security changed without negative test coverage") {
-    return "auth/security code changed without negative-path test coverage";
-  }
-
-  if (floorReason !== undefined) {
-    return `${floorReason[0].toLowerCase()}${floorReason.slice(1)}`;
-  }
-
-  return `${report.blockingFindingsCount} blocking code/test/security finding(s) require review`;
 }

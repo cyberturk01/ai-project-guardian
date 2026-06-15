@@ -171,6 +171,39 @@ describe("runGuardianCli integration", () => {
     });
   });
 
+  it("keeps generated reports, package artifacts, and generated folders out of reports and counts", async () => {
+    await withIgnoredArtifactsFixtureRepo(async (repoPath) => {
+      const jsonStdout = new MemoryWritable();
+
+      await runGuardianCli({
+        argv: ["--repo", repoPath, "--base", "origin/main", "--format", "json"],
+        stdout: jsonStdout
+      });
+
+      const report = JSON.parse(jsonStdout.value) as GuardianReport;
+
+      assert.deepEqual(report.changedFiles.map((file) => file.path), ["src/menu.ts"]);
+      assert.equal(report.changedFiles.length, 1);
+      assert.equal(report.scoreBreakdown.changedFileScore, 6);
+      assert.equal(report.qaFindings.length, 1);
+      assert.deepEqual(report.qaFindings[0].affectedFiles, ["src/menu.ts"]);
+      assert.doesNotMatch(JSON.stringify(report.actionableGuidance), /guardian-report|guardian-summary|\.tgz|dist\/|coverage\/|\.next\/|node_modules\//);
+
+      const markdownStdout = new MemoryWritable();
+
+      await runGuardianCli({
+        argv: ["--repo", repoPath, "--base", "origin/main", "--full-report"],
+        stdout: markdownStdout
+      });
+
+      assert.match(markdownStdout.value, /src\/menu\.ts/);
+      assert.doesNotMatch(
+        markdownStdout.value,
+        /guardian-report|guardian-summary|guardian-pr-comment|\.tgz|\.tar\.gz|dist\/|coverage\/|\.next\/|node_modules\//
+      );
+    });
+  });
+
   it("blocks auth changes when negative test coverage is missing", async () => {
     await withAuthFixtureRepo({ hasNegativeTest: false, changeReleaseFile: false }, async (repoPath) => {
       const stdout = new MemoryWritable();
@@ -512,6 +545,17 @@ async function withRepoContextCenterStyleFixtureRepo(test: (repoPath: string) =>
   }
 }
 
+async function withIgnoredArtifactsFixtureRepo(test: (repoPath: string) => Promise<void>): Promise<void> {
+  const repoPath = await mkdtemp(join(tmpdir(), "guardian-ignored-artifacts-fixture-"));
+
+  try {
+    await createIgnoredArtifactsFixtureRepo(repoPath);
+    await test(repoPath);
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+}
+
 async function createFixtureRepo(repoPath: string): Promise<void> {
   await git(repoPath, "init");
   await git(repoPath, "config", "user.email", "guardian@example.com");
@@ -750,6 +794,51 @@ async function writeRepoContextCenterStyleFiles(repoPath: string, label: string)
   );
   await writeFile(join(repoPath, ".github", "workflows", "ai-project-guardian.yml"), workflowYaml(`guardian-${label}`), "utf8");
   await writeFile(join(repoPath, ".github", "workflows", "ci.yml"), workflowYaml(`ci-${label}`), "utf8");
+}
+
+async function createIgnoredArtifactsFixtureRepo(repoPath: string): Promise<void> {
+  await git(repoPath, "init");
+  await git(repoPath, "config", "user.email", "guardian@example.com");
+  await git(repoPath, "config", "user.name", "Guardian Test");
+  await mkdir(join(repoPath, "src"), { recursive: true });
+  await writeFile(
+    join(repoPath, "guardian.config.json"),
+    JSON.stringify(
+      {
+        projectName: "Ignored Artifacts Fixture",
+        riskFolders: [],
+        testFolders: ["tests"],
+        releaseSensitiveFiles: [],
+        requiredChecks: []
+      },
+      null,
+      2
+    ),
+    "utf8"
+  );
+  await writeFile(join(repoPath, "src", "menu.ts"), "export const menu = ['baseline'];\n", "utf8");
+  await git(repoPath, "add", ".");
+  await git(repoPath, "commit", "-m", "Initial ignored artifact fixture");
+  await git(repoPath, "update-ref", "refs/remotes/origin/main", "HEAD");
+
+  await mkdir(join(repoPath, "dist"), { recursive: true });
+  await mkdir(join(repoPath, "coverage"), { recursive: true });
+  await mkdir(join(repoPath, ".next", "server"), { recursive: true });
+  await mkdir(join(repoPath, "node_modules", "pkg"), { recursive: true });
+  await writeFile(join(repoPath, "src", "menu.ts"), "export const menu = ['changed'];\n", "utf8");
+  await writeFile(join(repoPath, "guardian-report.md"), "# Generated report\n", "utf8");
+  await writeFile(join(repoPath, "guardian-summary.md"), "# Generated summary\n", "utf8");
+  await writeFile(join(repoPath, "guardian-pr-comment.md"), "# Generated PR comment\n", "utf8");
+  await writeFile(join(repoPath, "ai-project-guardian-0.1.0.tgz"), "package artifact\n", "utf8");
+  await writeFile(join(repoPath, "guardian-package.tar.gz"), "package artifact\n", "utf8");
+  await writeFile(join(repoPath, "npm-debug.log.1"), "debug log\n", "utf8");
+  await writeFile(join(repoPath, ".DS_Store"), "metadata\n", "utf8");
+  await writeFile(join(repoPath, "dist", "index.js"), "console.log('built');\n", "utf8");
+  await writeFile(join(repoPath, "coverage", "lcov.info"), "TN:\n", "utf8");
+  await writeFile(join(repoPath, ".next", "server", "app.js"), "console.log('next');\n", "utf8");
+  await writeFile(join(repoPath, "node_modules", "pkg", "index.js"), "module.exports = {};\n", "utf8");
+  await git(repoPath, "add", ".");
+  await git(repoPath, "commit", "-m", "Change source and generated artifacts");
 }
 
 function workflowYaml(name: string): string {

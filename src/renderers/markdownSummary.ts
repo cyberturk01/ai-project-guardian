@@ -1,4 +1,6 @@
 import type { GuardianReport, RiskLevel } from "../core/types.js";
+import { renderDecisionSummary } from "./decisionSummary.js";
+import { buildOnboardingGuidance } from "./onboardingGuidance.js";
 
 export function renderMarkdownSummary(report: GuardianReport): string {
   return `# AI Project Guardian Summary
@@ -43,7 +45,7 @@ ${renderGuidanceSection(report)}
 ## Notes
 
 - Run with ${"`"}--full-report${"`"} for changed files, detailed findings, accepted findings, and suggested tests.
-${renderWarnings(report.warnings)}
+${renderWarnings([...buildOnboardingGuidance(report.warnings), ...report.warnings])}
 `;
 }
 
@@ -88,32 +90,6 @@ function renderGuidanceSection(report: GuardianReport): string {
 ${renderShortGuidanceList(report)}`;
 }
 
-function renderDecisionSummary(report: GuardianReport): string {
-  if (report.blockingFindingsCount === 0 && report.checklistFindingsCount > 0) {
-    return "No blocking code/test/security findings remain. Release checklist items still require human approval before deploy.";
-  }
-
-  if (report.blockingFindingsCount > 0) {
-    return `Merge blocked because ${blockingReason(report)}.`;
-  }
-
-  return "No blocking code/test/security findings remain. No release checklist items require approval.";
-}
-
-function blockingReason(report: GuardianReport): string {
-  const floorReason = report.scoreBreakdown.criticalFloorApplied?.reason;
-
-  if (floorReason === "Auth or security changed without negative test coverage") {
-    return "auth/security code changed without negative-path test coverage";
-  }
-
-  if (floorReason !== undefined) {
-    return lowercaseFirst(floorReason);
-  }
-
-  return `${report.blockingFindingsCount} blocking code/test/security finding(s) require review`;
-}
-
 function renderShortGuidanceList(report: GuardianReport): string {
   if (report.actionableGuidance.length === 0) {
     return "No actionable guidance.";
@@ -143,8 +119,4 @@ function renderRiskLabel(riskLevel: RiskLevel): string {
 
 function escapeTableCell(value: string): string {
   return value.replaceAll("|", "\\|").replaceAll("\n", " ");
-}
-
-function lowercaseFirst(value: string): string {
-  return value.length === 0 ? value : `${value[0].toLowerCase()}${value.slice(1)}`;
 }
