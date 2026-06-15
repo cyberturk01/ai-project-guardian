@@ -52,6 +52,7 @@ From the repository you want Guardian to monitor:
 npx ai-project-guardian@beta --help
 npx ai-project-guardian@beta init --dry-run
 npx ai-project-guardian@beta init
+npx ai-project-guardian@beta --repo . --out guardian-summary.md --summary-only
 ```
 
 `init` creates `guardian.config.json`, `.project-brain/` template files, and `.github/workflows/ai-project-guardian.yml` when they are missing. Review the generated files before committing them or relying on CI output.
@@ -166,6 +167,14 @@ Multiple artifact paths in environment variables are comma-separated.
 ## Onboarding a New Repository
 
 Guardian can run with defaults, but analysis quality is better when the target repository provides repository-specific config and Project Brain context.
+
+Recommended first run:
+
+```sh
+npx ai-project-guardian init --dry-run
+npx ai-project-guardian init
+npx ai-project-guardian --repo . --out guardian-summary.md --summary-only
+```
 
 Each target repository should add:
 

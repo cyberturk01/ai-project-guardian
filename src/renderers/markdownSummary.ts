@@ -1,5 +1,6 @@
 import type { GuardianReport, RiskLevel } from "../core/types.js";
 import { renderDecisionSummary } from "./decisionSummary.js";
+import { buildOnboardingGuidance } from "./onboardingGuidance.js";
 
 export function renderMarkdownSummary(report: GuardianReport): string {
   return `# AI Project Guardian Summary
@@ -44,7 +45,7 @@ ${renderGuidanceSection(report)}
 ## Notes
 
 - Run with ${"`"}--full-report${"`"} for changed files, detailed findings, accepted findings, and suggested tests.
-${renderWarnings(report.warnings)}
+${renderWarnings([...buildOnboardingGuidance(report.warnings), ...report.warnings])}
 `;
 }
 

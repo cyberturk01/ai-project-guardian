@@ -1,6 +1,6 @@
 {
   "name": "ai-project-guardian",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CLI repository risk analysis reports for QA, release, and security workflows.",
   "license": "MIT",
   "type": "module",

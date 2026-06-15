@@ -7,6 +7,10 @@ import { buildActionableGuidance, buildRequiredDeployActions } from "../src/core
 import type { GuardianReport, MergeRecommendation } from "../src/core/types.js";
 import { renderMarkdownReport } from "../src/renderers/markdownReport.js";
 import { renderMarkdownSummary } from "../src/renderers/markdownSummary.js";
+import {
+  missingConfigOnboardingNote,
+  missingProjectBrainOnboardingNote
+} from "../src/renderers/onboardingGuidance.js";
 import { renderPrComment } from "../src/renderers/prComment.js";
 import { renderReport } from "../src/renderers/renderReport.js";
 
@@ -100,6 +104,60 @@ describe("renderMarkdownReport", () => {
     });
 
     assert.match(renderMarkdownSummary(report), /Merge requires review because 1 code\/test\/security finding\(s\) need attention before merge\./);
+  });
+
+  it("adds missing config onboarding guidance to Markdown reports", () => {
+    const report = {
+      ...makeReport(),
+      warnings: ['guardian.config.json was not found; using default config for project "demo".']
+    };
+
+    assert.match(renderMarkdownReport(report), new RegExp(escapeRegExp(missingConfigOnboardingNote)));
+    assert.match(renderMarkdownSummary(report), new RegExp(escapeRegExp(missingConfigOnboardingNote)));
+  });
+
+  it("adds missing Project Brain onboarding guidance to Markdown reports", () => {
+    const report = {
+      ...makeReport(),
+      warnings: ["Project Brain context was not found; continuing without repository-specific context."]
+    };
+
+    assert.match(renderMarkdownReport(report), new RegExp(escapeRegExp(missingProjectBrainOnboardingNote)));
+    assert.match(renderMarkdownSummary(report), new RegExp(escapeRegExp(missingProjectBrainOnboardingNote)));
+  });
+
+  it("renders each onboarding guidance item only once per Markdown report", () => {
+    const report = {
+      ...makeReport(),
+      warnings: [
+        'guardian.config.json was not found; using default config for project "demo".',
+        "guardian.config.json was not found; using safe defaults.",
+        "Project Brain context was not found; continuing without repository-specific context.",
+        "Project Brain context was not found; continuing without repository-specific context."
+      ]
+    };
+
+    assert.equal(countOccurrences(renderMarkdownReport(report), missingConfigOnboardingNote), 1);
+    assert.equal(countOccurrences(renderMarkdownReport(report), missingProjectBrainOnboardingNote), 1);
+    assert.equal(countOccurrences(renderMarkdownSummary(report), missingConfigOnboardingNote), 1);
+    assert.equal(countOccurrences(renderMarkdownSummary(report), missingProjectBrainOnboardingNote), 1);
+  });
+
+  it("keeps onboarding guidance out of PR comments, JSON reports, and SARIF reports", () => {
+    const report = {
+      ...makeReport(),
+      warnings: [
+        'guardian.config.json was not found; using default config for project "demo".',
+        "Project Brain context was not found; continuing without repository-specific context."
+      ]
+    };
+
+    assert.doesNotMatch(renderPrComment(report), new RegExp(escapeRegExp(missingConfigOnboardingNote)));
+    assert.doesNotMatch(renderPrComment(report), new RegExp(escapeRegExp(missingProjectBrainOnboardingNote)));
+    assert.doesNotMatch(renderReport(report, "json"), new RegExp(escapeRegExp(missingConfigOnboardingNote)));
+    assert.doesNotMatch(renderReport(report, "json"), new RegExp(escapeRegExp(missingProjectBrainOnboardingNote)));
+    assert.doesNotMatch(renderReport(report, "sarif"), new RegExp(escapeRegExp(missingConfigOnboardingNote)));
+    assert.doesNotMatch(renderReport(report, "sarif"), new RegExp(escapeRegExp(missingProjectBrainOnboardingNote)));
   });
 });
 
@@ -253,4 +311,8 @@ function makeReportForRecommendation(options: {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function countOccurrences(value: string, search: string): number {
+  return value.split(search).length - 1;
 }

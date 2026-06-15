@@ -151,4 +151,5 @@ These findings matched `.guardian-baseline.json` and are shown for visibility, b
 ## Notes
 
 - This report is generated from repository heuristics and should support, not replace, human review.
+- Tip: Run `npx ai-project-guardian init` to generate config, Project Brain templates, and GitHub Actions workflow.
 - guardian.config.json was not found; using safe defaults.
