@@ -204,6 +204,7 @@ describe("analyzeSecurity", () => {
       ["security-api-key"]
     );
     assert.equal(findings[0]?.filePath, "tests/realisticSecret.test.ts");
+    assert.equal(findings[0]?.riskLevel, "low");
   });
 
   it("deduplicates hardcoded-secret when jwt-secret-default triggers on the same line", async () => {
@@ -308,6 +309,43 @@ describe("analyzeSecurity", () => {
     });
 
     assert.deepEqual(findings, []);
+  });
+
+  it("downgrades disabled auth bypass findings in test and fixture files", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [
+        changedFile("tests/auth/bypass.test.ts"),
+        changedFile("fixtures/auth/sampleBypass.ts")
+      ],
+      readFile: fakeReader({
+        "tests/auth/bypass.test.ts": "export const options = { requireAuth: false };",
+        "fixtures/auth/sampleBypass.ts": "export const options = { bypassAuth: true };"
+      })
+    });
+
+    assert.deepEqual(
+      findings.map((finding) => `${finding.id}:${finding.riskLevel}:${finding.filePath}`),
+      [
+        "security-disabled-auth-check:low:fixtures/auth/sampleBypass.ts",
+        "security-disabled-auth-check:low:tests/auth/bypass.test.ts"
+      ]
+    );
+  });
+
+  it("keeps disabled auth bypass findings high in production source files", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [changedFile("src/auth/devAuth.ts")],
+      readFile: fakeReader({
+        "src/auth/devAuth.ts": "export const options = { requireAuth: false };"
+      })
+    });
+
+    assert.deepEqual(
+      findings.map((finding) => `${finding.id}:${finding.riskLevel}:${finding.filePath}`),
+      ["security-disabled-auth-check:high:src/auth/devAuth.ts"]
+    );
   });
 });
 

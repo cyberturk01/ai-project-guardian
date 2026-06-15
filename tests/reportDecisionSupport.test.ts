@@ -33,7 +33,7 @@ describe("buildReportDecisionSupport", () => {
     assert.equal(decisionSupport.riskReason, "Only release checklist items remain.");
   });
 
-  it("classifies QA, security, workflow, external, and correlated findings as blocking findings", () => {
+  it("classifies QA, high security, workflow, and high correlations as blocking findings", () => {
     const decisionSupport = buildReportDecisionSupport({
       overallRisk: "critical",
       scoreBreakdown: scoreBreakdown(),
@@ -45,7 +45,7 @@ describe("buildReportDecisionSupport", () => {
       correlatedFindings: [correlatedFinding("critical")]
     });
 
-    assert.equal(decisionSupport.blockingFindingsCount, 5);
+    assert.equal(decisionSupport.blockingFindingsCount, 4);
     assert.equal(decisionSupport.checklistFindingsCount, 1);
     assert.equal(decisionSupport.mergeRecommendation, "blocked");
     assert.equal(decisionSupport.codeRisk, "critical");
@@ -88,6 +88,24 @@ describe("buildReportDecisionSupport", () => {
     assert.equal(decisionSupport.blockingFindingsCount, 1);
     assert.equal(decisionSupport.mergeRecommendation, "review_required");
     assert.match(decisionSupport.riskReason, /1 blocking finding\(s\) require review/);
+  });
+
+  it("does not block merge for low or medium heuristic security findings", () => {
+    const decisionSupport = buildReportDecisionSupport({
+      overallRisk: "medium",
+      scoreBreakdown: scoreBreakdown(),
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: [securityFinding("low"), securityFinding("medium")],
+      workflowFindings: [],
+      externalFindings: [],
+      correlatedFindings: []
+    });
+
+    assert.equal(decisionSupport.blockingFindingsCount, 0);
+    assert.equal(decisionSupport.mergeRecommendation, "safe");
+    assert.equal(decisionSupport.codeRisk, "info");
+    assert.equal(decisionSupport.riskReason, "No blocking findings remain.");
   });
 
   it("blocks when the auth/security critical floor applies", () => {

@@ -159,7 +159,7 @@ export async function analyzeSecurity(input: AnalyzeSecurityInput): Promise<Secu
         area: "security",
         title: rule.title,
         description: `${rule.title} detected in a changed file. This is a possible security risk based on heuristic matching, not a confirmed vulnerability.`,
-        riskLevel: rule.riskLevel,
+        riskLevel: riskLevelForRule(rule, scannedFile.file),
         filePath: normalizePath(scannedFile.file.path),
         lineNumber: matchingLineIndex + 1,
         recommendation: rule.recommendation
@@ -319,6 +319,26 @@ function hasDisabledRateLimiting(line: string): boolean {
     /\b(?:rateLimit|rateLimiter|limiter|throttle|slowDown)\b\s*:\s*false\b/i.test(line) ||
     /\b(?:disableRateLimit|disableRateLimiting|skipRateLimit|skipRateLimiting|rateLimitDisabled|rateLimitingDisabled|bypassRateLimit)\b\s*[:=]\s*true\b/i.test(line) ||
     /\/\/\s*(?:rate\s*limit|rate\s*limiting|throttling)\s+(?:disabled|bypassed|off)/i.test(line)
+  );
+}
+
+function riskLevelForRule(rule: SecurityRule, file: ChangedFile): RiskLevel {
+  if (isNonRuntimeContextPath(file.path)) {
+    return "low";
+  }
+
+  return rule.riskLevel;
+}
+
+function isNonRuntimeContextPath(path: string): boolean {
+  const normalized = normalizePath(path);
+
+  return (
+    isTestFile(normalized) ||
+    isGeneratedAssetPath(normalized) ||
+    /(^|\/)(__fixtures__|fixtures?|mocks?|samples?|examples?|templates?)(\/|$)/i.test(normalized) ||
+    /(^|\/)(docs?|documentation)(\/|$)/i.test(normalized) ||
+    /\.(md|mdx|txt)$/i.test(normalized)
   );
 }
 

@@ -99,6 +99,36 @@ describe("scoreRisk", () => {
     assert.equal(result.overallRisk, "low");
   });
 
+  it("keeps dependency-only changes as release checklist risk without forcing critical", () => {
+    const result = scoreRisk({
+      changedFiles: [
+        changedFile({
+          path: "package.json",
+          category: "config",
+          riskLevel: "high"
+        }),
+        changedFile({
+          path: "package-lock.json",
+          category: "config",
+          riskLevel: "high"
+        })
+      ],
+      qaFindings: [],
+      releaseFindings: [
+        releaseFinding({
+          id: "release-package-dependency-changed",
+          riskLevel: "medium",
+          affectedFiles: ["package-lock.json", "package.json"]
+        })
+      ],
+      securityFindings: []
+    });
+
+    assert.equal(result.scoreBreakdown.selectedBand, "config");
+    assert.ok(result.score < 60);
+    assert.notEqual(result.overallRisk, "critical");
+  });
+
   it("keeps migration changes in the 50-80 range when DB tests are not missing", () => {
     const result = scoreRisk({
       changedFiles: [
@@ -151,6 +181,31 @@ describe("scoreRisk", () => {
 
     assert.equal(result.score, 80);
     assert.equal(result.overallRisk, "high");
+  });
+
+  it("does not escalate one low heuristic security finding in a test file to security band critical risk", () => {
+    const result = scoreRisk({
+      changedFiles: [
+        changedFile({
+          path: "tests/auth/bypass.test.ts",
+          category: "test",
+          riskLevel: "low"
+        })
+      ],
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: [
+        securityFinding({
+          id: "security-disabled-auth-check",
+          riskLevel: "low",
+          filePath: "tests/auth/bypass.test.ts"
+        })
+      ]
+    });
+
+    assert.notEqual(result.scoreBreakdown.selectedBand, "security");
+    assert.ok(result.score < 70);
+    assert.notEqual(result.overallRisk, "critical");
   });
 
   it("allows security findings to become critical when the score crosses the critical threshold", () => {

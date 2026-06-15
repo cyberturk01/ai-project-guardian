@@ -72,7 +72,7 @@ const releaseRules: ReleaseRule[] = [
     id: "release-package-dependency-changed",
     title: "Package dependency changed",
     description: "A package manifest or lockfile changed.",
-    riskLevel: "high",
+    riskLevel: "medium",
     whyItMatters: "Dependency updates can alter runtime behavior, build output, transitive packages, and known vulnerability exposure.",
     requiredBeforeDeploy: [
       "Run install, build, and test checks from a clean dependency install.",
