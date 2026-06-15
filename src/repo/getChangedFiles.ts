@@ -1,23 +1,11 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import type { ChangedFile, ChangedFileStatus } from "../core/types.js";
+import { runGitCommand, type GitCommand, type GitCommandResult, type GitCommandRunner } from "./gitRunner.js";
 
-const execFileAsync = promisify(execFile);
 const defaultBaseRef = "origin/main";
 const fallbackRef = "HEAD~1";
 const allowedBaseRefPattern = /^[A-Za-z0-9._/@~-]+$/;
 
-export type GitCommand = {
-  command: "git";
-  args: string[];
-  cwd: string;
-};
-
-export type GitCommandResult = {
-  stdout: string;
-};
-
-export type GitCommandRunner = (command: GitCommand) => Promise<GitCommandResult>;
+export type { GitCommand, GitCommandResult, GitCommandRunner };
 
 export type GetChangedFilesOptions = {
   repoPath: string;
@@ -110,14 +98,4 @@ function assertSafeBaseRef(baseRef: string): void {
   if (baseRef.trim() === "" || baseRef.startsWith("-") || !allowedBaseRefPattern.test(baseRef)) {
     throw new Error(`Unsafe git base ref: ${baseRef}`);
   }
-}
-
-async function runGitCommand(command: GitCommand): Promise<GitCommandResult> {
-  const { stdout } = await execFileAsync(command.command, command.args, {
-    cwd: command.cwd,
-    encoding: "utf8",
-    windowsHide: true
-  });
-
-  return { stdout };
 }

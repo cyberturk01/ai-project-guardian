@@ -1,9 +1,7 @@
-import { execFile } from "node:child_process";
 import { readdir } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { promisify } from "node:util";
+import { runGitCommand } from "./gitRunner.js";
 
-const execFileAsync = promisify(execFile);
 const ignoredDirectories = new Set([".git", "dist", "node_modules"]);
 
 export type ListRepoFilesOptions = {
@@ -12,10 +10,10 @@ export type ListRepoFilesOptions = {
 
 export async function listRepoFiles(options: ListRepoFilesOptions): Promise<string[]> {
   try {
-    const { stdout } = await execFileAsync("git", ["ls-files"], {
-      cwd: options.repoPath,
-      encoding: "utf8",
-      windowsHide: true
+    const { stdout } = await runGitCommand({
+      command: "git",
+      args: ["ls-files"],
+      cwd: options.repoPath
     });
 
     return normalizeAndSort(stdout.split(/\r?\n/).filter((path) => path.length > 0));
