@@ -384,6 +384,53 @@ describe("scoreRisk", () => {
     assert.equal(authResult.overallRisk, "medium");
   });
 
+  it("selects auth band for production auth paths and strong auth filenames", () => {
+    for (const path of [
+      "src/auth/session.ts",
+      "src/security/permissions.ts",
+      "src/services/authService.ts",
+      "src/pages/login.tsx",
+      "src/lib/jwt.ts",
+      "src/lib/session.ts",
+      "src/lib/permission.ts",
+      "src/lib/access-control.ts"
+    ]) {
+      const result = scoreRisk({
+        changedFiles: [
+          changedFile({
+            path,
+            category: path.startsWith("src/auth/") || path.startsWith("src/security/") ? "security" : "source",
+            riskLevel: "high"
+          })
+        ],
+        qaFindings: [],
+        releaseFindings: [],
+        securityFindings: []
+      });
+
+      assert.equal(result.scoreBreakdown.selectedBand, "auth", `${path} should select auth band`);
+    }
+  });
+
+  it("does not select auth band for repository context, config, or workflow files", () => {
+    const result = scoreRisk({
+      changedFiles: [
+        changedFile({ path: "guardian.config.json", category: "config", riskLevel: "high" }),
+        changedFile({ path: ".project-brain/security-rules.md", category: "project-brain", riskLevel: "info" }),
+        changedFile({ path: ".project-brain/deployment-rules.md", category: "project-brain", riskLevel: "info" }),
+        changedFile({ path: ".project-brain/known-risks.md", category: "project-brain", riskLevel: "info" }),
+        changedFile({ path: ".project-brain/module-map.json", category: "project-brain", riskLevel: "info" }),
+        changedFile({ path: ".github/workflows/ai-project-guardian.yml", category: "ci", riskLevel: "medium" }),
+        changedFile({ path: ".github/workflows/ci.yml", category: "ci", riskLevel: "medium" })
+      ],
+      qaFindings: [],
+      releaseFindings: [releaseFinding({ id: "release-github-actions-changed", riskLevel: "high" })],
+      securityFindings: []
+    });
+
+    assert.notEqual(result.scoreBreakdown.selectedBand, "auth");
+  });
+
   it("marks migration plus missing DB test coverage as critical", () => {
     const result = scoreRisk({
       changedFiles: [
