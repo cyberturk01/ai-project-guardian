@@ -39,6 +39,7 @@ describe("parseArgs", () => {
 
   it("keeps help output aligned with supported flags", () => {
     assert.match(helpText, /--repo <path>/);
+    assert.match(helpText, /init/);
     assert.match(helpText, /--base <ref>/);
     assert.match(helpText, /--out <path>/);
     assert.match(helpText, /--format <format>/);

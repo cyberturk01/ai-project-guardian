@@ -3,6 +3,7 @@ import { loadConfig, type ReportFormat } from "../config/loadConfig.js";
 import type { RiskLevel } from "../core/types.js";
 import { runGuardian as runGuardianCore } from "../core/guardian.js";
 import { renderReport, type ReportStyle } from "../renderers/renderReport.js";
+import { runInitCommand } from "./initGuardian.js";
 
 export type FailOnRisk = Extract<RiskLevel, "high" | "critical">;
 
@@ -28,15 +29,18 @@ export type CliRunResult = {
 
 export type CliRunOptions = {
   argv: string[];
+  cwd?: string;
   stdout?: NodeJS.WritableStream;
 };
 
 export const helpText = `ai-project-guardian
 
 Usage:
+  ai-project-guardian init [--repo <path>] [--dry-run] [--force]
   ai-project-guardian --repo <path> [--base <ref>] [--out <path>] [--format markdown|json|sarif] [--sarif <path>] [--codeql <path>] [--semgrep <path>] [--snyk <path>] [--summary-only|--full-report|--pr-comment] [--fail-on high|critical]
 
 Options:
+  init                   Bootstrap Guardian config, Project Brain templates, and a GitHub Actions workflow.
   --repo <path>          Target repository path. Defaults to GUARDIAN_REPO_PATH or ".".
   --base <ref>           Base git ref for changed file detection. Defaults to origin/main with HEAD~1 fallback.
   --out <path>           Output report path. Defaults to GUARDIAN_OUTPUT_PATH when set.
@@ -48,6 +52,8 @@ Options:
   --summary-only         Write a short GitHub Actions-friendly summary. This is the default.
   --full-report          Write the complete Markdown report with detailed findings.
   --pr-comment           Write a compact Markdown summary suitable for GitHub PR comments.
+  --dry-run              For init, print planned file changes without writing files.
+  --force                For init, overwrite existing Guardian bootstrap files.
   --fail-on <risk>       Exit 1 when overall risk meets the threshold: high or critical.
   --help                 Show this help message.
 `;
@@ -147,6 +153,15 @@ export function parseArgs(args: string[]): CliArgs {
 
 export async function runGuardianCli(options: CliRunOptions): Promise<CliRunResult> {
   const stdout = options.stdout ?? process.stdout;
+
+  if (options.argv[0] === "init") {
+    return runInitCommand({
+      argv: options.argv.slice(1),
+      cwd: options.cwd,
+      stdout
+    });
+  }
+
   const args = parseArgs(options.argv);
 
   if (args.help) {

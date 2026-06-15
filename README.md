@@ -77,6 +77,16 @@ Run the CLI against another repository:
 npm run guardian -- --repo ../AI-Restaurants --base origin/main --out guardian-report.md
 ```
 
+Bootstrap Guardian in a repository:
+
+```sh
+ai-project-guardian init
+ai-project-guardian init --dry-run
+ai-project-guardian init --repo ../AI-Restaurants
+```
+
+`init` creates `guardian.config.json`, `.project-brain/` template files, and `.github/workflows/ai-project-guardian.yml` when they are missing. Existing files are skipped unless `--force` is set.
+
 Write a full Markdown report:
 
 ```sh
