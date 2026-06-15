@@ -50,6 +50,22 @@ npx ai-project-guardian --help
 npx ai-project-guardian --repo ../AI-Restaurants --base origin/main --out guardian-report.md
 ```
 
+## First-Time Setup
+
+From the repository you want Guardian to monitor:
+
+```sh
+npx ai-project-guardian init
+git add guardian.config.json .project-brain .github/workflows/ai-project-guardian.yml
+git commit -m "Add AI Project Guardian"
+```
+
+The generated GitHub Actions workflow runs Guardian with `npx ai-project-guardian` on pull requests and manual workflow runs. Review and commit the generated files before relying on CI output.
+
+## Beta Status
+
+This beta produces advisory output. Release checklist items need human review, and no deployment should be blocked only by generic checklist items without project-specific confirmation.
+
 Verify a local package tarball:
 
 ```sh
@@ -296,7 +312,7 @@ Each target repository should add:
 .github/workflows/ai-project-guardian.yml
 ```
 
-The workflow checks out the target repo, checks out the `ai-project-guardian` repo, runs Guardian against the target repo, and writes `guardian-report.md` to the GitHub Actions summary.
+The generated workflow checks out the target repo, runs Guardian with `npx --yes ai-project-guardian`, and writes `guardian-report.md` to the GitHub Actions summary.
 
 See `docs/github-actions-integration.md` for a complete workflow.
 
@@ -495,11 +511,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci
-      - run: npm run build
-      - run: npm run guardian -- --repo . --base origin/main --out guardian-summary.md --summary-only --fail-on critical
+      - run: npx --yes ai-project-guardian --repo . --base origin/main --out guardian-summary.md --summary-only --fail-on critical
       - run: cat guardian-summary.md >> "$GITHUB_STEP_SUMMARY"
-      - run: npm run guardian -- --repo . --base origin/main --out guardian-report.md --full-report
+      - run: npx --yes ai-project-guardian --repo . --base origin/main --out guardian-report.md --full-report
       - uses: actions/upload-artifact@v4
         with:
           name: guardian-report
@@ -510,7 +524,7 @@ This repository also includes `.github/workflows/guardian-self-check.yml` to run
 
 ## Use from another GitHub repository
 
-To run `ai-project-guardian` from a different repository, checkout the target project first, then checkout this tool into a nested `.guardian` directory.
+To run `ai-project-guardian` from a GitHub repository, install nothing in the repo; the generated workflow uses `npx --yes ai-project-guardian`.
 
 ```yaml
 name: Guardian Report
@@ -523,39 +537,21 @@ jobs:
   guardian:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout target repository
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          path: target
           fetch-depth: 0
-
-      - name: Checkout ai-project-guardian
-        uses: actions/checkout@v4
-        with:
-          repository: your-org/ai-project-guardian
-          path: target/.guardian
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Install guardian dependencies
-        working-directory: target/.guardian
-        run: npm ci
-
-      - name: Build guardian
-        working-directory: target/.guardian
-        run: npm run build
-
       - name: Run guardian against target repo
-        working-directory: target/.guardian
-        run: npm run guardian -- --repo .. --base origin/main --out guardian-summary.md --summary-only
+        run: npx --yes ai-project-guardian --repo . --base origin/main --out guardian-summary.md --summary-only
 
       - name: Append report to job summary
-        run: cat target/.guardian/guardian-summary.md >> "$GITHUB_STEP_SUMMARY"
+        run: cat guardian-summary.md >> "$GITHUB_STEP_SUMMARY"
 ```
-
-Replace `your-org/ai-project-guardian` with the actual owner and repository name for this project.
 
 See `docs/github-actions-integration.md` for a complete copy-paste workflow.
