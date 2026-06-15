@@ -43,6 +43,27 @@ Guardian currently supports:
 
 ## Usage
 
+Run without installing:
+
+```sh
+npx ai-project-guardian --help
+npx ai-project-guardian --repo ../AI-Restaurants --base origin/main --out guardian-report.md
+```
+
+Verify a local package tarball:
+
+```sh
+npm pack
+npx ./ai-project-guardian-*.tgz --help
+```
+
+Install globally:
+
+```sh
+npm install -g ai-project-guardian
+ai-project-guardian --repo ../AI-Restaurants --base origin/main --out guardian-report.md
+```
+
 Install dependencies and build the CLI:
 
 ```sh

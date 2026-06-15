@@ -7,8 +7,15 @@
   "bin": {
     "ai-project-guardian": "./dist/src/cli/index.js"
   },
+  "files": [
+    "dist/src",
+    "templates",
+    "examples",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node -e \"require('fs').chmodSync('dist/src/cli/index.js', 0o755)\"",
     "test": "npm run build && node --test dist/tests/*.test.js",
     "lint": "tsc --noEmit -p tsconfig.json",
     "guardian": "node dist/src/cli/index.js"
