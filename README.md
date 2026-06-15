@@ -89,6 +89,8 @@ Run the CLI against another repository:
 npm run guardian -- --repo ../AI-Restaurants --base origin/main --out guardian-report.md
 ```
 
+Local runs include committed branch changes compared to the resolved base ref, plus staged, unstaged, and untracked files in the target repository. When local working tree changes are included, Guardian adds a note to the report.
+
 Write a full Markdown report:
 
 ```sh
@@ -456,6 +458,12 @@ See `docs/report-decision-model.md` for a longer explanation of how these fields
 This means Git cannot resolve the configured comparison ref in the target repository. It often happens in local repositories that have no `origin/main` remote-tracking branch, in repositories that use a different default branch, or in shallow CI checkouts.
 
 Guardian validates the requested base ref before diffing. If `--base` is invalid, it falls back to `HEAD~1` when available and prints a warning. If no base is provided, Guardian tries `origin/main`, then `main`, then `master`, then `HEAD~1`.
+
+### Local changed files vs CI
+
+When you run Guardian locally, changed-file detection combines the committed branch diff with staged, unstaged, and untracked files. This lets you review work in progress without committing first.
+
+In CI, Guardian normally runs on a clean checkout and reports the committed pull request diff against the configured base ref. Staged, unstaged, and untracked files are usually absent unless the workflow creates them before Guardian runs.
 
 Useful alternatives:
 

@@ -31,6 +31,8 @@ export type GetChangedFilesResult = {
   warnings: string[];
 };
 
+const localWorkingTreeIncludedWarning = "Local working tree changes were included in changed-file detection.";
+
 export async function getChangedFiles(options: GetChangedFilesOptions): Promise<ChangedFile[]> {
   const result = await getChangedFilesWithWarnings(options);
 
@@ -51,7 +53,12 @@ export async function getChangedFilesWithWarnings(options: GetChangedFilesOption
     });
 
     if (explicitResult !== undefined) {
-      return { changedFiles: explicitResult, warnings };
+      return withLocalWorkingTreeChanges({
+        repoPath: options.repoPath,
+        baseChangedFiles: explicitResult,
+        runCommand,
+        warnings
+      });
     }
 
     warnings.push(`Requested base ref "${options.baseRef}" could not be used; trying HEAD~1.`);
@@ -65,11 +72,21 @@ export async function getChangedFilesWithWarnings(options: GetChangedFilesOption
     });
 
     if (fallbackResult !== undefined) {
-      return { changedFiles: fallbackResult, warnings };
+      return withLocalWorkingTreeChanges({
+        repoPath: options.repoPath,
+        baseChangedFiles: fallbackResult,
+        runCommand,
+        warnings
+      });
     }
 
-    warnings.push(`Fallback base ref HEAD~1 could not be used; continuing with no changed files.`);
-    return { changedFiles: [], warnings };
+    warnings.push(`Fallback base ref HEAD~1 could not be used; continuing with local working tree changes only.`);
+    return withLocalWorkingTreeChanges({
+      repoPath: options.repoPath,
+      baseChangedFiles: [],
+      runCommand,
+      warnings
+    });
   }
 
   for (const baseRef of defaultBaseRefCandidates) {
@@ -87,12 +104,22 @@ export async function getChangedFilesWithWarnings(options: GetChangedFilesOption
         warnings.push(`Default base ref ${defaultBaseRef} could not be used; using ${baseRef}.`);
       }
 
-      return { changedFiles: result, warnings };
+      return withLocalWorkingTreeChanges({
+        repoPath: options.repoPath,
+        baseChangedFiles: result,
+        runCommand,
+        warnings
+      });
     }
   }
 
-  warnings.push(`No valid git base ref found (tried ${defaultBaseRefCandidates.join(", ")}); continuing with no changed files.`);
-  return { changedFiles: [], warnings };
+  warnings.push(`No valid git base ref found (tried ${defaultBaseRefCandidates.join(", ")}); continuing with local working tree changes only.`);
+  return withLocalWorkingTreeChanges({
+    repoPath: options.repoPath,
+    baseChangedFiles: [],
+    runCommand,
+    warnings
+  });
 }
 
 export function parseNameStatus(output: string): ChangedFile[] {
@@ -159,6 +186,30 @@ function buildFallbackDiffCommand(repoPath: string): GitCommand {
   };
 }
 
+function buildCachedDiffCommand(repoPath: string): GitCommand {
+  return {
+    command: "git",
+    args: ["diff", "--name-status", "--cached", "--"],
+    cwd: repoPath
+  };
+}
+
+function buildWorkingTreeDiffCommand(repoPath: string): GitCommand {
+  return {
+    command: "git",
+    args: ["diff", "--name-status", "--"],
+    cwd: repoPath
+  };
+}
+
+function buildUntrackedFilesCommand(repoPath: string): GitCommand {
+  return {
+    command: "git",
+    args: ["ls-files", "--others", "--exclude-standard"],
+    cwd: repoPath
+  };
+}
+
 function buildVerifyRefCommand(repoPath: string, baseRef: string): GitCommand {
   assertSafeBaseRef(baseRef);
 
@@ -195,6 +246,82 @@ async function tryChangedFilesFromBaseRef(options: {
     options.warnings.push(`${options.warningPrefix} exists, but git diff failed: ${formatGitError(error)} Continuing with fallback base detection.`);
     return undefined;
   }
+}
+
+async function withLocalWorkingTreeChanges(options: {
+  repoPath: string;
+  baseChangedFiles: ChangedFile[];
+  runCommand: GitCommandRunner;
+  warnings: string[];
+}): Promise<GetChangedFilesResult> {
+  const localChangedFiles = await getLocalWorkingTreeChangedFiles(options.repoPath, options.runCommand, options.warnings);
+  const changedFiles = dedupeChangedFiles([...options.baseChangedFiles, ...localChangedFiles]);
+
+  if (localChangedFiles.length > 0) {
+    options.warnings.push(localWorkingTreeIncludedWarning);
+  }
+
+  return { changedFiles, warnings: options.warnings };
+}
+
+async function getLocalWorkingTreeChangedFiles(
+  repoPath: string,
+  runCommand: GitCommandRunner,
+  warnings: string[]
+): Promise<ChangedFile[]> {
+  try {
+    const [cachedResult, workingTreeResult, untrackedResult] = await Promise.all([
+      runCommand(buildCachedDiffCommand(repoPath)),
+      runCommand(buildWorkingTreeDiffCommand(repoPath)),
+      runCommand(buildUntrackedFilesCommand(repoPath))
+    ]);
+
+    return [
+      ...parseNameStatus(cachedResult.stdout),
+      ...parseNameStatus(workingTreeResult.stdout),
+      ...parseUntrackedFiles(untrackedResult.stdout)
+    ];
+  } catch (error) {
+    warnings.push(`Local working tree changes could not be inspected: ${formatGitError(error)}`);
+    return [];
+  }
+}
+
+function parseUntrackedFiles(output: string): ChangedFile[] {
+  return output
+    .split(/\r?\n/)
+    .filter((line) => line.length > 0)
+    .map((path) => makeChangedFile(path, "added"));
+}
+
+function dedupeChangedFiles(changedFiles: ChangedFile[]): ChangedFile[] {
+  const deduped = new Map<string, ChangedFile>();
+
+  for (const file of changedFiles) {
+    const existing = deduped.get(file.path);
+
+    if (existing === undefined || statusPriority(file.status) > statusPriority(existing.status)) {
+      deduped.set(file.path, file);
+    }
+  }
+
+  return [...deduped.values()];
+}
+
+function statusPriority(status: ChangedFileStatus): number {
+  if (status === "deleted") {
+    return 4;
+  }
+
+  if (status === "renamed") {
+    return 3;
+  }
+
+  if (status === "modified") {
+    return 2;
+  }
+
+  return 1;
 }
 
 function assertSafeBaseRef(baseRef: string): void {
