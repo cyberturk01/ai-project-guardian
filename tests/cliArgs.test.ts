@@ -39,12 +39,16 @@ describe("parseArgs", () => {
 
   it("keeps help output aligned with supported flags", () => {
     assert.match(helpText, /--repo <path>/);
+    assert.match(helpText, /init/);
     assert.match(helpText, /--base <ref>/);
     assert.match(helpText, /--out <path>/);
     assert.match(helpText, /--format <format>/);
     assert.match(helpText, /--summary-only/);
     assert.match(helpText, /--full-report/);
     assert.match(helpText, /--pr-comment/);
+    assert.match(helpText, /--preset <name>/);
+    assert.match(helpText, /python/);
+    assert.match(helpText, /monorepo/);
     assert.match(helpText, /--fail-on <risk>/);
     assert.match(helpText, /--help/);
   });

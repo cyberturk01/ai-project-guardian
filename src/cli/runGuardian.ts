@@ -3,6 +3,7 @@ import { loadConfig, type ReportFormat } from "../config/loadConfig.js";
 import type { RiskLevel } from "../core/types.js";
 import { runGuardian as runGuardianCore } from "../core/guardian.js";
 import { renderReport, type ReportStyle } from "../renderers/renderReport.js";
+import { runInitCommand, type InitPreset } from "./initGuardian.js";
 
 export type FailOnRisk = Extract<RiskLevel, "high" | "critical">;
 
@@ -24,21 +25,26 @@ export type CliRunResult = {
   exitCode: number;
   outputPath?: string;
   overallRisk?: RiskLevel;
+  preset?: InitPreset;
 };
 
 export type CliRunOptions = {
   argv: string[];
+  cwd?: string;
   stdout?: NodeJS.WritableStream;
+  stderr?: NodeJS.WritableStream;
 };
 
 export const helpText = `ai-project-guardian
 
 Usage:
+  ai-project-guardian init [--repo <path>] [--preset generic|node-api|web-app|python|monorepo] [--dry-run] [--force]
   ai-project-guardian --repo <path> [--base <ref>] [--out <path>] [--format markdown|json|sarif] [--sarif <path>] [--codeql <path>] [--semgrep <path>] [--snyk <path>] [--summary-only|--full-report|--pr-comment] [--fail-on high|critical]
 
 Options:
+  init                   Bootstrap Guardian config, Project Brain templates, and a GitHub Actions workflow.
   --repo <path>          Target repository path. Defaults to GUARDIAN_REPO_PATH or ".".
-  --base <ref>           Base git ref for changed file detection. Defaults to origin/main with HEAD~1 fallback.
+  --base <ref>           Base git ref for changed-file detection. Defaults to origin/main, main, master, then HEAD~1.
   --out <path>           Output report path. Defaults to GUARDIAN_OUTPUT_PATH when set.
   --format <format>      Report format: markdown, json, or sarif. Defaults to markdown.
   --sarif <path>         Import a local SARIF artifact. Can be repeated.
@@ -48,6 +54,9 @@ Options:
   --summary-only         Write a short GitHub Actions-friendly summary. This is the default.
   --full-report          Write the complete Markdown report with detailed findings.
   --pr-comment           Write a compact Markdown summary suitable for GitHub PR comments.
+  --preset <name>        For init, choose config preset: generic, node-api, web-app, python, or monorepo.
+  --dry-run              For init, print planned file changes without writing files.
+  --force                For init, overwrite existing Guardian bootstrap files.
   --fail-on <risk>       Exit 1 when overall risk meets the threshold: high or critical.
   --help                 Show this help message.
 `;
@@ -147,6 +156,16 @@ export function parseArgs(args: string[]): CliArgs {
 
 export async function runGuardianCli(options: CliRunOptions): Promise<CliRunResult> {
   const stdout = options.stdout ?? process.stdout;
+  const stderr = options.stderr ?? process.stderr;
+
+  if (options.argv[0] === "init") {
+    return runInitCommand({
+      argv: options.argv.slice(1),
+      cwd: options.cwd,
+      stdout
+    });
+  }
+
   const args = parseArgs(options.argv);
 
   if (args.help) {
@@ -166,6 +185,10 @@ export async function runGuardianCli(options: CliRunOptions): Promise<CliRunResu
   });
   const report = await runGuardianCore(config);
   const rendered = renderReport(report, config.format, args.reportStyle);
+
+  for (const warning of report.warnings.filter(isChangedFileWarning)) {
+    stderr.write(`Warning: ${warning}\n`);
+  }
 
   if (config.outputPath === undefined) {
     stdout.write(rendered);
@@ -217,4 +240,8 @@ function parseReportFormat(value: string): ReportFormat {
   }
 
   throw new Error(`Unsupported --format value: ${value}. Expected "markdown", "json", or "sarif".`);
+}
+
+function isChangedFileWarning(warning: string): boolean {
+  return warning.includes("base ref") || warning.includes("git diff failed") || warning.includes("No valid git base ref");
 }

@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { basename, isAbsolute, join } from "node:path";
 import { loadConfig } from "../src/config/loadConfig.js";
 import { loadGuardianConfig } from "../src/config/guardianConfig.js";
 
@@ -184,14 +184,18 @@ describe("loadGuardianConfig", () => {
   });
 
   it("uses defaults and warns when config is missing", () => {
-    const result = loadGuardianConfig(makeRepo());
+    const repoPath = makeRepo();
+    const result = loadGuardianConfig(repoPath);
 
-    assert.equal(result.config.projectName, "ai-project-guardian");
+    assert.equal(result.config.projectName, basename(repoPath));
     assert.deepEqual(result.config.riskFolders, []);
     assert.deepEqual(result.config.businessAreas, []);
     assert.deepEqual(result.config.customRules, []);
     assert.equal(result.warnings.length, 1);
-    assert.match(result.warnings[0], /not found/);
+    assert.equal(
+      result.warnings[0],
+      `guardian.config.json was not found; using default config for project "${result.config.projectName}".`
+    );
   });
 
   it("uses safe defaults and warnings for invalid config", () => {

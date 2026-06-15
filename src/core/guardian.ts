@@ -9,7 +9,7 @@ import { analyzeWorkflows } from "../analyzers/workflowAnalyzer.js";
 import { scoreRisk } from "../analyzers/riskScorer.js";
 import { loadProjectBrain } from "../project-brain/loadProjectBrain.js";
 import { classifyFile } from "../repo/fileClassifier.js";
-import { getChangedFiles } from "../repo/getChangedFiles.js";
+import { getChangedFilesWithWarnings } from "../repo/getChangedFiles.js";
 import type { GuardianReport } from "./types.js";
 import { listRepoFiles } from "../repo/listRepoFiles.js";
 import { applyBaseline, loadBaseline } from "./baseline.js";
@@ -17,20 +17,19 @@ import { buildActionableGuidance, buildRequiredDeployActions } from "./actionabl
 import { buildReportDecisionSupport } from "./reportDecisionSupport.js";
 
 export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
-  const changedFiles = await getChangedFiles({
+  const changedFileResult = await getChangedFilesWithWarnings({
     repoPath: config.repoPath,
     baseRef: config.baseRef
-  }).then((files) =>
-    files.map((file) => {
-      const classification = classifyFile(file.path, config.guardian);
+  });
+  const changedFiles = changedFileResult.changedFiles.map((file) => {
+    const classification = classifyFile(file.path, config.guardian);
 
-      return {
-        ...file,
-        category: classification.category,
-        riskLevel: classification.riskLevel
-      };
-    })
-  );
+    return {
+      ...file,
+      category: classification.category,
+      riskLevel: classification.riskLevel
+    };
+  });
 
   const repoFiles = await listRepoFiles({ repoPath: config.repoPath });
   const projectBrainResult = loadProjectBrain(config.repoPath);
@@ -128,6 +127,12 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     requiredDeployActions,
     actionableGuidance,
     requiredActions: requiredDeployActions,
-    warnings: [...config.warnings, ...projectBrainResult.warnings, ...baselineResult.warnings, ...enterpriseRiskCorrelation.warnings]
+    warnings: [
+      ...config.warnings,
+      ...changedFileResult.warnings,
+      ...projectBrainResult.warnings,
+      ...baselineResult.warnings,
+      ...enterpriseRiskCorrelation.warnings
+    ]
   };
 }

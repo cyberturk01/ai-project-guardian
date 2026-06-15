@@ -1,14 +1,25 @@
 {
   "name": "ai-project-guardian",
-  "version": "0.1.0",
+  "version": "0.1.0-beta.2",
   "description": "CLI repository risk analysis reports for QA, release, and security workflows.",
   "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cyberturk01/ai-project-guardian.git"
+  },
   "bin": {
     "ai-project-guardian": "./dist/src/cli/index.js"
   },
+  "files": [
+    "dist/src",
+    "templates",
+    "examples",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node -e \"require('fs').chmodSync('dist/src/cli/index.js', 0o755)\"",
     "test": "npm run build && node --test dist/tests/*.test.js",
     "lint": "tsc --noEmit -p tsconfig.json",
     "guardian": "node dist/src/cli/index.js"
@@ -22,6 +33,7 @@
   ],
   "devDependencies": {
     "@types/node": "^20.14.0",
+    "repo-context-center": "^0.4.0",
     "typescript": "^5.4.0"
   },
   "engines": {

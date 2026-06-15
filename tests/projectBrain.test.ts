@@ -1,5 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadProjectBrain } from "../src/project-brain/loadProjectBrain.js";
 
@@ -26,16 +28,28 @@ describe("loadProjectBrain", () => {
         }
       ]
     });
+    assert.ok(result.warnings.every((warning) => !warning.includes("missing files")));
   });
 
-  it("warns about missing files without throwing", () => {
+  it("warns once when the Project Brain directory is missing", () => {
+    const result = loadProjectBrain(mkdtempSync(join(tmpdir(), "guardian-missing-brain-")));
+
+    assert.deepEqual(result.projectBrain.documents, {});
+    assert.equal(result.projectBrain.moduleMap, undefined);
+    assert.deepEqual(result.warnings, [
+      "Project Brain context was not found; continuing without repository-specific context."
+    ]);
+  });
+
+  it("groups missing file warnings without throwing", () => {
     const result = loadProjectBrain(join(fixturesPath, "partial"));
 
     assert.match(result.projectBrain.documents.project?.content ?? "", /Partial Brain/);
     assert.equal(result.projectBrain.documents.architecture, undefined);
     assert.equal(result.projectBrain.moduleMap, undefined);
-    assert.equal(result.warnings.length, 7);
-    assert.ok(result.warnings.every((warning) => warning.includes("was not found")));
+    assert.deepEqual(result.warnings, [
+      "Project Brain context is incomplete; missing files: architecture.md, testing-strategy.md, deployment-rules.md, security-rules.md, known-risks.md, known-bugs.md, module-map.json."
+    ]);
   });
 
   it("warns about invalid module-map JSON without failing markdown loading", () => {
@@ -43,7 +57,8 @@ describe("loadProjectBrain", () => {
 
     assert.match(result.projectBrain.documents.project?.content ?? "", /Invalid Map/);
     assert.equal(result.projectBrain.moduleMap, undefined);
-    assert.equal(result.warnings.length, 7);
+    assert.equal(result.warnings.length, 2);
+    assert.ok(result.warnings.some((warning) => warning.includes("missing files")));
     assert.ok(result.warnings.some((warning) => warning.includes("contains invalid JSON")));
   });
 });

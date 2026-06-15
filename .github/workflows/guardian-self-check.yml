@@ -11,6 +11,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -20,11 +22,18 @@ jobs:
       - run: npm ci
       - run: npm run build
 
+      - name: Resolve Guardian base
+        run: |
+          git fetch origin main --depth=1
+          echo "GUARDIAN_BASE=origin/main" >> "$GITHUB_ENV"
+
       - name: Guardian Summary
         continue-on-error: true
         run: |
+          echo "Using Guardian base: $GUARDIAN_BASE"
           npm run guardian -- \
             --repo . \
+            --base "$GUARDIAN_BASE" \
             --out guardian-summary.md \
             --summary-only
 
@@ -39,8 +48,10 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
+          echo "Using Guardian base: $GUARDIAN_BASE"
           npm run guardian -- \
             --repo . \
+            --base "$GUARDIAN_BASE" \
             --out guardian-report.md \
             --full-report
 

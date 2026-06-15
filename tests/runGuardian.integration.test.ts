@@ -139,6 +139,38 @@ describe("runGuardianCli integration", () => {
     });
   });
 
+  it("does not classify repo-context-center-style context and workflow changes as auth risk", async () => {
+    await withRepoContextCenterStyleFixtureRepo(async (repoPath) => {
+      const stdout = new MemoryWritable();
+
+      await runGuardianCli({
+        argv: ["--repo", repoPath, "--base", "origin/main", "--format", "json"],
+        stdout
+      });
+
+      const report = JSON.parse(stdout.value) as GuardianReport;
+
+      assert.deepEqual(
+        report.changedFiles.map((file) => file.path).sort((left, right) => left.localeCompare(right)),
+        [
+          ".github/workflows/ai-project-guardian.yml",
+          ".github/workflows/ci.yml",
+          ".project-brain/deployment-rules.md",
+          ".project-brain/known-risks.md",
+          ".project-brain/module-map.json",
+          ".project-brain/security-rules.md",
+          "guardian.config.json"
+        ].sort((left, right) => left.localeCompare(right))
+      );
+      assert.notEqual(report.scoreBreakdown.selectedBand, "auth");
+      assert.equal(report.mergeRecommendation, "safe_after_checklist");
+      assert.equal(report.blockingFindingsCount, 0);
+      assert.equal(report.qaFindings.length, 0);
+      assert.equal(report.securityFindings.length, 0);
+      assert.equal(report.workflowFindings.length, 0);
+    });
+  });
+
   it("blocks auth changes when negative test coverage is missing", async () => {
     await withAuthFixtureRepo({ hasNegativeTest: false, changeReleaseFile: false }, async (repoPath) => {
       const stdout = new MemoryWritable();
@@ -469,6 +501,17 @@ async function withReleaseOnlyFixtureRepo(test: (repoPath: string) => Promise<vo
   }
 }
 
+async function withRepoContextCenterStyleFixtureRepo(test: (repoPath: string) => Promise<void>): Promise<void> {
+  const repoPath = await mkdtemp(join(tmpdir(), "guardian-repo-context-center-fixture-"));
+
+  try {
+    await createRepoContextCenterStyleFixtureRepo(repoPath);
+    await test(repoPath);
+  } finally {
+    await rm(repoPath, { recursive: true, force: true });
+  }
+}
+
 async function createFixtureRepo(repoPath: string): Promise<void> {
   await git(repoPath, "init");
   await git(repoPath, "config", "user.email", "guardian@example.com");
@@ -662,6 +705,65 @@ async function createReleaseOnlyFixtureRepo(repoPath: string): Promise<void> {
   await writeFile(join(repoPath, "package.json"), JSON.stringify({ name: "release-only", version: "1.0.1" }, null, 2), "utf8");
   await git(repoPath, "add", ".");
   await git(repoPath, "commit", "-m", "Release-only package change");
+}
+
+async function createRepoContextCenterStyleFixtureRepo(repoPath: string): Promise<void> {
+  await git(repoPath, "init");
+  await git(repoPath, "config", "user.email", "guardian@example.com");
+  await git(repoPath, "config", "user.name", "Guardian Test");
+  await mkdir(join(repoPath, ".project-brain"), { recursive: true });
+  await mkdir(join(repoPath, ".github", "workflows"), { recursive: true });
+  await writeRepoContextCenterStyleFiles(repoPath, "baseline");
+  await git(repoPath, "add", ".");
+  await git(repoPath, "commit", "-m", "Initial repo context fixture");
+  await git(repoPath, "update-ref", "refs/remotes/origin/main", "HEAD");
+
+  await writeRepoContextCenterStyleFiles(repoPath, "head");
+  await git(repoPath, "add", ".");
+  await git(repoPath, "commit", "-m", "Change repo context fixture");
+}
+
+async function writeRepoContextCenterStyleFiles(repoPath: string, label: string): Promise<void> {
+  await writeFile(
+    join(repoPath, "guardian.config.json"),
+    JSON.stringify(
+      {
+        projectName: `Repo Context Fixture ${label}`,
+        riskFolders: [],
+        testFolders: ["tests"],
+        releaseSensitiveFiles: [],
+        requiredChecks: [],
+        coverageThreshold: 80
+      },
+      null,
+      2
+    ),
+    "utf8"
+  );
+  await writeFile(join(repoPath, ".project-brain", "security-rules.md"), `# Security Rules\n\n${label}\n`, "utf8");
+  await writeFile(join(repoPath, ".project-brain", "deployment-rules.md"), `# Deployment Rules\n\n${label}\n`, "utf8");
+  await writeFile(join(repoPath, ".project-brain", "known-risks.md"), `# Known Risks\n\n${label}\n`, "utf8");
+  await writeFile(
+    join(repoPath, ".project-brain", "module-map.json"),
+    JSON.stringify({ modules: [{ name: "context", owner: label }] }, null, 2),
+    "utf8"
+  );
+  await writeFile(join(repoPath, ".github", "workflows", "ai-project-guardian.yml"), workflowYaml(`guardian-${label}`), "utf8");
+  await writeFile(join(repoPath, ".github", "workflows", "ci.yml"), workflowYaml(`ci-${label}`), "utf8");
+}
+
+function workflowYaml(name: string): string {
+  return [
+    `name: ${name}`,
+    "on: [pull_request]",
+    "jobs:",
+    "  test:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - uses: actions/checkout@v4",
+    "      - run: npm test",
+    ""
+  ].join("\n");
 }
 
 async function git(cwd: string, ...args: string[]): Promise<void> {

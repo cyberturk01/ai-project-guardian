@@ -1,3 +1,4 @@
+import { basename, extname } from "node:path";
 import type {
   ChangedFile,
   CorrelatedFinding,
@@ -364,7 +365,7 @@ function hasPaymentChangeWithoutIntegrationTest(input: RiskScoreInput): boolean 
 }
 
 function hasAuthChange(input: RiskScoreInput): boolean {
-  return input.changedFiles.some((file) => file.category === "security" || isAuthPath(file.path));
+  return input.changedFiles.some(isProductionAuthFile);
 }
 
 function hasMigrationChange(input: RiskScoreInput): boolean {
@@ -411,8 +412,36 @@ function hasNoRiskSignals(input: RiskScoreInput): boolean {
   );
 }
 
-function isAuthPath(path: string): boolean {
-  return /(^|\/)(auth|authentication|authorization|crypto|jwt|oauth|password|permissions|secrets?|security|session)(\/|\.|-|_|$)/i.test(normalizePath(path));
+function isProductionAuthFile(file: ChangedFile): boolean {
+  if (
+    file.status === "deleted" ||
+    file.category === "ci" ||
+    file.category === "config" ||
+    file.category === "documentation" ||
+    file.category === "project-brain" ||
+    file.category === "generated-report" ||
+    file.category === "test" ||
+    isGeneratedGuardianReportPath(file.path)
+  ) {
+    return false;
+  }
+
+  const normalizedPath = normalizePath(file.path);
+
+  if (/^src\/(auth|security)(\/|$)/i.test(normalizedPath)) {
+    return true;
+  }
+
+  return isSourceLikeFile(normalizedPath) && isStrongAuthFileName(normalizedPath);
+}
+
+function isSourceLikeFile(path: string): boolean {
+  return [".cjs", ".cts", ".js", ".jsx", ".mjs", ".mts", ".ts", ".tsx", ".vue"].includes(extname(path).toLowerCase());
+}
+
+function isStrongAuthFileName(path: string): boolean {
+  const name = basename(path).replace(/\.[^.]+$/, "");
+  return /^(authService|login|jwt|session|permission|access-control)$/i.test(name);
 }
 
 function isPaymentPath(path: string): boolean {
