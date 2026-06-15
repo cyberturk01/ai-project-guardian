@@ -19,6 +19,7 @@ describe("init command", () => {
 
       assert.equal(result.exitCode, 0);
       assert.match(stdout.value, /Guardian init summary/);
+      assert.match(stdout.value, /Preset: generic/);
       assert.match(stdout.value, /Created: 10/);
       assert.match(stdout.value, /guardian\.config\.json/);
       assert.match(stdout.value, /\.project-brain\/project\.md/);
@@ -38,6 +39,134 @@ describe("init command", () => {
     });
   });
 
+  it("generates the generic config when --preset generic is set", async () => {
+    await withTempRepo(async (repoPath) => {
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["init", "--preset", "generic"],
+        cwd: repoPath,
+        stdout
+      });
+      const config = await readGuardianConfig(repoPath);
+
+      assert.equal(result.exitCode, 0);
+      assert.match(stdout.value, /Preset: generic/);
+      assert.deepEqual(config.riskFolders, ["src"]);
+      assert.deepEqual(config.testFolders, ["tests"]);
+    });
+  });
+
+  it("generates the node API config when --preset node-api is set", async () => {
+    await withTempRepo(async (repoPath) => {
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["init", "--preset", "node-api"],
+        cwd: repoPath,
+        stdout
+      });
+      const config = await readGuardianConfig(repoPath);
+
+      assert.equal(result.exitCode, 0);
+      assert.match(stdout.value, /Preset: node-api/);
+      assert.deepEqual(config.riskFolders, ["src/routes", "src/services", "src/controllers", "src/middleware", "src/auth", "src/config"]);
+      assert.deepEqual(config.testFolders, ["tests", "__tests__"]);
+    });
+  });
+
+  it("generates the web app config when --preset web-app is set", async () => {
+    await withTempRepo(async (repoPath) => {
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["init", "--preset", "web-app"],
+        cwd: repoPath,
+        stdout
+      });
+      const config = await readGuardianConfig(repoPath);
+
+      assert.equal(result.exitCode, 0);
+      assert.match(stdout.value, /Preset: web-app/);
+      assert.deepEqual(config.riskFolders, ["src", "app", "pages", "components"]);
+      assert.deepEqual(config.testFolders, ["tests", "__tests__", "cypress", "e2e"]);
+    });
+  });
+
+  it("auto-detects node-api when package.json and API folders exist", async () => {
+    await withTempRepo(async (repoPath) => {
+      await writeFile(join(repoPath, "package.json"), JSON.stringify({ name: "api-fixture" }, null, 2), "utf8");
+      await mkdir(join(repoPath, "src", "services"), { recursive: true });
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["init"],
+        cwd: repoPath,
+        stdout
+      });
+      const config = await readGuardianConfig(repoPath);
+
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.preset, "node-api");
+      assert.match(stdout.value, /Preset: node-api/);
+      assert.deepEqual(config.riskFolders, ["src/routes", "src/services", "src/controllers", "src/middleware", "src/auth", "src/config"]);
+    });
+  });
+
+  it("auto-detects web-app when package.json and web app markers exist", async () => {
+    await withTempRepo(async (repoPath) => {
+      await writeFile(join(repoPath, "package.json"), JSON.stringify({ name: "web-fixture" }, null, 2), "utf8");
+      await writeFile(join(repoPath, "vite.config.ts"), "export default {};\n", "utf8");
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["init", "--dry-run"],
+        cwd: repoPath,
+        stdout
+      });
+
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.preset, "web-app");
+      assert.match(stdout.value, /Guardian init dry run/);
+      assert.match(stdout.value, /Preset: web-app/);
+      assert.match(stdout.value, /No files written\./);
+      await assert.rejects(access(join(repoPath, "guardian.config.json")));
+    });
+  });
+
+  it("falls back to generic when no project preset is detected", async () => {
+    await withTempRepo(async (repoPath) => {
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["init"],
+        cwd: repoPath,
+        stdout
+      });
+      const config = await readGuardianConfig(repoPath);
+
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.preset, "generic");
+      assert.match(stdout.value, /Preset: generic/);
+      assert.deepEqual(config.riskFolders, ["src"]);
+    });
+  });
+
+  it("reports invalid init presets clearly", async () => {
+    await withTempRepo(async (repoPath) => {
+      const stdout = new MemoryWritable();
+
+      await assert.rejects(
+        runGuardianCli({
+          argv: ["init", "--preset", "rails"],
+          cwd: repoPath,
+          stdout
+        }),
+        /Unsupported --preset value: rails/
+      );
+    });
+  });
+
   it("prints planned changes without writing files in dry-run mode", async () => {
     await withTempRepo(async (repoPath) => {
       const stdout = new MemoryWritable();
@@ -50,6 +179,7 @@ describe("init command", () => {
 
       assert.equal(result.exitCode, 0);
       assert.match(stdout.value, /Guardian init dry run/);
+      assert.match(stdout.value, /Preset: generic/);
       assert.match(stdout.value, /Created: 10/);
       assert.match(stdout.value, /No files written\./);
       await assert.rejects(access(join(repoPath, "guardian.config.json")));
@@ -127,4 +257,11 @@ class MemoryWritable extends Writable {
     this.value += chunk.toString();
     callback();
   }
+}
+
+async function readGuardianConfig(repoPath: string): Promise<{ riskFolders: string[]; testFolders: string[] }> {
+  return JSON.parse(await readFile(join(repoPath, "guardian.config.json"), "utf8")) as {
+    riskFolders: string[];
+    testFolders: string[];
+  };
 }

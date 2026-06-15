@@ -1,11 +1,13 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 type InitAction = "create" | "overwrite" | "skip";
+type InitPreset = "generic" | "node-api" | "web-app";
 
 export type InitArgs = {
   repo?: string;
+  preset?: InitPreset;
   force: boolean;
   dryRun: boolean;
   help: boolean;
@@ -19,6 +21,7 @@ export type InitFileChange = {
 export type InitResult = {
   exitCode: number;
   changes: InitFileChange[];
+  preset?: InitPreset;
 };
 
 export type InitOptions = {
@@ -41,10 +44,11 @@ const projectBrainTemplateFiles = [
 export const initHelpText = `ai-project-guardian init
 
 Usage:
-  ai-project-guardian init [--repo <path>] [--dry-run] [--force]
+  ai-project-guardian init [--repo <path>] [--preset generic|node-api|web-app] [--dry-run] [--force]
 
 Options:
   --repo <path>   Target repository path. Defaults to the current working directory.
+  --preset <name> Config preset: generic, node-api, or web-app. Defaults to best-effort detection.
   --dry-run       Print planned file changes without writing files.
   --force         Overwrite existing Guardian bootstrap files.
   --help          Show this help message.
@@ -67,6 +71,12 @@ export function parseInitArgs(args: string[]): InitArgs {
 
     if (arg === "--repo") {
       parsed.repo = readValue(args, index, arg);
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--preset") {
+      parsed.preset = parseInitPreset(readValue(args, index, arg));
       index += 1;
       continue;
     }
@@ -98,7 +108,8 @@ export async function runInitCommand(options: InitOptions): Promise<InitResult> 
   }
 
   const repoPath = resolve(cwd, args.repo ?? ".");
-  const plannedFiles = await buildInitFiles(repoPath);
+  const preset = args.preset ?? (await detectInitPreset(repoPath));
+  const plannedFiles = await buildInitFiles(repoPath, preset);
   const changes: InitFileChange[] = [];
 
   for (const plannedFile of plannedFiles) {
@@ -118,9 +129,9 @@ export async function runInitCommand(options: InitOptions): Promise<InitResult> 
     await writeFile(plannedFile.absolutePath, plannedFile.contents, "utf8");
   }
 
-  stdout.write(formatInitSummary(repoPath, changes, args.dryRun));
+  stdout.write(formatInitSummary(repoPath, changes, args.dryRun, preset));
 
-  return { exitCode: 0, changes };
+  return { exitCode: 0, changes, preset };
 }
 
 function readValue(args: string[], index: number, flag: string): string {
@@ -133,16 +144,24 @@ function readValue(args: string[], index: number, flag: string): string {
   return value;
 }
 
+function parseInitPreset(value: string): InitPreset {
+  if (value === "generic" || value === "node-api" || value === "web-app") {
+    return value;
+  }
+
+  throw new Error(`Unsupported --preset value: ${value}. Expected "generic", "node-api", or "web-app".`);
+}
+
 type PlannedInitFile = {
   absolutePath: string;
   contents: string;
 };
 
-async function buildInitFiles(repoPath: string): Promise<PlannedInitFile[]> {
+async function buildInitFiles(repoPath: string, preset: InitPreset): Promise<PlannedInitFile[]> {
   const files: PlannedInitFile[] = [
     {
       absolutePath: join(repoPath, "guardian.config.json"),
-      contents: buildGuardianConfig(repoPath)
+      contents: buildGuardianConfig(repoPath, preset)
     },
     {
       absolutePath: join(repoPath, ".github", "workflows", "ai-project-guardian.yml"),
@@ -160,21 +179,74 @@ async function buildInitFiles(repoPath: string): Promise<PlannedInitFile[]> {
   return files;
 }
 
-function buildGuardianConfig(repoPath: string): string {
+function buildGuardianConfig(repoPath: string, preset: InitPreset): string {
   return `${JSON.stringify(
-    {
-      projectName: basename(repoPath),
-      riskFolders: ["src"],
-      testFolders: ["tests"],
-      releaseSensitiveFiles: ["package.json", "package-lock.json", ".env.example", ".github/workflows"],
-      requiredChecks: ["npm test"],
-      coverageThreshold: 80,
-      businessAreas: [],
-      customRules: []
-    },
+    buildGuardianConfigObject(repoPath, preset),
     null,
     2
   )}\n`;
+}
+
+function buildGuardianConfigObject(repoPath: string, preset: InitPreset): Record<string, unknown> {
+  const baseConfig = {
+    projectName: basename(repoPath),
+    testFolders: ["tests"],
+    releaseSensitiveFiles: ["package.json", "package-lock.json", ".env.example", ".github/workflows"],
+    requiredChecks: ["npm test"],
+    coverageThreshold: 80,
+    businessAreas: [],
+    customRules: []
+  };
+
+  if (preset === "node-api") {
+    return {
+      ...baseConfig,
+      riskFolders: ["src/routes", "src/services", "src/controllers", "src/middleware", "src/auth", "src/config"],
+      testFolders: ["tests", "__tests__"]
+    };
+  }
+
+  if (preset === "web-app") {
+    return {
+      ...baseConfig,
+      riskFolders: ["src", "app", "pages", "components"],
+      testFolders: ["tests", "__tests__", "cypress", "e2e"]
+    };
+  }
+
+  return {
+    ...baseConfig,
+    riskFolders: ["src"]
+  };
+}
+
+async function detectInitPreset(repoPath: string): Promise<InitPreset> {
+  if (!(await fileExists(join(repoPath, "package.json")))) {
+    return "generic";
+  }
+
+  if ((await fileExists(join(repoPath, "src", "routes"))) || (await fileExists(join(repoPath, "src", "services")))) {
+    return "node-api";
+  }
+
+  if ((await fileExists(join(repoPath, "src", "pages"))) || (await fileExists(join(repoPath, "app"))) || (await hasViteConfig(repoPath))) {
+    return "web-app";
+  }
+
+  return "generic";
+}
+
+async function hasViteConfig(repoPath: string): Promise<boolean> {
+  try {
+    const entries = await readdir(repoPath);
+    return entries.some((entry) => entry.startsWith("vite.config."));
+  } catch (error: unknown) {
+    if (isMissingFileError(error)) {
+      return false;
+    }
+
+    throw error;
+  }
 }
 
 async function readProjectBrainTemplate(fileName: string): Promise<string> {
@@ -201,8 +273,9 @@ function isMissingFileError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
 }
 
-function formatInitSummary(repoPath: string, changes: InitFileChange[], dryRun: boolean): string {
+function formatInitSummary(repoPath: string, changes: InitFileChange[], dryRun: boolean, preset: InitPreset): string {
   const lines = [`Guardian init ${dryRun ? "dry run" : "summary"} for ${repoPath}`];
+  lines.push(`Preset: ${preset}`);
   appendActionGroup(lines, "Created", changes, "create");
   appendActionGroup(lines, "Overwritten", changes, "overwrite");
   appendActionGroup(lines, "Skipped existing", changes, "skip");

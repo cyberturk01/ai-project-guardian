@@ -46,6 +46,7 @@ describe("parseArgs", () => {
     assert.match(helpText, /--summary-only/);
     assert.match(helpText, /--full-report/);
     assert.match(helpText, /--pr-comment/);
+    assert.match(helpText, /--preset <name>/);
     assert.match(helpText, /--fail-on <risk>/);
     assert.match(helpText, /--help/);
   });

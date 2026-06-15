@@ -83,9 +83,10 @@ Bootstrap Guardian in a repository:
 ai-project-guardian init
 ai-project-guardian init --dry-run
 ai-project-guardian init --repo ../AI-Restaurants
+ai-project-guardian init --preset node-api
 ```
 
-`init` creates `guardian.config.json`, `.project-brain/` template files, and `.github/workflows/ai-project-guardian.yml` when they are missing. Existing files are skipped unless `--force` is set.
+`init` creates `guardian.config.json`, `.project-brain/` template files, and `.github/workflows/ai-project-guardian.yml` when they are missing. Existing files are skipped unless `--force` is set. Config presets are `generic`, `node-api`, and `web-app`; when `--preset` is omitted, init chooses a best-effort preset from local project files.
 
 Write a full Markdown report:
 
@@ -126,6 +127,7 @@ Available flags:
 - `--summary-only`: write a short overview for GitHub Actions summaries. This is the default.
 - `--full-report`: write the complete Markdown report with changed files, detailed findings, accepted findings, required actions, and suggested tests.
 - `--pr-comment`: write compact Markdown suitable for a GitHub PR comment. It does not call the GitHub API.
+- `--preset <generic|node-api|web-app>`: choose the config preset for `init`. Defaults to best-effort detection.
 - `--fail-on <high|critical>`: exit with code 1 when the calculated risk meets the threshold. Defaults to not failing the build.
 - `--help`: print CLI help.
 
