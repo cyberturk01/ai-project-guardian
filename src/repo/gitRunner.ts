@@ -1,9 +1,6 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { spawnSync } from "node:child_process";
 
-const execFileAsync = promisify(execFile);
 const defaultGitCommand = "git";
-const macOsFallbackGitCommand = "/usr/bin/git";
 const gitBinEnvVar = "AI_PROJECT_GUARDIAN_GIT_BIN";
 
 export type GitCommand = {
@@ -19,40 +16,53 @@ export type GitCommandResult = {
 export type GitCommandRunner = (command: GitCommand) => Promise<GitCommandResult>;
 
 export async function runGitCommand(command: GitCommand): Promise<GitCommandResult> {
+  const gitCommand = resolveGitBinary();
+
+  validateGitExecutable(gitCommand);
+  return execGitCommand(gitCommand, command);
+}
+
+export function resolveGitBinary(): string {
   const configuredGitCommand = process.env[gitBinEnvVar]?.trim();
-  const firstGitCommand = configuredGitCommand || command.command || defaultGitCommand;
+  return configuredGitCommand || defaultGitCommand;
+}
 
-  try {
-    return await execGitCommand(firstGitCommand, command);
-  } catch (error) {
-    if (!isEnoentError(error) || configuredGitCommand !== undefined) {
-      throw enhanceGitNotFoundError(error, firstGitCommand);
-    }
+function validateGitExecutable(gitCommand: string): void {
+  const result = spawnSync(gitCommand, ["--version"], buildSpawnOptions(process.cwd()));
 
-    try {
-      return await execGitCommand(macOsFallbackGitCommand, command);
-    } catch (fallbackError) {
-      if (isEnoentError(fallbackError)) {
-        throw enhanceGitNotFoundError(fallbackError, firstGitCommand);
-      }
+  if (result.error !== undefined) {
+    throw enhanceGitNotFoundError(result.error, gitCommand);
+  }
 
-      throw fallbackError;
-    }
+  if (result.status !== 0 || result.signal !== null) {
+    throw buildGitProcessError("git-validation-failed", gitCommand, ["--version"], result);
   }
 }
 
-async function execGitCommand(gitCommand: string, command: GitCommand): Promise<GitCommandResult> {
-  const { stdout } = await execFileAsync(gitCommand, command.args, {
-    cwd: command.cwd,
+function execGitCommand(gitCommand: string, command: GitCommand): GitCommandResult {
+  const result = spawnSync(gitCommand, command.args, buildSpawnOptions(command.cwd));
+
+  if (result.error !== undefined) {
+    throw enhanceGitNotFoundError(result.error, gitCommand);
+  }
+
+  if (result.status !== 0 || result.signal !== null) {
+    throw buildGitProcessError("git-command-failed", gitCommand, command.args, result);
+  }
+
+  return { stdout: result.stdout };
+}
+
+function buildSpawnOptions(cwd: string) {
+  return {
+    cwd,
     encoding: "utf8",
     env: {
       ...process.env,
       PATH: process.env.PATH
     },
     windowsHide: true
-  });
-
-  return { stdout };
+  } as const;
 }
 
 function isEnoentError(error: unknown): boolean {
@@ -69,6 +79,29 @@ function enhanceGitNotFoundError(error: unknown, checkedCommand: string): Error 
     `Checked command: ${checkedCommand}`,
     `PATH: ${process.env.PATH ?? ""}`,
     `Try setting ${gitBinEnvVar}=/usr/bin/git`
+  ].join("\n");
+
+  return new Error(message);
+}
+
+function buildGitProcessError(
+  reason: "git-validation-failed" | "git-command-failed",
+  command: string,
+  args: string[],
+  result: {
+    status: number | null;
+    signal: NodeJS.Signals | null;
+    stdout: string | Buffer;
+    stderr: string | Buffer;
+  }
+): Error {
+  const message = [
+    reason,
+    `Command: ${[command, ...args].join(" ")}`,
+    `Status: ${result.status ?? ""}`,
+    `Signal: ${result.signal ?? ""}`,
+    `Stdout: ${String(result.stdout)}`,
+    `Stderr: ${String(result.stderr)}`
   ].join("\n");
 
   return new Error(message);
