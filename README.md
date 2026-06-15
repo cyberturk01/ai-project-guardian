@@ -129,7 +129,7 @@ npm run guardian -- \
 Available flags:
 
 - `--repo <path>`: target repository to inspect. Defaults to `GUARDIAN_REPO_PATH` or `.`.
-- `--base <ref>`: base git ref for changed-file detection. Defaults to `origin/main`, then falls back to `HEAD~1` when the default ref is unavailable.
+- `--base <ref>`: base git ref for changed-file detection. Defaults to `origin/main`, then `main`, then `master`, then `HEAD~1`.
 - `--out <path>`: optional output file. Defaults to `GUARDIAN_OUTPUT_PATH` when set. Without `--out`, the report is written to stdout.
 - `--format <markdown|json|sarif>`: report format. Defaults to `markdown`.
 - `--sarif <path>`: import a local SARIF artifact. Can be repeated.
@@ -445,6 +445,22 @@ Examples:
 | Real secret or security finding | 1+ | any | `blocked` for high/critical code risk, `review_required` for lower-severity blocking risk | `Security findings require review.` |
 
 See `docs/report-decision-model.md` for a longer explanation of how these fields should be used in CI and PR review.
+
+## Troubleshooting
+
+### `fatal: bad revision 'origin/main...HEAD'`
+
+This means Git cannot resolve the configured comparison ref in the target repository. It often happens in local repositories that have no `origin/main` remote-tracking branch, in repositories that use a different default branch, or in shallow CI checkouts.
+
+Guardian validates the requested base ref before diffing. If `--base` is invalid, it falls back to `HEAD~1` when available and prints a warning. If no base is provided, Guardian tries `origin/main`, then `main`, then `master`, then `HEAD~1`.
+
+Useful alternatives:
+
+```sh
+npx ai-project-guardian@beta --repo . --base HEAD~1
+git fetch origin main
+git branch -a
+```
 
 ## Output Modes
 

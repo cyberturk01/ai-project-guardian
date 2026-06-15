@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { getChangedFiles, parseNameStatus, type GitCommand } from "../src/repo/getChangedFiles.js";
+import { getChangedFiles, getChangedFilesWithWarnings, parseNameStatus, type GitCommand } from "../src/repo/getChangedFiles.js";
 
 describe("parseNameStatus", () => {
   it("maps git name-status output to changed files", () => {
@@ -47,10 +47,11 @@ describe("parseNameStatus", () => {
 });
 
 describe("getChangedFiles", () => {
-  it("uses origin/main...HEAD by default", async () => {
+  it("uses a valid explicit base ref from the CLI config", async () => {
     const commands: GitCommand[] = [];
-    const changedFiles = await getChangedFiles({
+    const result = await getChangedFilesWithWarnings({
       repoPath: "/repo",
+      baseRef: "origin/release-1.2",
       runCommand: async (command) => {
         commands.push(command);
         return { stdout: "M\tREADME.md\n" };
@@ -60,23 +61,30 @@ describe("getChangedFiles", () => {
     assert.deepEqual(commands, [
       {
         command: "git",
-        args: ["diff", "--name-status", "origin/main...HEAD", "--"],
+        args: ["rev-parse", "--verify", "--quiet", "origin/release-1.2^{commit}"],
+        cwd: "/repo"
+      },
+      {
+        command: "git",
+        args: ["diff", "--name-status", "origin/release-1.2...HEAD", "--"],
         cwd: "/repo"
       }
     ]);
-    assert.equal(changedFiles[0]?.path, "README.md");
-    assert.equal(changedFiles[0]?.status, "modified");
+    assert.equal(result.changedFiles[0]?.path, "README.md");
+    assert.equal(result.changedFiles[0]?.status, "modified");
+    assert.deepEqual(result.warnings, []);
   });
 
-  it("falls back to HEAD~1 when origin/main is unavailable", async () => {
+  it("falls back to HEAD~1 when an explicit base ref is unavailable", async () => {
     const commands: GitCommand[] = [];
-    const changedFiles = await getChangedFiles({
+    const result = await getChangedFilesWithWarnings({
       repoPath: "/repo",
+      baseRef: "origin/missing",
       runCommand: async (command) => {
         commands.push(command);
 
-        if (commands.length === 1) {
-          throw new Error("missing origin/main");
+        if (command.args.includes("origin/missing^{commit}")) {
+          throw new Error("missing origin/missing");
         }
 
         return { stdout: "A\tsrc/file.ts\n" };
@@ -86,7 +94,12 @@ describe("getChangedFiles", () => {
     assert.deepEqual(commands, [
       {
         command: "git",
-        args: ["diff", "--name-status", "origin/main...HEAD", "--"],
+        args: ["rev-parse", "--verify", "--quiet", "origin/missing^{commit}"],
+        cwd: "/repo"
+      },
+      {
+        command: "git",
+        args: ["rev-parse", "--verify", "--quiet", "HEAD~1^{commit}"],
         cwd: "/repo"
       },
       {
@@ -95,28 +108,141 @@ describe("getChangedFiles", () => {
         cwd: "/repo"
       }
     ]);
-    assert.equal(changedFiles[0]?.status, "added");
+    assert.equal(result.changedFiles[0]?.status, "added");
+    assert.deepEqual(result.warnings, ['Requested base ref "origin/missing" could not be used; trying HEAD~1.']);
   });
 
-  it("uses an explicit base ref from the CLI config", async () => {
+  it("falls back from missing origin/main to main by default", async () => {
     const commands: GitCommand[] = [];
-
-    await getChangedFiles({
+    const result = await getChangedFilesWithWarnings({
       repoPath: "/repo",
-      baseRef: "origin/release-1.2",
       runCommand: async (command) => {
         commands.push(command);
-        return { stdout: "" };
+
+        if (command.args.includes("origin/main^{commit}")) {
+          throw new Error("missing origin/main");
+        }
+
+        return { stdout: "M\tsrc/main.ts\n" };
       }
     });
 
     assert.deepEqual(commands, [
       {
         command: "git",
-        args: ["diff", "--name-status", "origin/release-1.2...HEAD", "--"],
+        args: ["rev-parse", "--verify", "--quiet", "origin/main^{commit}"],
+        cwd: "/repo"
+      },
+      {
+        command: "git",
+        args: ["rev-parse", "--verify", "--quiet", "main^{commit}"],
+        cwd: "/repo"
+      },
+      {
+        command: "git",
+        args: ["diff", "--name-status", "main...HEAD", "--"],
         cwd: "/repo"
       }
     ]);
+    assert.equal(result.changedFiles[0]?.path, "src/main.ts");
+    assert.deepEqual(result.warnings, ["Default base ref origin/main could not be used; using main."]);
+  });
+
+  it("falls back from missing origin/main, main, and master to HEAD~1 by default", async () => {
+    const commands: GitCommand[] = [];
+    const result = await getChangedFilesWithWarnings({
+      repoPath: "/repo",
+      runCommand: async (command) => {
+        commands.push(command);
+
+        if (
+          command.args.includes("origin/main^{commit}") ||
+          command.args.includes("main^{commit}") ||
+          command.args.includes("master^{commit}")
+        ) {
+          throw new Error("missing named base");
+        }
+
+        return { stdout: "M\tsrc/fallback.ts\n" };
+      }
+    });
+
+    assert.deepEqual(commands, [
+      {
+        command: "git",
+        args: ["rev-parse", "--verify", "--quiet", "origin/main^{commit}"],
+        cwd: "/repo"
+      },
+      {
+        command: "git",
+        args: ["rev-parse", "--verify", "--quiet", "main^{commit}"],
+        cwd: "/repo"
+      },
+      {
+        command: "git",
+        args: ["rev-parse", "--verify", "--quiet", "master^{commit}"],
+        cwd: "/repo"
+      },
+      {
+        command: "git",
+        args: ["rev-parse", "--verify", "--quiet", "HEAD~1^{commit}"],
+        cwd: "/repo"
+      },
+      {
+        command: "git",
+        args: ["diff", "--name-status", "HEAD~1", "--"],
+        cwd: "/repo"
+      }
+    ]);
+    assert.equal(result.changedFiles[0]?.path, "src/fallback.ts");
+    assert.deepEqual(result.warnings, ["Default base ref origin/main could not be used; using HEAD~1."]);
+  });
+
+  it("returns no changed files when a repository has no previous commit", async () => {
+    const result = await getChangedFilesWithWarnings({
+      repoPath: "/repo",
+      runCommand: async () => {
+        throw new Error("missing ref");
+      }
+    });
+
+    assert.deepEqual(result.changedFiles, []);
+    assert.deepEqual(result.warnings, ["No valid git base ref found (tried origin/main, main, master, HEAD~1); continuing with no changed files."]);
+  });
+
+  it("converts git diff errors into warnings and tries the next fallback", async () => {
+    const commands: GitCommand[] = [];
+    const result = await getChangedFilesWithWarnings({
+      repoPath: "/repo",
+      runCommand: async (command) => {
+        commands.push(command);
+
+        if (command.args.includes("origin/main...HEAD")) {
+          throw new Error("fatal: bad revision 'origin/main...HEAD'");
+        }
+
+        if (command.args.includes("main^{commit}") || command.args.includes("master^{commit}")) {
+          throw new Error("missing branch");
+        }
+
+        return { stdout: "M\tsrc/recovered.ts\n" };
+      }
+    });
+
+    assert.deepEqual(
+      commands.map((command) => command.args),
+      [
+        ["rev-parse", "--verify", "--quiet", "origin/main^{commit}"],
+        ["diff", "--name-status", "origin/main...HEAD", "--"],
+        ["rev-parse", "--verify", "--quiet", "main^{commit}"],
+        ["rev-parse", "--verify", "--quiet", "master^{commit}"],
+        ["rev-parse", "--verify", "--quiet", "HEAD~1^{commit}"],
+        ["diff", "--name-status", "HEAD~1", "--"]
+      ]
+    );
+    assert.equal(result.changedFiles[0]?.path, "src/recovered.ts");
+    assert.match(result.warnings[0] ?? "", /git diff failed: fatal: bad revision/);
+    assert.equal(result.warnings[1], "Default base ref origin/main could not be used; using HEAD~1.");
   });
 
   it("rejects unsafe base refs before command execution", async () => {
