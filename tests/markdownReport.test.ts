@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildActionableGuidance, buildRequiredDeployActions } from "../src/core/actionableGuidance.js";
-import type { GuardianReport } from "../src/core/types.js";
+import type { GuardianReport, MergeRecommendation } from "../src/core/types.js";
 import { renderMarkdownReport } from "../src/renderers/markdownReport.js";
 import { renderMarkdownSummary } from "../src/renderers/markdownSummary.js";
 import { renderPrComment } from "../src/renderers/prComment.js";
@@ -48,6 +48,48 @@ describe("renderMarkdownReport", () => {
     const report = makeReport();
 
     assert.equal(renderReport(report, "markdown", "pr-comment"), renderPrComment(report));
+  });
+
+  it("renders decision wording that matches each merge recommendation state", () => {
+    const cases: Array<{
+      recommendation: MergeRecommendation;
+      blockingFindingsCount: number;
+      checklistFindingsCount: number;
+      expected: string;
+    }> = [
+      {
+        recommendation: "blocked",
+        blockingFindingsCount: 2,
+        checklistFindingsCount: 1,
+        expected: "Merge blocked because 2 blocking code/test/security finding(s) require attention."
+      },
+      {
+        recommendation: "review_required",
+        blockingFindingsCount: 1,
+        checklistFindingsCount: 0,
+        expected: "Merge requires review because 1 code/test/security finding(s) need attention before merge."
+      },
+      {
+        recommendation: "safe_after_checklist",
+        blockingFindingsCount: 0,
+        checklistFindingsCount: 2,
+        expected: "Merge is safe after completing the remaining release checklist items."
+      },
+      {
+        recommendation: "safe",
+        blockingFindingsCount: 0,
+        checklistFindingsCount: 0,
+        expected: "No blocking findings remain. Merge is considered safe."
+      }
+    ];
+
+    for (const testCase of cases) {
+      const report = makeReportForRecommendation(testCase);
+
+      assert.match(renderMarkdownSummary(report), new RegExp(escapeRegExp(testCase.expected)));
+      assert.match(renderMarkdownReport(report), new RegExp(escapeRegExp(testCase.expected)));
+      assert.match(renderPrComment(report), new RegExp(`- ${escapeRegExp(testCase.expected)}`));
+    }
   });
 });
 
@@ -184,4 +226,21 @@ function makeReport(): GuardianReport {
 function readSnapshot(fileName: string): string {
   const compiledTestDir = dirname(fileURLToPath(import.meta.url));
   return readFileSync(join(compiledTestDir, "../../tests/__snapshots__", fileName), "utf8");
+}
+
+function makeReportForRecommendation(options: {
+  recommendation: MergeRecommendation;
+  blockingFindingsCount: number;
+  checklistFindingsCount: number;
+}): GuardianReport {
+  return {
+    ...makeReport(),
+    mergeRecommendation: options.recommendation,
+    blockingFindingsCount: options.blockingFindingsCount,
+    checklistFindingsCount: options.checklistFindingsCount
+  };
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

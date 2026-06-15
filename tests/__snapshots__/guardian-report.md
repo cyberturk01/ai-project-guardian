@@ -32,7 +32,7 @@
 | Overall/combined risk | **high** |
 | Risk reason | Security findings require review. |
 
-Merge blocked because 2 blocking code/test/security finding(s) require review.
+Merge blocked because 2 blocking code/test/security finding(s) require attention.
 
 Highest detected risk: **high**.
 
