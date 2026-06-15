@@ -3,7 +3,7 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 type InitAction = "create" | "overwrite" | "skip";
-type InitPreset = "generic" | "node-api" | "web-app";
+export type InitPreset = "generic" | "node-api" | "web-app" | "python" | "monorepo";
 
 export type InitArgs = {
   repo?: string;
@@ -44,11 +44,11 @@ const projectBrainTemplateFiles = [
 export const initHelpText = `ai-project-guardian init
 
 Usage:
-  ai-project-guardian init [--repo <path>] [--preset generic|node-api|web-app] [--dry-run] [--force]
+  ai-project-guardian init [--repo <path>] [--preset generic|node-api|web-app|python|monorepo] [--dry-run] [--force]
 
 Options:
   --repo <path>   Target repository path. Defaults to the current working directory.
-  --preset <name> Config preset: generic, node-api, or web-app. Defaults to best-effort detection.
+  --preset <name> Config preset: generic, node-api, web-app, python, or monorepo. Defaults to best-effort detection.
   --dry-run       Print planned file changes without writing files.
   --force         Overwrite existing Guardian bootstrap files.
   --help          Show this help message.
@@ -145,11 +145,15 @@ function readValue(args: string[], index: number, flag: string): string {
 }
 
 function parseInitPreset(value: string): InitPreset {
-  if (value === "generic" || value === "node-api" || value === "web-app") {
+  if (isInitPreset(value)) {
     return value;
   }
 
-  throw new Error(`Unsupported --preset value: ${value}. Expected "generic", "node-api", or "web-app".`);
+  throw new Error(`Unsupported --preset value: ${value}. Expected "generic", "node-api", "web-app", "python", or "monorepo".`);
+}
+
+function isInitPreset(value: string): value is InitPreset {
+  return value === "generic" || value === "node-api" || value === "web-app" || value === "python" || value === "monorepo";
 }
 
 type PlannedInitFile = {
@@ -214,6 +218,26 @@ function buildGuardianConfigObject(repoPath: string, preset: InitPreset): Record
     };
   }
 
+  if (preset === "python") {
+    return {
+      ...baseConfig,
+      riskFolders: ["src", "app", "api"],
+      testFolders: ["tests"],
+      releaseSensitiveFiles: ["pyproject.toml", "requirements.txt", "setup.py", "Dockerfile", ".github/workflows"],
+      requiredChecks: ["pytest"]
+    };
+  }
+
+  if (preset === "monorepo") {
+    return {
+      ...baseConfig,
+      riskFolders: ["packages", "apps", "libs", "src"],
+      testFolders: ["tests", "__tests__", "packages", "apps", "libs"],
+      releaseSensitiveFiles: ["package.json", "pnpm-lock.yaml", "yarn.lock", "package-lock.json", "turbo.json", "nx.json", ".github/workflows"],
+      requiredChecks: ["npm test", "npm run lint"]
+    };
+  }
+
   return {
     ...baseConfig,
     riskFolders: ["src"]
@@ -221,6 +245,14 @@ function buildGuardianConfigObject(repoPath: string, preset: InitPreset): Record
 }
 
 async function detectInitPreset(repoPath: string): Promise<InitPreset> {
+  if (await hasAnyPath(repoPath, ["pyproject.toml", "requirements.txt", "setup.py", "setup.cfg", "tox.ini"])) {
+    return "python";
+  }
+
+  if (await hasAnyPath(repoPath, ["pnpm-workspace.yaml", "turbo.json", "nx.json", "packages", "apps", "libs"])) {
+    return "monorepo";
+  }
+
   if (!(await fileExists(join(repoPath, "package.json")))) {
     return "generic";
   }
@@ -234,6 +266,16 @@ async function detectInitPreset(repoPath: string): Promise<InitPreset> {
   }
 
   return "generic";
+}
+
+async function hasAnyPath(repoPath: string, paths: string[]): Promise<boolean> {
+  for (const path of paths) {
+    if (await fileExists(join(repoPath, path))) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 async function hasViteConfig(repoPath: string): Promise<boolean> {

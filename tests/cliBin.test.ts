@@ -51,6 +51,14 @@ describe("package CLI smoke", () => {
       assert.match(nodeApiDryRun.stdout, /Guardian init dry run/);
       assert.match(nodeApiDryRun.stdout, /Preset: node-api/);
       assert.match(nodeApiDryRun.stdout, /No files written\./);
+
+      const pythonDryRun = await runPackedCli(tarballPath, ["init", "--preset", "python", "--dry-run"], repoPath, cacheDir);
+      assert.match(pythonDryRun.stdout, /Guardian init dry run/);
+      assert.match(pythonDryRun.stdout, /Preset: python/);
+
+      const monorepoDryRun = await runPackedCli(tarballPath, ["init", "--preset", "monorepo", "--dry-run"], repoPath, cacheDir);
+      assert.match(monorepoDryRun.stdout, /Guardian init dry run/);
+      assert.match(monorepoDryRun.stdout, /Preset: monorepo/);
       await assert.rejects(access(resolve(repoPath, ".github", "workflows", "ai-project-guardian.yml")));
     } finally {
       await rm(packDir, { recursive: true, force: true });

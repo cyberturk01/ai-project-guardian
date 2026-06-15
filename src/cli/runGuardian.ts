@@ -3,7 +3,7 @@ import { loadConfig, type ReportFormat } from "../config/loadConfig.js";
 import type { RiskLevel } from "../core/types.js";
 import { runGuardian as runGuardianCore } from "../core/guardian.js";
 import { renderReport, type ReportStyle } from "../renderers/renderReport.js";
-import { runInitCommand } from "./initGuardian.js";
+import { runInitCommand, type InitPreset } from "./initGuardian.js";
 
 export type FailOnRisk = Extract<RiskLevel, "high" | "critical">;
 
@@ -25,7 +25,7 @@ export type CliRunResult = {
   exitCode: number;
   outputPath?: string;
   overallRisk?: RiskLevel;
-  preset?: "generic" | "node-api" | "web-app";
+  preset?: InitPreset;
 };
 
 export type CliRunOptions = {
@@ -37,7 +37,7 @@ export type CliRunOptions = {
 export const helpText = `ai-project-guardian
 
 Usage:
-  ai-project-guardian init [--repo <path>] [--preset generic|node-api|web-app] [--dry-run] [--force]
+  ai-project-guardian init [--repo <path>] [--preset generic|node-api|web-app|python|monorepo] [--dry-run] [--force]
   ai-project-guardian --repo <path> [--base <ref>] [--out <path>] [--format markdown|json|sarif] [--sarif <path>] [--codeql <path>] [--semgrep <path>] [--snyk <path>] [--summary-only|--full-report|--pr-comment] [--fail-on high|critical]
 
 Options:
@@ -53,7 +53,7 @@ Options:
   --summary-only         Write a short GitHub Actions-friendly summary. This is the default.
   --full-report          Write the complete Markdown report with detailed findings.
   --pr-comment           Write a compact Markdown summary suitable for GitHub PR comments.
-  --preset <name>        For init, choose config preset: generic, node-api, or web-app.
+  --preset <name>        For init, choose config preset: generic, node-api, web-app, python, or monorepo.
   --dry-run              For init, print planned file changes without writing files.
   --force                For init, overwrite existing Guardian bootstrap files.
   --fail-on <risk>       Exit 1 when overall risk meets the threshold: high or critical.

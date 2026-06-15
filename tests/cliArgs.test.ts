@@ -47,6 +47,8 @@ describe("parseArgs", () => {
     assert.match(helpText, /--full-report/);
     assert.match(helpText, /--pr-comment/);
     assert.match(helpText, /--preset <name>/);
+    assert.match(helpText, /python/);
+    assert.match(helpText, /monorepo/);
     assert.match(helpText, /--fail-on <risk>/);
     assert.match(helpText, /--help/);
   });

@@ -93,6 +93,126 @@ describe("init command", () => {
     });
   });
 
+  it("generates the Python config when --preset python is set", async () => {
+    await withTempRepo(async (repoPath) => {
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["init", "--preset", "python"],
+        cwd: repoPath,
+        stdout
+      });
+      const config = await readGuardianConfig(repoPath);
+
+      assert.equal(result.exitCode, 0);
+      assert.match(stdout.value, /Preset: python/);
+      assert.deepEqual(config.riskFolders, ["src", "app", "api"]);
+      assert.deepEqual(config.testFolders, ["tests"]);
+      assert.deepEqual(config.releaseSensitiveFiles, ["pyproject.toml", "requirements.txt", "setup.py", "Dockerfile", ".github/workflows"]);
+      assert.deepEqual(config.requiredChecks, ["pytest"]);
+    });
+  });
+
+  it("generates the monorepo config when --preset monorepo is set", async () => {
+    await withTempRepo(async (repoPath) => {
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["init", "--preset", "monorepo"],
+        cwd: repoPath,
+        stdout
+      });
+      const config = await readGuardianConfig(repoPath);
+
+      assert.equal(result.exitCode, 0);
+      assert.match(stdout.value, /Preset: monorepo/);
+      assert.deepEqual(config.riskFolders, ["packages", "apps", "libs", "src"]);
+      assert.deepEqual(config.testFolders, ["tests", "__tests__", "packages", "apps", "libs"]);
+      assert.deepEqual(config.releaseSensitiveFiles, [
+        "package.json",
+        "pnpm-lock.yaml",
+        "yarn.lock",
+        "package-lock.json",
+        "turbo.json",
+        "nx.json",
+        ".github/workflows"
+      ]);
+      assert.deepEqual(config.requiredChecks, ["npm test", "npm run lint"]);
+    });
+  });
+
+  it("auto-detects python from pyproject.toml", async () => {
+    await withTempRepo(async (repoPath) => {
+      await writeFile(join(repoPath, "pyproject.toml"), "[project]\nname = \"python-fixture\"\n", "utf8");
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["init"],
+        cwd: repoPath,
+        stdout
+      });
+      const config = await readGuardianConfig(repoPath);
+
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.preset, "python");
+      assert.match(stdout.value, /Preset: python/);
+      assert.deepEqual(config.requiredChecks, ["pytest"]);
+    });
+  });
+
+  it("auto-detects python from requirements.txt", async () => {
+    await withTempRepo(async (repoPath) => {
+      await writeFile(join(repoPath, "requirements.txt"), "pytest\n", "utf8");
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["init"],
+        cwd: repoPath,
+        stdout
+      });
+
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.preset, "python");
+      assert.match(stdout.value, /Preset: python/);
+    });
+  });
+
+  it("auto-detects monorepo from pnpm-workspace.yaml", async () => {
+    await withTempRepo(async (repoPath) => {
+      await writeFile(join(repoPath, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n", "utf8");
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["init"],
+        cwd: repoPath,
+        stdout
+      });
+      const config = await readGuardianConfig(repoPath);
+
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.preset, "monorepo");
+      assert.match(stdout.value, /Preset: monorepo/);
+      assert.deepEqual(config.requiredChecks, ["npm test", "npm run lint"]);
+    });
+  });
+
+  it("auto-detects monorepo from packages/", async () => {
+    await withTempRepo(async (repoPath) => {
+      await mkdir(join(repoPath, "packages"), { recursive: true });
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["init"],
+        cwd: repoPath,
+        stdout
+      });
+
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.preset, "monorepo");
+      assert.match(stdout.value, /Preset: monorepo/);
+    });
+  });
+
   it("auto-detects node-api when package.json and API folders exist", async () => {
     await withTempRepo(async (repoPath) => {
       await writeFile(join(repoPath, "package.json"), JSON.stringify({ name: "api-fixture" }, null, 2), "utf8");
@@ -162,13 +282,14 @@ describe("init command", () => {
           cwd: repoPath,
           stdout
         }),
-        /Unsupported --preset value: rails/
+        /Expected "generic", "node-api", "web-app", "python", or "monorepo"/
       );
     });
   });
 
-  it("prints planned changes without writing files in dry-run mode", async () => {
+  it("prints planned changes and the selected preset without writing files in dry-run mode", async () => {
     await withTempRepo(async (repoPath) => {
+      await writeFile(join(repoPath, "pyproject.toml"), "[project]\nname = \"python-fixture\"\n", "utf8");
       const stdout = new MemoryWritable();
 
       const result = await runGuardianCli({
@@ -178,8 +299,9 @@ describe("init command", () => {
       });
 
       assert.equal(result.exitCode, 0);
+      assert.equal(result.preset, "python");
       assert.match(stdout.value, /Guardian init dry run/);
-      assert.match(stdout.value, /Preset: generic/);
+      assert.match(stdout.value, /Preset: python/);
       assert.match(stdout.value, /Created: 10/);
       assert.match(stdout.value, /No files written\./);
       await assert.rejects(access(join(repoPath, "guardian.config.json")));
@@ -259,9 +381,16 @@ class MemoryWritable extends Writable {
   }
 }
 
-async function readGuardianConfig(repoPath: string): Promise<{ riskFolders: string[]; testFolders: string[] }> {
+async function readGuardianConfig(repoPath: string): Promise<{
+  riskFolders: string[];
+  testFolders: string[];
+  releaseSensitiveFiles: string[];
+  requiredChecks: string[];
+}> {
   return JSON.parse(await readFile(join(repoPath, "guardian.config.json"), "utf8")) as {
     riskFolders: string[];
     testFolders: string[];
+    releaseSensitiveFiles: string[];
+    requiredChecks: string[];
   };
 }

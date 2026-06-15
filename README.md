@@ -41,30 +41,23 @@ Guardian currently supports:
 - No GitHub API requirement for report generation or PR comment text generation.
 - No replacement for dedicated SAST, dependency scanning, or test coverage tools.
 
-## Usage
-
-Run without installing:
-
-```sh
-npx ai-project-guardian --help
-npx ai-project-guardian --repo ../AI-Restaurants --base origin/main --out guardian-report.md
-```
-
-## First-Time Setup
+## NPM Beta Quickstart
 
 From the repository you want Guardian to monitor:
 
 ```sh
-npx ai-project-guardian init
-git add guardian.config.json .project-brain .github/workflows/ai-project-guardian.yml
-git commit -m "Add AI Project Guardian"
+npx ai-project-guardian@beta --help
+npx ai-project-guardian@beta init --dry-run
+npx ai-project-guardian@beta init
 ```
 
-The generated GitHub Actions workflow runs Guardian with `npx ai-project-guardian` on pull requests and manual workflow runs. Review and commit the generated files before relying on CI output.
+`init` creates `guardian.config.json`, `.project-brain/` template files, and `.github/workflows/ai-project-guardian.yml` when they are missing. Review the generated files before committing them or relying on CI output.
 
 ## Beta Status
 
 This beta produces advisory output. Release checklist items need human review, and no deployment should be blocked only by generic checklist items without project-specific confirmation.
+
+## Usage
 
 Verify a local package tarball:
 
@@ -93,22 +86,25 @@ Run the CLI against another repository:
 npm run guardian -- --repo ../AI-Restaurants --base origin/main --out guardian-report.md
 ```
 
-Bootstrap Guardian in a repository:
-
-```sh
-ai-project-guardian init
-ai-project-guardian init --dry-run
-ai-project-guardian init --repo ../AI-Restaurants
-ai-project-guardian init --preset node-api
-```
-
-`init` creates `guardian.config.json`, `.project-brain/` template files, and `.github/workflows/ai-project-guardian.yml` when they are missing. Existing files are skipped unless `--force` is set. Config presets are `generic`, `node-api`, and `web-app`; when `--preset` is omitted, init chooses a best-effort preset from local project files.
-
 Write a full Markdown report:
 
 ```sh
 npm run guardian -- --repo ../AI-Restaurants --base origin/main --out guardian-report.md --full-report
 ```
+
+## Init Presets
+
+Bootstrap Guardian in a repository:
+
+```sh
+npx ai-project-guardian@beta init --dry-run
+npx ai-project-guardian@beta init --preset python
+npx ai-project-guardian@beta init --preset monorepo
+```
+
+Existing files are skipped unless `--force` is set. Supported config presets are `generic`, `node-api`, `web-app`, `python`, and `monorepo`.
+
+When `--preset` is omitted, init chooses a best-effort preset from local project files. Python markers such as `pyproject.toml` or `requirements.txt` select `python`; workspace markers such as `pnpm-workspace.yaml`, `turbo.json`, `nx.json`, `packages/`, `apps/`, or `libs/` select `monorepo`; Node API and web app markers select `node-api` or `web-app`; otherwise Guardian uses `generic`.
 
 Write SARIF for GitHub code scanning:
 
@@ -143,7 +139,7 @@ Available flags:
 - `--summary-only`: write a short overview for GitHub Actions summaries. This is the default.
 - `--full-report`: write the complete Markdown report with changed files, detailed findings, accepted findings, required actions, and suggested tests.
 - `--pr-comment`: write compact Markdown suitable for a GitHub PR comment. It does not call the GitHub API.
-- `--preset <generic|node-api|web-app>`: choose the config preset for `init`. Defaults to best-effort detection.
+- `--preset <generic|node-api|web-app|python|monorepo>`: choose the config preset for `init`. Defaults to best-effort detection.
 - `--fail-on <high|critical>`: exit with code 1 when the calculated risk meets the threshold. Defaults to not failing the build.
 - `--help`: print CLI help.
 
