@@ -1,5 +1,8 @@
 # ai-project-guardian
 
+![npm](https://img.shields.io/npm/dm/ai-project-guardian)
+![npm](https://img.shields.io/npm/v/ai-project-guardian)
+
 `ai-project-guardian` is a TypeScript CLI for analyzing another repository and producing QA, release, security, workflow, coverage, and external-scanner risk reports that can be published from GitHub Actions.
 
 This is not a SaaS app. It is a local and CI-friendly repository analysis tool.

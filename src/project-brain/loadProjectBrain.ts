@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { ModuleMap, ProjectBrain, ProjectBrainDocumentName } from "./types.js";
 
@@ -28,10 +28,18 @@ export function loadProjectBrain(repoPath: string): ProjectBrainLoadResult {
     rootPath,
     documents: {}
   };
+  const missingFiles: string[] = [];
+
+  if (!isDirectory(rootPath)) {
+    return {
+      projectBrain,
+      warnings: ["Project Brain context was not found; continuing without repository-specific context."]
+    };
+  }
 
   for (const [name, fileName] of Object.entries(projectBrainMarkdownFiles)) {
     const path = join(rootPath, fileName);
-    const content = readOptionalFile(path, warnings);
+    const content = readOptionalFile(path, fileName, missingFiles, warnings);
 
     if (content !== undefined) {
       projectBrain.documents[name as ProjectBrainDocumentName] = {
@@ -43,7 +51,7 @@ export function loadProjectBrain(repoPath: string): ProjectBrainLoadResult {
   }
 
   const moduleMapPath = join(rootPath, moduleMapFileName);
-  const moduleMapContent = readOptionalFile(moduleMapPath, warnings);
+  const moduleMapContent = readOptionalFile(moduleMapPath, moduleMapFileName, missingFiles, warnings);
 
   if (moduleMapContent !== undefined) {
     const moduleMap = parseModuleMap(moduleMapContent, moduleMapPath, warnings);
@@ -53,15 +61,27 @@ export function loadProjectBrain(repoPath: string): ProjectBrainLoadResult {
     }
   }
 
+  if (missingFiles.length > 0) {
+    warnings.unshift(`Project Brain context is incomplete; missing files: ${missingFiles.join(", ")}.`);
+  }
+
   return { projectBrain, warnings };
 }
 
-function readOptionalFile(path: string, warnings: string[]): string | undefined {
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch (error: unknown) {
+    return false;
+  }
+}
+
+function readOptionalFile(path: string, fileName: string, missingFiles: string[], warnings: string[]): string | undefined {
   try {
     return readFileSync(path, "utf8");
   } catch (error: unknown) {
     if (isMissingFileError(error)) {
-      warnings.push(`${path} was not found; continuing without it.`);
+      missingFiles.push(fileName);
       return undefined;
     }
 

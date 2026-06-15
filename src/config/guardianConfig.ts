@@ -1,5 +1,5 @@
 import { readFileSync } from "fs";
-import { isAbsolute, join, relative, resolve } from "path";
+import { basename, isAbsolute, join, relative, resolve } from "path";
 import type { BusinessArea, CustomRule, GuardianConfig } from "../core/types.js";
 import { isRiskLevel } from "../core/types.js";
 
@@ -43,9 +43,11 @@ export function loadGuardianConfig(repoPath: string): GuardianConfigLoadResult {
     return validateGuardianConfig(JSON.parse(rawConfig), resolvedRepoPath);
   } catch (error: unknown) {
     if (isMissingFileError(error)) {
+      const projectName = basename(resolvedRepoPath);
+
       return {
-        config: { ...defaultGuardianConfig },
-        warnings: [`${guardianConfigFileName} was not found at ${configPath}; using default Guardian config.`]
+        config: { ...defaultGuardianConfig, projectName },
+        warnings: [`${guardianConfigFileName} was not found; using default config for project "${projectName}".`]
       };
     }
 
