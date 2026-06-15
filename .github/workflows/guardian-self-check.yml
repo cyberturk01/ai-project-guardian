@@ -24,15 +24,13 @@ jobs:
 
       - name: Resolve Guardian base
         run: |
-          BASE_REF="${{ github.base_ref }}"
-          if [ -z "$BASE_REF" ]; then
-            BASE_REF="main"
-          fi
-          echo "GUARDIAN_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
+          git fetch origin main --depth=1
+          echo "GUARDIAN_BASE=origin/main" >> "$GITHUB_ENV"
 
       - name: Guardian Summary
         continue-on-error: true
         run: |
+          echo "Using Guardian base: $GUARDIAN_BASE"
           npm run guardian -- \
             --repo . \
             --base "$GUARDIAN_BASE" \
@@ -50,6 +48,7 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
+          echo "Using Guardian base: $GUARDIAN_BASE"
           npm run guardian -- \
             --repo . \
             --base "$GUARDIAN_BASE" \
