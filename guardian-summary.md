@@ -3,7 +3,7 @@
 | Field | Value |
 | --- | --- |
 | Project | ai-project-guardian |
-| Generated | 2026-06-16T09:20:08.917Z |
+| Generated | 2026-06-16T09:26:51.569Z |
 | Merge recommendation | review_required |
 | Blocking findings | 1 |
 | Checklist findings | 2 |

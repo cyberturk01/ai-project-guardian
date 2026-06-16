@@ -90,6 +90,24 @@ describe("buildReportDecisionSupport", () => {
     assert.match(decisionSupport.riskReason, /1 blocking finding\(s\) require review/);
   });
 
+  it("requires review for workflow-only findings instead of blocking automatically", () => {
+    const decisionSupport = buildReportDecisionSupport({
+      overallRisk: "low",
+      scoreBreakdown: scoreBreakdown({ selectedBand: "workflow" }),
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: [],
+      workflowFindings: [workflowFinding("high")],
+      externalFindings: [],
+      correlatedFindings: []
+    });
+
+    assert.equal(decisionSupport.blockingFindingsCount, 1);
+    assert.equal(decisionSupport.mergeRecommendation, "review_required");
+    assert.equal(decisionSupport.codeRisk, "high");
+    assert.match(decisionSupport.riskReason, /1 blocking finding\(s\) require review/);
+  });
+
   it("does not block merge for low or medium heuristic security findings", () => {
     const decisionSupport = buildReportDecisionSupport({
       overallRisk: "medium",
@@ -157,6 +175,24 @@ describe("buildReportDecisionSupport", () => {
       securityFindings: [securityFinding("high")],
       workflowFindings: [],
       externalFindings: [],
+      correlatedFindings: []
+    });
+
+    assert.equal(decisionSupport.blockingFindingsCount, 1);
+    assert.equal(decisionSupport.mergeRecommendation, "blocked");
+    assert.equal(decisionSupport.codeRisk, "high");
+    assert.equal(decisionSupport.riskReason, "Security findings require review.");
+  });
+
+  it("blocks on high external scanner findings", () => {
+    const decisionSupport = buildReportDecisionSupport({
+      overallRisk: "high",
+      scoreBreakdown: scoreBreakdown({ selectedBand: "security" }),
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: [],
+      workflowFindings: [],
+      externalFindings: [externalFinding("high")],
       correlatedFindings: []
     });
 

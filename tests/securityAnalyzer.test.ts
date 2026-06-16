@@ -333,6 +333,28 @@ describe("analyzeSecurity", () => {
     );
   });
 
+  it("downgrades heuristic findings in template and snapshot files", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [
+        changedFile("templates/auth/sample.ts"),
+        changedFile("src/__snapshots__/authSnapshot.ts")
+      ],
+      readFile: fakeReader({
+        "templates/auth/sample.ts": "export const options = { requireAuth: false };",
+        "src/__snapshots__/authSnapshot.ts": "const jwtSecret = 'RealJwtSecret12345';"
+      })
+    });
+
+    assert.deepEqual(
+      findings.map((finding) => `${finding.id}:${finding.riskLevel}:${finding.filePath}`),
+      [
+        "security-jwt-secret-default:low:src/__snapshots__/authSnapshot.ts",
+        "security-disabled-auth-check:low:templates/auth/sample.ts"
+      ]
+    );
+  });
+
   it("keeps disabled auth bypass findings high in production source files", async () => {
     const findings = await analyzeSecurity({
       repoPath,
