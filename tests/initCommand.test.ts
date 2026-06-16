@@ -75,6 +75,25 @@ describe("init command", () => {
     });
   });
 
+  it("generates the generic CLI config when --preset generic-cli is set", async () => {
+    await withTempRepo(async (repoPath) => {
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["init", "--preset", "generic-cli"],
+        cwd: repoPath,
+        stdout
+      });
+      const config = await readGuardianConfig(repoPath);
+
+      assert.equal(result.exitCode, 0);
+      assert.match(stdout.value, /Preset: generic-cli/);
+      assert.deepEqual(config.riskFolders, ["src", "bin", "cli", "scripts"]);
+      assert.deepEqual(config.testFolders, ["tests", "__tests__"]);
+    });
+  });
+
+
   it("generates the web app config when --preset web-app is set", async () => {
     await withTempRepo(async (repoPath) => {
       const stdout = new MemoryWritable();
@@ -177,6 +196,25 @@ describe("init command", () => {
     });
   });
 
+  it("auto-detects python API repos from app/main.py", async () => {
+    await withTempRepo(async (repoPath) => {
+      await mkdir(join(repoPath, "app"), { recursive: true });
+      await writeFile(join(repoPath, "app", "main.py"), "from fastapi import FastAPI\n", "utf8");
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["init", "--dry-run"],
+        cwd: repoPath,
+        stdout
+      });
+
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.preset, "python");
+      assert.match(stdout.value, /Preset: python/);
+    });
+  });
+
+
   it("auto-detects monorepo from pnpm-workspace.yaml", async () => {
     await withTempRepo(async (repoPath) => {
       await writeFile(join(repoPath, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n", "utf8");
@@ -198,7 +236,10 @@ describe("init command", () => {
 
   it("auto-detects monorepo from packages/", async () => {
     await withTempRepo(async (repoPath) => {
-      await mkdir(join(repoPath, "packages"), { recursive: true });
+      await mkdir(join(repoPath, "packages", "api"), { recursive: true });
+      await writeFile(join(repoPath, "packages", "api", "package.json"), JSON.stringify({ name: "api" }, null, 2), "utf8");
+      await mkdir(join(repoPath, "apps", "web"), { recursive: true });
+      await writeFile(join(repoPath, "apps", "web", "package.json"), JSON.stringify({ name: "web" }, null, 2), "utf8");
       const stdout = new MemoryWritable();
 
       const result = await runGuardianCli({
@@ -210,6 +251,28 @@ describe("init command", () => {
       assert.equal(result.exitCode, 0);
       assert.equal(result.preset, "monorepo");
       assert.match(stdout.value, /Preset: monorepo/);
+    });
+  });
+
+  it("does not treat a single examples/apps folder as a monorepo boundary", async () => {
+    await withTempRepo(async (repoPath) => {
+      await writeFile(
+        join(repoPath, "package.json"),
+        JSON.stringify({ name: "cli-fixture", bin: { "cli-fixture": "./dist/index.js" } }, null, 2),
+        "utf8"
+      );
+      await mkdir(join(repoPath, "apps", "fixture-example"), { recursive: true });
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["init", "--dry-run"],
+        cwd: repoPath,
+        stdout
+      });
+
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.preset, "generic-cli");
+      assert.match(stdout.value, /Preset: generic-cli/);
     });
   });
 
@@ -254,6 +317,60 @@ describe("init command", () => {
     });
   });
 
+  it("auto-detects web-app from React or Next dependencies", async () => {
+    await withTempRepo(async (repoPath) => {
+      await writeFile(
+        join(repoPath, "package.json"),
+        JSON.stringify({ name: "wallet-health-ui", dependencies: { next: "^15.0.0", react: "^19.0.0" } }, null, 2),
+        "utf8"
+      );
+      await mkdir(join(repoPath, "app"), { recursive: true });
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["init", "--dry-run"],
+        cwd: repoPath,
+        stdout
+      });
+
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.preset, "web-app");
+      assert.match(stdout.value, /Preset: web-app/);
+    });
+  });
+
+  it("auto-detects CLI tooling repos without treating docs or examples as web apps", async () => {
+    await withTempRepo(async (repoPath) => {
+      await writeFile(
+        join(repoPath, "package.json"),
+        JSON.stringify(
+          {
+            name: "ai-project-guardian",
+            bin: { "ai-project-guardian": "./dist/src/cli/index.js" },
+            keywords: ["cli", "security"]
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+      await mkdir(join(repoPath, "docs"), { recursive: true });
+      await mkdir(join(repoPath, "examples", "web-app"), { recursive: true });
+      const stdout = new MemoryWritable();
+
+      const result = await runGuardianCli({
+        argv: ["init", "--dry-run"],
+        cwd: repoPath,
+        stdout
+      });
+
+      assert.equal(result.exitCode, 0);
+      assert.equal(result.preset, "generic-cli");
+      assert.match(stdout.value, /Preset: generic-cli/);
+    });
+  });
+
+
   it("falls back to generic when no project preset is detected", async () => {
     await withTempRepo(async (repoPath) => {
       const stdout = new MemoryWritable();
@@ -282,7 +399,7 @@ describe("init command", () => {
           cwd: repoPath,
           stdout
         }),
-        /Expected "generic", "node-api", "web-app", "python", or "monorepo"/
+        /Expected "generic", "generic-cli", "node-api", "web-app", "python", or "monorepo"/
       );
     });
   });

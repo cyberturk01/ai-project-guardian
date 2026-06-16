@@ -6,22 +6,51 @@ export const defaultIgnoredChangedFilePatterns = [
   "*.tar.gz",
   "npm-debug.log*",
   ".DS_Store",
+  ".calibration/**",
+  ".cache/**",
+  ".nyc_output/**",
+  ".parcel-cache/**",
+  ".pytest_cache/**",
+  ".ruff_cache/**",
+  ".mypy_cache/**",
+  ".turbo/**",
+  ".vite/**",
+  "__pycache__/**",
+  "build/**",
   "dist/**",
+  "htmlcov/**",
+  "out/**",
   "coverage/**",
   ".next/**",
   "node_modules/**"
 ] as const;
 
-const ignoredRootFolders = new Set(["dist", "coverage", ".next", "node_modules"]);
+const ignoredRootFolders = new Set([
+  ".calibration",
+  ".cache",
+  ".nyc_output",
+  ".parcel-cache",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".mypy_cache",
+  ".turbo",
+  ".vite",
+  "__pycache__",
+  "build",
+  "dist",
+  "htmlcov",
+  "out",
+  "coverage",
+  ".next",
+  "node_modules"
+]);
 
 export function isIgnoredChangedFile(path: string): boolean {
   const normalizedPath = normalizePath(path);
   const fileName = normalizedPath.split("/").at(-1) ?? normalizedPath;
 
   return (
-    normalizedPath === "guardian-report.md" ||
-    normalizedPath === "guardian-summary.md" ||
-    /^guardian-.*\.md$/i.test(normalizedPath) ||
+    /^guardian-.*\.md$/i.test(fileName) ||
     fileName.endsWith(".tgz") ||
     fileName.endsWith(".tar.gz") ||
     /^npm-debug\.log/i.test(fileName) ||

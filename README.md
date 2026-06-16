@@ -92,7 +92,7 @@ npm run guardian -- --repo ../AI-Restaurants --base origin/main --out guardian-r
 
 Local runs include committed branch changes compared to the resolved base ref, plus staged, unstaged, and untracked files in the target repository. When local working tree changes are included, Guardian adds a note to the report.
 
-Guardian ignores its own generated reports and common local build/package artifacts by default, including `guardian-*.md`, `*.tgz`, `*.tar.gz`, `dist/`, `coverage/`, `.next/`, and `node_modules/`. Add project-specific generated files to the target repository's `.gitignore` so local tools and reviews stay clean too.
+Guardian ignores its own generated reports and common local build/package artifacts by default, including `guardian-*.md`, `*.tgz`, `*.tar.gz`, `build/`, `dist/`, `out/`, `coverage/`, `.next/`, cache folders, and `node_modules/`. Add project-specific generated files to the target repository's `.gitignore` so local tools and reviews stay clean too.
 
 Write a full Markdown report:
 
@@ -110,9 +110,9 @@ npx ai-project-guardian@beta init --preset python
 npx ai-project-guardian@beta init --preset monorepo
 ```
 
-Existing files are skipped unless `--force` is set. Supported config presets are `generic`, `node-api`, `web-app`, `python`, and `monorepo`.
+Existing files are skipped unless `--force` is set. Supported config presets are `generic`, `generic-cli`, `node-api`, `web-app`, `python`, and `monorepo`.
 
-When `--preset` is omitted, init chooses a best-effort preset from local project files. Python markers such as `pyproject.toml` or `requirements.txt` select `python`; workspace markers such as `pnpm-workspace.yaml`, `turbo.json`, `nx.json`, `packages/`, `apps/`, or `libs/` select `monorepo`; Node API and web app markers select `node-api` or `web-app`; otherwise Guardian uses `generic`.
+When `--preset` is omitted, init chooses a best-effort preset from local project files. Explicit workspace markers such as `pnpm-workspace.yaml`, `turbo.json`, `nx.json`, package workspaces, or multiple package boundaries under `packages/`, `apps/`, or `libs/` select `monorepo`; Python markers such as `pyproject.toml`, `requirements.txt`, or FastAPI-style `app/main.py` select `python`; React, Next, Vite, Angular, Vue, and Svelte markers select `web-app`; Node API markers select `node-api`; CLI package markers select `generic-cli`; otherwise Guardian uses `generic`.
 
 Write SARIF for GitHub code scanning:
 
@@ -147,7 +147,7 @@ Available flags:
 - `--summary-only`: write a short overview for GitHub Actions summaries. This is the default.
 - `--full-report`: write the complete Markdown report with changed files, detailed findings, accepted findings, required actions, and suggested tests.
 - `--pr-comment`: write compact Markdown suitable for a GitHub PR comment. It does not call the GitHub API.
-- `--preset <generic|node-api|web-app|python|monorepo>`: choose the config preset for `init`. Defaults to best-effort detection.
+- `--preset <generic|generic-cli|node-api|web-app|python|monorepo>`: choose the config preset for `init`. Defaults to best-effort detection.
 - `--fail-on <high|critical>`: exit with code 1 when the calculated risk meets the threshold. Defaults to not failing the build.
 - `--help`: print CLI help.
 

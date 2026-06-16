@@ -52,6 +52,10 @@ describe("package CLI smoke", () => {
       assert.match(nodeApiDryRun.stdout, /Preset: node-api/);
       assert.match(nodeApiDryRun.stdout, /No files written\./);
 
+      const cliDryRun = await runPackedCli(tarballPath, ["init", "--preset", "generic-cli", "--dry-run"], repoPath, cacheDir);
+      assert.match(cliDryRun.stdout, /Guardian init dry run/);
+      assert.match(cliDryRun.stdout, /Preset: generic-cli/);
+
       const pythonDryRun = await runPackedCli(tarballPath, ["init", "--preset", "python", "--dry-run"], repoPath, cacheDir);
       assert.match(pythonDryRun.stdout, /Guardian init dry run/);
       assert.match(pythonDryRun.stdout, /Preset: python/);
