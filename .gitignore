@@ -147,3 +147,4 @@ vite.config.ts.timestamp-*
 .DS_Store
 Thumbs.db
 calibration.repos.local.json
+guardian-summary.md

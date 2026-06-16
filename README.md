@@ -1,154 +1,189 @@
-# ai-project-guardian
+# AI Project Guardian
 
 ![npm](https://img.shields.io/npm/dm/ai-project-guardian)
 ![npm](https://img.shields.io/npm/v/ai-project-guardian)
 
-`ai-project-guardian` is a TypeScript CLI for analyzing another repository and producing QA, release, security, workflow, coverage, and external-scanner risk reports that can be published from GitHub Actions.
+Repository risk review for AI-assisted development, QA, release, and security checks.
 
-This is not a SaaS app. It is a local and CI-friendly repository analysis tool.
+Status: early release / usable MVP.
 
-## Purpose
+AI Project Guardian is a local and CI-friendly repository risk review CLI. It looks at what changed in a repository, classifies the risk, and produces readable reports for developers, QA engineers, SDETs, maintainers, and teams using AI coding agents.
 
-AI-assisted projects can move quickly, but teams still need a repeatable way to ask:
+It is not a SaaS. There is no account, no hosted dashboard, and no code upload. Guardian runs locally or in GitHub Actions, does not modify your code, and can produce Markdown, JSON, SARIF, GitHub Actions summary, and PR-comment style output.
+
+Guardian complements scanners and tests. It does not replace CodeQL, Semgrep, Snyk, dependency audits, test coverage, or human review; it adds a deterministic repository-change review layer around them.
+
+## Why Guardian?
+
+AI coding agents can change a lot of files quickly. That speed is useful, but it also makes reviews harder: a small prompt can touch auth code, migrations, workflows, package locks, generated files, tests, and documentation in one pass.
+
+Guardian gives teams a repeatable way to ask the same release-minded questions every time:
 
 - What changed?
-- What needs QA attention?
-- What could block a release?
-- What security-sensitive areas deserve review?
+- What risk did this change introduce?
+- Are tests missing near changed code?
+- Did dependency, workflow, migration, auth, security, or release-sensitive files change?
+- Is this PR safe, checklist-required, review-required, or blocked?
 
-`ai-project-guardian` provides a local command-line workflow for generating those reports from repository state and optional local scanner artifacts.
+The goal is not to replace reviewers. The goal is to make the first review pass calmer, faster, and less dependent on someone manually noticing every risky file.
 
-## Current Capabilities
+## Who Is It For?
+
+- Developers using AI coding agents.
+- QA engineers and SDETs looking for lightweight PR risk summaries.
+- Solo maintainers who want release checks without a heavy platform.
+- Small teams without formal release governance.
+- Open-source maintainers reviewing broad or unfamiliar contributions.
+- Teams that want local reports before opening a PR and CI summaries after opening one.
+
+## When Should I Use It?
+
+Use Guardian:
+
+- Before opening a pull request.
+- Inside GitHub Actions on PRs.
+- After AI-generated changes.
+- Before release.
+- After dependency or lockfile changes.
+- After auth, security, workflow, migration, config, or release-sensitive changes.
+- When a PR touches many files and you want a deterministic review summary.
+
+## What Does It Check?
 
 Guardian currently supports:
 
-- Changed-file classification across source, tests, migrations, config, CI, documentation, i18n, security, and Project Brain context files.
-- QA heuristics for missing nearby tests, API/integration tests, Cypress coverage, DB/integration tests, localization tests, and negative auth/security tests.
-- Release heuristics for migrations, package/dependency changes, environment config changes, and GitHub Actions changes.
-- Workflow validation for required GitHub Actions checks configured per repository.
+- Changed-file classification across source, tests, migrations, config, CI, documentation, i18n, security, generated reports, and Project Brain context files.
+- QA/test heuristics for missing nearby tests, API/integration coverage, component/e2e coverage, DB/migration tests, localization tests, and negative auth/security tests.
+- Release checklist findings for migrations, dependency changes, environment config changes, GitHub Actions changes, and repository-defined deploy rules.
 - Security heuristics for hardcoded secrets, API keys, JWT/default secret fallbacks, sensitive logs, SQL interpolation, auth bypasses, CORS wildcards, route auth, and rate limiting.
+- Workflow checks for required GitHub Actions commands configured per repository.
 - Optional coverage awareness from `coverage-final.json` or `lcov.info`.
-- Repository-defined business areas and custom deterministic rules.
+- External scanner correlation from local SARIF, CodeQL, Semgrep, and Snyk artifacts.
+- Project-specific configuration through `guardian.config.json`.
+- Project Brain context through `.project-brain/`.
 - Accepted-findings baselines through `.guardian-baseline.json`.
-- Risk scoring with critical escalation for high-risk combinations.
-- Decision-support fields that separate blocking findings from release checklist items.
-- Markdown, JSON, SARIF, GitHub Actions summary, and PR-comment-style output.
-- Local Enterprise Risk Correlation by importing SARIF, CodeQL, Semgrep, and Snyk artifacts without calling external APIs.
 
-## Non-goals
+## Quick Start
 
-- No hosted dashboard.
-- No SaaS backend.
-- No persistent user accounts.
-- No automatic code modification.
-- No GitHub API requirement for report generation or PR comment text generation.
-- No replacement for dedicated SAST, dependency scanning, or test coverage tools.
+From the repository you want Guardian to review:
 
-## NPM Beta Quickstart
-
-From the repository you want Guardian to monitor:
-
-```sh
-npx ai-project-guardian@beta --help
-npx ai-project-guardian@beta init --dry-run
-npx ai-project-guardian@beta init
-npx ai-project-guardian@beta --repo . --out guardian-summary.md --summary-only
+```bash
+npx ai-project-guardian@latest --help
+npx ai-project-guardian@latest init --dry-run
+npx ai-project-guardian@latest init
+npx ai-project-guardian@latest --repo . --out guardian-summary.md --summary-only
+npx ai-project-guardian@latest --repo . --out guardian-report.md --full-report
 ```
 
-`init` creates `guardian.config.json`, `.project-brain/` template files, and `.github/workflows/ai-project-guardian.yml` when they are missing. Review the generated files before committing them or relying on CI output.
+`init` creates these files when they are missing:
 
-## Beta Status
+- `guardian.config.json`
+- `.project-brain/*`
+- `.github/workflows/ai-project-guardian.yml`
 
-This beta produces advisory output. Release checklist items need human review, and no deployment should be blocked only by generic checklist items without project-specific confirmation.
+Review generated files before committing them. Guardian works without config, but the reports improve when the repository describes its own test folders, release-sensitive paths, business areas, and required checks.
 
-## Usage
+## Example Output
 
-Verify a local package tarball:
+```md
+Risk score: 41/100
+Overall risk: medium
+Merge recommendation: review_required
+Blocking findings: 0
+Release checklist findings: 1
+Security findings: 0
+Actionable guidance items: 5
+```
 
-```sh
+Merge recommendations:
+
+- `safe`: no active findings that need special review.
+- `safe_after_checklist`: no blocking code/test/security findings, but release checklist items remain.
+- `review_required`: lower-severity blocking findings need human review before merge.
+- `blocked`: high-risk or critical findings should be fixed or explicitly accepted before merge.
+
+## GitHub Actions Usage
+
+```yaml
+name: AI Project Guardian
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  guardian:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run Guardian
+        run: |
+          npx --yes ai-project-guardian@latest \
+            --repo . \
+            --out guardian-summary.md \
+            --summary-only
+
+      - name: Add report to GitHub summary
+        run: cat guardian-summary.md >> $GITHUB_STEP_SUMMARY
+```
+
+For stricter CI behavior, add `--fail-on high` or `--fail-on critical`.
+
+## Local Usage
+
+Install dependencies and build the CLI from this repository:
+
+```bash
+npm install
+npm run build
+```
+
+Run the local build against another repository:
+
+```bash
+npm run guardian -- --repo ../AI-Restaurants --base origin/main --out guardian-report.md --full-report
+```
+
+Verify a package tarball:
+
+```bash
 npm pack
 npx ./ai-project-guardian-*.tgz --help
 ```
 
 Install globally:
 
-```sh
+```bash
 npm install -g ai-project-guardian
-ai-project-guardian --repo ../AI-Restaurants --base origin/main --out guardian-report.md
-```
-
-Install dependencies and build the CLI:
-
-```sh
-npm install
-npm run build
-```
-
-Run the CLI against another repository:
-
-```sh
-npm run guardian -- --repo ../AI-Restaurants --base origin/main --out guardian-report.md
+ai-project-guardian --repo . --out guardian-summary.md --summary-only
 ```
 
 Local runs include committed branch changes compared to the resolved base ref, plus staged, unstaged, and untracked files in the target repository. When local working tree changes are included, Guardian adds a note to the report.
 
-Guardian ignores its own generated reports and common local build/package artifacts by default, including `guardian-*.md`, `*.tgz`, `*.tar.gz`, `build/`, `dist/`, `out/`, `coverage/`, `.next/`, cache folders, and `node_modules/`. Add project-specific generated files to the target repository's `.gitignore` so local tools and reviews stay clean too.
+Guardian ignores its own generated reports and common local build/package artifacts by default, including `guardian-*.md`, `*.tgz`, `*.tar.gz`, `build/`, `dist/`, `out/`, `coverage/`, `.next/`, cache folders, and `node_modules/`.
 
-Write a full Markdown report:
-
-```sh
-npm run guardian -- --repo ../AI-Restaurants --base origin/main --out guardian-report.md --full-report
-```
-
-## Init Presets
-
-Bootstrap Guardian in a repository:
-
-```sh
-npx ai-project-guardian@beta init --dry-run
-npx ai-project-guardian@beta init --preset python
-npx ai-project-guardian@beta init --preset monorepo
-```
-
-Existing files are skipped unless `--force` is set. Supported config presets are `generic`, `generic-cli`, `node-api`, `web-app`, `python`, and `monorepo`.
-
-When `--preset` is omitted, init chooses a best-effort preset from local project files. Explicit workspace markers such as `pnpm-workspace.yaml`, `turbo.json`, `nx.json`, package workspaces, or multiple package boundaries under `packages/`, `apps/`, or `libs/` select `monorepo`; Python markers such as `pyproject.toml`, `requirements.txt`, or FastAPI-style `app/main.py` select `python`; React, Next, Vite, Angular, Vue, and Svelte markers select `web-app`; Node API markers select `node-api`; CLI package markers select `generic-cli`; otherwise Guardian uses `generic`.
-
-Write SARIF for GitHub code scanning:
-
-```sh
-npm run guardian -- --repo ../AI-Restaurants --base origin/main --format sarif --out guardian.sarif
-```
-
-Import local scanner artifacts and correlate them with Guardian findings:
-
-```sh
-npm run guardian -- \
-  --repo ../AI-Restaurants \
-  --base origin/main \
-  --full-report \
-  --sarif reports/generic.sarif \
-  --codeql reports/codeql.sarif \
-  --semgrep reports/semgrep.json \
-  --snyk reports/snyk.json \
-  --out guardian-report.md
-```
-
-Available flags:
+## CLI Options
 
 - `--repo <path>`: target repository to inspect. Defaults to `GUARDIAN_REPO_PATH` or `.`.
 - `--base <ref>`: base git ref for changed-file detection. Defaults to `origin/main`, then `main`, then `master`, then `HEAD~1`.
-- `--out <path>`: optional output file. Defaults to `GUARDIAN_OUTPUT_PATH` when set. Without `--out`, the report is written to stdout.
+- `--out <path>`: optional output file. Defaults to `GUARDIAN_OUTPUT_PATH` when set.
 - `--format <markdown|json|sarif>`: report format. Defaults to `markdown`.
+- `--summary-only`: write a short overview for GitHub Actions summaries. This is the default.
+- `--full-report`: write the complete Markdown report.
+- `--pr-comment`: write compact Markdown suitable for a GitHub PR comment. Guardian does not call the GitHub API.
 - `--sarif <path>`: import a local SARIF artifact. Can be repeated.
 - `--codeql <path>`: import a local CodeQL SARIF artifact. Can be repeated.
 - `--semgrep <path>`: import a local Semgrep JSON or SARIF artifact. Can be repeated.
 - `--snyk <path>`: import a local Snyk JSON or SARIF artifact. Can be repeated.
-- `--summary-only`: write a short overview for GitHub Actions summaries. This is the default.
-- `--full-report`: write the complete Markdown report with changed files, detailed findings, accepted findings, required actions, and suggested tests.
-- `--pr-comment`: write compact Markdown suitable for a GitHub PR comment. It does not call the GitHub API.
-- `--preset <generic|generic-cli|node-api|web-app|python|monorepo>`: choose the config preset for `init`. Defaults to best-effort detection.
-- `--fail-on <high|critical>`: exit with code 1 when the calculated risk meets the threshold. Defaults to not failing the build.
+- `--preset <generic|generic-cli|node-api|web-app|python|monorepo>`: choose the config preset for `init`.
+- `--fail-on <high|critical>`: exit with code 1 when overall risk meets the threshold.
 - `--help`: print CLI help.
 
 Equivalent environment variables:
@@ -164,52 +199,17 @@ Equivalent environment variables:
 
 Multiple artifact paths in environment variables are comma-separated.
 
-## Onboarding a New Repository
+## Project-Specific Configuration
 
-Guardian can run with defaults, but analysis quality is better when the target repository provides repository-specific config and Project Brain context.
-
-Recommended first run:
-
-```sh
-npx ai-project-guardian init --dry-run
-npx ai-project-guardian init
-npx ai-project-guardian --repo . --out guardian-summary.md --summary-only
-```
-
-Each target repository should add:
-
-- `guardian.config.json`
-- `.project-brain/`
-- `.github/workflows/ai-project-guardian.yml`
-
-### 1. Add guardian.config.json
-
-Add `guardian.config.json` at the target repository root:
+Guardian works without config, but analysis quality improves with `guardian.config.json`:
 
 ```json
 {
   "projectName": "My Project",
-  "riskFolders": [
-    "src/routes",
-    "src/services",
-    "src/auth",
-    "src/config"
-  ],
-  "testFolders": [
-    "tests",
-    "cypress",
-    "__tests__"
-  ],
-  "releaseSensitiveFiles": [
-    "package.json",
-    "package-lock.json",
-    ".env.example",
-    ".github/workflows"
-  ],
-  "requiredChecks": [
-    "npm test",
-    "npm run lint"
-  ],
+  "riskFolders": ["src/routes", "src/services", "src/auth", "src/config"],
+  "testFolders": ["tests", "cypress", "__tests__"],
+  "releaseSensitiveFiles": ["package.json", "package-lock.json", ".env.example", ".github/workflows"],
+  "requiredChecks": ["npm test", "npm run lint"],
   "coverageThreshold": 80,
   "customRules": [
     {
@@ -222,13 +222,11 @@ Add `guardian.config.json` at the target repository root:
 }
 ```
 
-Coverage awareness is optional. When `coverage-final.json` or `lcov.info` exists at the repository root or under `coverage/`, Guardian flags changed source files below `coverageThreshold`.
+Missing config and missing Project Brain files are onboarding notes, not risk amplifiers.
 
-`customRules` are optional. They are deterministic path rules for repositories that need project-specific QA or release checks without changing Guardian source code.
+### Project Brain
 
-### 2. Add Project Brain
-
-Add `.project-brain/` at the target repository root:
+`.project-brain/` gives Guardian and AI coding agents repository context:
 
 ```text
 .project-brain/
@@ -242,176 +240,58 @@ Add `.project-brain/` at the target repository root:
   module-map.json
 ```
 
-- `project.md`: what the application does, business flows, and critical user journeys.
-- `architecture.md`: backend, frontend, database, migrations, and external integrations.
-- `testing-strategy.md`: test types, coverage expectations, and regression-critical areas.
-- `deployment-rules.md`: stage/prod separation, environment variables, migration caution, and release checks.
-- `security-rules.md`: auth rules, secret handling, privacy-sensitive data, and commit restrictions.
-- `known-risks.md`: risky flows, fragile modules, and areas needing extra release review.
-- `known-bugs.md`: unresolved issues, or empty when there are no known current issues.
-- `module-map.json`: important folders mapped to business areas.
+Use it to describe critical user journeys, architecture, test expectations, deployment rules, security conventions, fragile modules, and business areas.
 
-### Quick Start Prompt for Project Brain
+## Presets
 
-Use this prompt with an AI coding agent in the target repository:
+`init` supports these presets:
 
-```text
-Create a .project-brain folder for this repository.
+- `generic`
+- `generic-cli`
+- `node-api`
+- `web-app`
+- `python`
+- `monorepo`
 
-Goal:
-Provide structured context for AI Project Guardian and future AI coding agents.
+Example:
 
-Create:
-.project-brain/
-  project.md
-  architecture.md
-  testing-strategy.md
-  deployment-rules.md
-  security-rules.md
-  known-risks.md
-  known-bugs.md
-  module-map.json
-
-Content requirements:
-1. project.md:
-   - Explain what this application does.
-   - Mention important business flows and critical user journeys.
-
-2. architecture.md:
-   - Explain backend structure.
-   - Explain frontend structure.
-   - Explain database/migration structure.
-   - Explain external integrations.
-
-3. testing-strategy.md:
-   - Explain existing test types.
-   - Mention coverage requirements.
-   - Mention critical areas that need regression tests.
-
-4. deployment-rules.md:
-   - Explain stage/prod separation.
-   - Mention required environment variables.
-   - Mention migration caution.
-   - Mention release checks.
-
-5. security-rules.md:
-   - Mention authentication and authorization rules.
-   - Mention secret handling.
-   - Mention privacy-sensitive data handling.
-   - Mention what must never be committed.
-
-6. known-risks.md:
-   - List known risky flows.
-   - List fragile modules.
-   - List areas that need extra review before release.
-
-7. known-bugs.md:
-   - Keep empty if there are no known current issues.
-   - Otherwise list known unresolved bugs.
-
-8. module-map.json:
-   - Map important folders to business areas.
-
-Do not change application logic.
-Only add documentation/context files.
+```bash
+npx ai-project-guardian@latest init --preset web-app
 ```
 
-### 3. Add GitHub Actions workflow
+When `--preset` is omitted, Guardian chooses a best-effort preset from local project files. Workspace markers such as `pnpm-workspace.yaml`, `turbo.json`, `nx.json`, package workspaces, or multiple package boundaries select `monorepo`; Python markers such as `pyproject.toml`, `requirements.txt`, or FastAPI-style `app/main.py` select `python`; React, Next, Vite, Angular, Vue, and Svelte markers select `web-app`; Node API markers select `node-api`; CLI package markers select `generic-cli`; otherwise Guardian uses `generic`.
 
-Each target repository should add:
+## Business Areas And Custom Rules
 
-```text
-.github/workflows/ai-project-guardian.yml
-```
-
-The generated workflow checks out the target repo, runs Guardian with `npx --yes ai-project-guardian`, and writes `guardian-report.md` to the GitHub Actions summary.
-
-See `docs/github-actions-integration.md` for a complete workflow.
-
-### Recommended Repository Layout
-
-```text
-repository-root/
-  guardian.config.json
-  .project-brain/
-  .github/workflows/ai-project-guardian.yml
-```
-
-## Business Areas
-
-Every product has business-critical paths that generic repository heuristics cannot fully understand. `ai-project-guardian` supports project-specific business rules through `guardian.config.json` so each repository can describe its own risky areas without changing Guardian code.
-
-Add a `businessAreas` array to the target repository config:
+Every product has business-critical paths that generic heuristics cannot fully understand. `guardian.config.json` can define business areas and deterministic custom rules without changing Guardian source code.
 
 ```json
 {
-  "projectName": "AI-Restaurants",
   "businessAreas": [
     {
       "name": "consent",
       "description": "Consent, privacy policy, and audit evidence flow",
       "riskLevel": "high",
-      "paths": [
-        "src/consent",
-        "src/privacy",
-        "src/routes/consentRoutes.ts"
-      ],
-      "requiredTestHints": [
-        "consent",
-        "privacy",
-        "audit"
-      ],
+      "paths": ["src/consent", "src/privacy", "src/routes/consentRoutes.ts"],
+      "requiredTestHints": ["consent", "privacy", "audit"],
       "requiredBeforeDeploy": [
         "Confirm consent audit evidence is still written",
         "Confirm privacy policy versioning is not broken"
       ]
     }
-  ]
-}
-```
-
-When a changed file matches a business area path, Guardian can add:
-
-- A QA finding when no existing or changed test file path matches `requiredTestHints`.
-- A release finding when `requiredBeforeDeploy` contains deploy checklist items.
-- Required actions in the report based on `requiredBeforeDeploy`.
-
-Path matching supports exact file paths, folder prefixes, and simple substring matches. Test hint matching is deterministic and checks test file paths from the existing repository file list and changed test files. Guardian does not make AI or LLM calls for this behavior.
-
-New projects only need a `guardian.config.json` to define their business areas. They can optionally add `.project-brain` files for extra human-readable context and team conventions.
-
-## Custom Rules
-
-Repositories can also define deterministic path-based QA and release rules in `guardian.config.json`:
-
-```json
-{
+  ],
   "customRules": [
-    {
-      "id": "email-change-requires-test",
-      "whenChanged": "src/email/**",
-      "requiresTest": "tests/email/**",
-      "risk": "high"
-    },
     {
       "id": "deploy-config-review",
       "whenChanged": "config/deploy/**",
       "risk": "high",
-      "requiredBeforeDeploy": [
-        "Review deploy config with release owner"
-      ]
+      "requiredBeforeDeploy": ["Review deploy config with release owner"]
     }
   ]
 }
 ```
 
-`requiresTest` creates a QA finding when matching files changed and no repository file matches the test glob. `requiredBeforeDeploy` creates a release finding and adds checklist items to the report. Glob matching supports `*` within one path segment and `**` across nested paths.
-
-Optional custom rule fields:
-
-- `title`: custom finding title.
-- `description`: custom finding description.
-- `whyItMatters`: release context for deploy reviewers.
+Business areas can add QA findings when matching tests are missing and release findings when deploy checklist items are required. Custom rules support `requiresTest` and `requiredBeforeDeploy`.
 
 Example configs are available in:
 
@@ -419,70 +299,29 @@ Example configs are available in:
 - `examples/togetherly/guardian.config.json`
 - `examples/generic-saas/guardian.config.json`
 
-## Coverage Awareness
-
-Guardian reads coverage artifacts when they exist in the target repository:
-
-- `coverage-final.json`
-- `coverage/coverage-final.json`
-- `lcov.info`
-- `coverage/lcov.info`
-
-Changed source files below `coverageThreshold` create a medium-risk QA finding named `Changed code has low test coverage`. Coverage awareness is optional and local-only; Guardian does not run tests or generate coverage itself.
-
 ## External Scanner Correlation
 
-Enterprise Risk Correlation imports local scanner artifacts and folds them into the report:
+Guardian can import local scanner outputs:
 
-- generic SARIF via `--sarif`
+- SARIF via `--sarif`
 - CodeQL SARIF via `--codeql`
 - Semgrep JSON or SARIF via `--semgrep`
 - Snyk JSON or SARIF via `--snyk`
 
-Guardian parses these files locally, deduplicates external findings, and correlates them with Guardian security findings by file, line, and normalized title. Correlations are reported as `single-tool` or `multi-tool`; multi-tool critical correlations can elevate overall risk.
+Example:
 
-## Report Decision Model
-
-Guardian keeps the existing `riskScore` and `overallRisk` scoring behavior, then adds decision-support fields to make release decisions easier to read:
-
-- `codeRisk`: highest active blocking code/test/security/workflow/external/correlated risk. Auth/security score bands can keep this elevated even after blocking findings clear.
-- `releaseChecklistRisk`: highest active release checklist risk.
-- `blockingFindingsCount`: active QA, security, workflow, external scanner, and correlated findings. These represent work that can block merge or require review.
-- `checklistFindingsCount`: active release findings. These are deploy-readiness checklist items, not code-location blockers.
-- `mergeRecommendation`: one of `blocked`, `review_required`, `safe_after_checklist`, or `safe`.
-- `riskReason`: short explanation for the recommendation, such as missing negative auth tests, security findings, checklist-only risk, or no remaining blockers.
-
-Examples:
-
-| Scenario | Blocking findings | Checklist findings | Merge recommendation | Risk reason |
-| --- | ---: | ---: | --- | --- |
-| Auth/security code changed without negative tests | 1+ | any | `blocked` | `Auth/security changed without negative test coverage.` |
-| Auth/security code changed with negative tests, and only release checklist items remain | 0 | 1+ | `safe_after_checklist` | `Only release checklist items remain.` |
-| Real secret or security finding | 1+ | any | `blocked` for high/critical code risk, `review_required` for lower-severity blocking risk | `Security findings require review.` |
-
-See `docs/report-decision-model.md` for a longer explanation of how these fields should be used in CI and PR review.
-
-## Troubleshooting
-
-### `fatal: bad revision 'origin/main...HEAD'`
-
-This means Git cannot resolve the configured comparison ref in the target repository. It often happens in local repositories that have no `origin/main` remote-tracking branch, in repositories that use a different default branch, or in shallow CI checkouts.
-
-Guardian validates the requested base ref before diffing. If `--base` is invalid, it falls back to `HEAD~1` when available and prints a warning. If no base is provided, Guardian tries `origin/main`, then `main`, then `master`, then `HEAD~1`.
-
-### Local changed files vs CI
-
-When you run Guardian locally, changed-file detection combines the committed branch diff with staged, unstaged, and untracked files. This lets you review work in progress without committing first.
-
-In CI, Guardian normally runs on a clean checkout and reports the committed pull request diff against the configured base ref. Staged, unstaged, and untracked files are usually absent unless the workflow creates them before Guardian runs.
-
-Useful alternatives:
-
-```sh
-npx ai-project-guardian@beta --repo . --base HEAD~1
-git fetch origin main
-git branch -a
+```bash
+npx ai-project-guardian@latest \
+  --repo . \
+  --full-report \
+  --sarif reports/generic.sarif \
+  --codeql reports/codeql.sarif \
+  --semgrep reports/semgrep.json \
+  --snyk reports/snyk.json \
+  --out guardian-report.md
 ```
+
+Guardian parses these files locally. It does not call external scanner APIs.
 
 ## Output Modes
 
@@ -494,11 +333,78 @@ Guardian can render:
 - JSON: `--format json`.
 - SARIF: `--format sarif`.
 
-SARIF output includes QA, security, workflow, and external/correlated scanner findings. Release findings stay in Markdown/JSON reports because they are checklist-oriented rather than code-location-oriented.
+SARIF output includes QA, security, workflow, external, and correlated scanner findings. Release findings stay in Markdown/JSON reports because they are checklist-oriented rather than code-location-oriented.
 
-## Risk baseline
+## Report Decision Model
 
-Add `.guardian-baseline.json` to a target repository to accept known findings without counting them toward the overall score:
+Guardian separates code/test/security blockers from release checklist items:
+
+- `codeRisk`: highest active blocking code/test/security/workflow/external/correlated risk.
+- `releaseChecklistRisk`: highest active release checklist risk.
+- `blockingFindingsCount`: active QA, security, workflow, external scanner, and correlated findings.
+- `checklistFindingsCount`: active release findings.
+- `mergeRecommendation`: one of `blocked`, `review_required`, `safe_after_checklist`, or `safe`.
+- `riskReason`: short explanation for the recommendation.
+
+Examples:
+
+| Scenario | Blocking findings | Checklist findings | Merge recommendation |
+| --- | ---: | ---: | --- |
+| Docs-only change | 0 | 0 | `safe` |
+| Workflow changed | 0 | 1+ | `safe_after_checklist` |
+| Source changed without nearby tests | 1+ | any | `review_required` |
+| Auth/security code changed without negative tests | 1+ | any | `blocked` |
+| High or critical scanner/security finding | 1+ | any | `blocked` |
+
+See `docs/report-decision-model.md` for a longer explanation.
+
+## What Guardian Is Not
+
+Guardian is:
+
+- Not a hosted dashboard.
+- Not a SaaS.
+- Not a replacement for SAST.
+- Not a replacement for dependency audit.
+- Not a replacement for tests.
+- Not a replacement for human review.
+- Not an automatic code fixer.
+- Not a tool that uploads your repository by default.
+
+## Example Use Cases
+
+- An AI agent changed 12 files; Guardian summarizes risk before the PR is opened.
+- `package-lock.json` changed; Guardian asks for clean install, build, test, and dependency audit.
+- Auth middleware changed; Guardian blocks until security review or negative test coverage is added.
+- A docs-only change stays low risk.
+- A workflow changed; Guardian asks for CI/CD review but does not automatically treat it as a code blocker.
+- A migration changed without DB test evidence; Guardian raises release and QA risk.
+
+## Troubleshooting
+
+### `fatal: bad revision 'origin/main...HEAD'`
+
+This means Git cannot resolve the configured comparison ref in the target repository. It often happens in local repositories with no `origin/main` remote-tracking branch, repositories using a different default branch, or shallow CI checkouts.
+
+Guardian validates the requested base ref before diffing. If `--base` is invalid, it falls back to `HEAD~1` when available and prints a warning. If no base is provided, Guardian tries `origin/main`, then `main`, then `master`, then `HEAD~1`.
+
+Useful alternatives:
+
+```bash
+npx ai-project-guardian@latest --repo . --base HEAD~1
+git fetch origin main
+git branch -a
+```
+
+### Local Changed Files Vs CI
+
+When you run Guardian locally, changed-file detection combines committed branch changes with staged, unstaged, and untracked files. This lets you review work in progress before committing.
+
+In CI, Guardian normally runs on a clean checkout and reports the committed pull request diff against the configured base ref.
+
+## Risk Baseline
+
+Add `.guardian-baseline.json` to accept known findings without counting them toward the active score:
 
 ```json
 {
@@ -511,81 +417,26 @@ Add `.guardian-baseline.json` to a target repository to accept known findings wi
 }
 ```
 
-Accepted findings are matched by `type` and `title`. They still appear in the report under `Accepted Findings`, but only new active findings affect the risk score.
+Accepted findings are matched by `type` and `title`. They still appear under `Accepted Findings`, but only new active findings affect the score.
 
 ## Analyzer Accuracy Baseline
 
-The repository includes integration fixtures under `tests/test-fixtures/analyzer-accuracy/` that run Guardian against simulated repositories for:
+The repository includes integration fixtures under `tests/test-fixtures/analyzer-accuracy/` for:
 
-- auth changes without tests
-- migration changes without DB tests
-- workflow changes
-- hardcoded secrets
-- docs-only changes
-- config-only changes
+- Auth changes without tests.
+- Migration changes without DB tests.
+- Workflow changes.
+- Hardcoded secrets.
+- Docs-only changes.
+- Config-only changes.
 
-The accuracy report lives at `.project-brain/metrics/ANALYZER_ACCURACY_REPORT.md`. These tests measure current analyzer behavior before new analyzer features are added.
+These tests measure analyzer behavior before new analyzer features are added.
 
-## GitHub Actions
+## Roadmap
 
-Example workflow:
-
-```yaml
-name: Guardian Report
-
-on:
-  pull_request:
-  workflow_dispatch:
-
-jobs:
-  guardian:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: npx --yes ai-project-guardian --repo . --base origin/main --out guardian-summary.md --summary-only --fail-on critical
-      - run: cat guardian-summary.md >> "$GITHUB_STEP_SUMMARY"
-      - run: npx --yes ai-project-guardian --repo . --base origin/main --out guardian-report.md --full-report
-      - uses: actions/upload-artifact@v4
-        with:
-          name: guardian-report
-          path: guardian-report.md
-```
-
-This repository also includes `.github/workflows/guardian-self-check.yml` to run Guardian against itself.
-
-## Use from another GitHub repository
-
-To run `ai-project-guardian` from a GitHub repository, install nothing in the repo; the generated workflow uses `npx --yes ai-project-guardian`.
-
-```yaml
-name: Guardian Report
-
-on:
-  pull_request:
-  workflow_dispatch:
-
-jobs:
-  guardian:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Run guardian against target repo
-        run: npx --yes ai-project-guardian --repo . --base origin/main --out guardian-summary.md --summary-only
-
-      - name: Append report to job summary
-        run: cat guardian-summary.md >> "$GITHUB_STEP_SUMMARY"
-```
-
-See `docs/github-actions-integration.md` for a complete copy-paste workflow.
+- Configurable ignore patterns.
+- Better framework-specific QA suggestions.
+- Python/FastAPI calibration.
+- Monorepo calibration.
+- Repo Context Center integration.
+- Broader real-repo calibration before stricter release gates.
