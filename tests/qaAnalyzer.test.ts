@@ -85,6 +85,54 @@ describe("analyzeQa", () => {
     assert.deepEqual(findings, []);
   });
 
+  it("does not create QA findings for docs-only changes", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "docs/release-process.md",
+          status: "modified",
+          category: "documentation",
+          riskLevel: "info"
+        },
+        {
+          path: "README.md",
+          status: "modified",
+          category: "documentation",
+          riskLevel: "info"
+        }
+      ],
+      repoFiles: ["docs/release-process.md", "README.md"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    assert.deepEqual(findings, []);
+  });
+
+  it("does not create QA findings for config-only changes", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "vite.config.ts",
+          status: "modified",
+          category: "config",
+          riskLevel: "high"
+        },
+        {
+          path: "config/runtime.json",
+          status: "modified",
+          category: "config",
+          riskLevel: "high"
+        }
+      ],
+      repoFiles: ["vite.config.ts", "config/runtime.json"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    assert.deepEqual(findings, []);
+  });
+
   it("does not require nearby tests for CSS-only changes", () => {
     const findings = analyzeQa({
       changedFiles: [
@@ -115,7 +163,7 @@ describe("analyzeQa", () => {
     assert.deepEqual(findings, []);
   });
 
-  it("groups repeated Cypress guidance for many affected UI files", () => {
+  it("groups repeated component/e2e guidance for many affected UI files", () => {
     const findings = analyzeQa({
       changedFiles: [
         {
@@ -151,12 +199,12 @@ describe("analyzeQa", () => {
       "src/pages/CheckoutPage.tsx"
     ]);
     assert.deepEqual(uiFinding?.suggestedTests, [
-      "Add or update Cypress coverage for affected UI files: src/components/MenuCard.tsx, src/components/OrderPanel.tsx, src/pages/CheckoutPage.tsx."
+      "Add component tests for touched UI components, or Cypress/e2e coverage for page flows (examples: src/components/MenuCard.tsx, src/components/OrderPanel.tsx, src/pages/CheckoutPage.tsx)."
     ]);
     assert.equal(guidance.filter((item) => item.sourceFindingId === "qa-ui-without-cypress-test").length, 1);
   });
 
-  it("groups repeated nearby-unit-test guidance for many affected source files", () => {
+  it("groups repeated nearby test guidance for many affected source files", () => {
     const findings = analyzeQa({
       changedFiles: [
         {
@@ -192,9 +240,77 @@ describe("analyzeQa", () => {
       "src/services/orderService.ts"
     ]);
     assert.deepEqual(sourceFinding?.suggestedTests, [
-      "Add or update nearby unit tests for affected source files: src/domain/pricing.ts, src/services/menuService.ts, src/services/orderService.ts."
+      "Create or update nearby unit tests for touched service/business logic files (examples: src/domain/pricing.ts, src/services/menuService.ts, src/services/orderService.ts)."
     ]);
     assert.equal(guidance.filter((item) => item.sourceFindingId === "qa-source-without-nearby-test").length, 1);
+  });
+
+  it("suggests component or e2e tests for frontend component changes", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/components/WalletSummary.tsx",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        }
+      ],
+      repoFiles: ["src/components/WalletSummary.tsx"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const uiFinding = findings.find((finding) => finding.id === "qa-ui-without-cypress-test");
+
+    assert.equal(uiFinding?.title, "UI changed without component or e2e coverage");
+    assert.deepEqual(uiFinding?.affectedFiles, ["src/components/WalletSummary.tsx"]);
+    assert.match(uiFinding?.suggestedTests[0] ?? "", /component tests/);
+    assert.match(uiFinding?.suggestedTests[0] ?? "", /Cypress\/e2e/);
+  });
+
+  it("suggests API or integration tests for backend API route changes", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/app/api/wallets/route.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        }
+      ],
+      repoFiles: ["src/app/api/wallets/route.ts"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const apiFinding = findings.find((finding) => finding.id === "qa-api-without-integration-test");
+
+    assert.deepEqual(apiFinding?.affectedFiles, ["src/app/api/wallets/route.ts"]);
+    assert.match(apiFinding?.suggestedTests[0] ?? "", /API or integration test/);
+  });
+
+  it("suggests unit tests for service changes", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/services/walletHealthService.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        }
+      ],
+      repoFiles: ["src/services/walletHealthService.ts"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const sourceFinding = findings.find((finding) => finding.id === "qa-source-without-nearby-test");
+
+    assert.deepEqual(sourceFinding?.affectedFiles, ["src/services/walletHealthService.ts"]);
+    assert.equal(
+      sourceFinding?.suggestedTests[0],
+      "Create or update nearby unit tests for touched service/business logic files (examples: src/services/walletHealthService.ts)."
+    );
   });
 
   it("still reports missing negative tests for real auth and security code", () => {
