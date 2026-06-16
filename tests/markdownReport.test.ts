@@ -42,6 +42,48 @@ describe("renderMarkdownReport", () => {
     assert.doesNotMatch(actual, /src\/api\/reservations\.ts:18/);
   });
 
+  it("renders QA test signal evidence in full and summary Markdown reports", () => {
+    const report = makeReport();
+    report.qaFindings = [
+      {
+        ...report.qaFindings[0],
+        title: "Source change without related test signal",
+        affectedFiles: ["src/referral/rewardService.ts", "src/referral/rewardRules.ts"],
+        suggestedTests: ["Review related referral test coverage."],
+        testSignalEvidence: {
+          changedFiles: ["src/referral/rewardRules.ts", "src/referral/rewardService.ts"],
+          expectedTestSignals: ["src/referral/*.test.ts", "src/referral/*.spec.ts", "tests/referral/*"],
+          detectedTestChanges: [],
+          suggestedCoverage: ["happy path", "duplicate/abuse prevention", "limit/quota boundary"],
+          reason: "No related test change detected."
+        }
+      }
+    ];
+    report.actionableGuidance = buildActionableGuidance([
+      ...report.releaseFindings,
+      ...report.qaFindings,
+      ...report.securityFindings,
+      ...report.workflowFindings
+    ]);
+
+    const fullReport = renderMarkdownReport(report);
+    const summary = renderMarkdownSummary(report);
+
+    assert.match(fullReport, /\*\*Test signal evidence\*\*/);
+    assert.match(fullReport, /Changed files:\n- `src\/referral\/rewardRules\.ts`\n- `src\/referral\/rewardService\.ts`/);
+    assert.match(fullReport, /Expected test signals:\n- `src\/referral\/\*\.test\.ts`\n- `src\/referral\/\*\.spec\.ts`\n- `tests\/referral\/\*`/);
+    assert.match(fullReport, /Detected related test changes:\n- None/);
+    assert.match(fullReport, /No related test change detected\./);
+    assert.match(summary, /## QA Test Signal Evidence/);
+    assert.match(summary, /Source change without related test signal: No related test change detected\./);
+    assert.match(
+      summary,
+      /Review test coverage for `src\/referral\/\*`; no related test change was detected\. Suggested coverage: happy path, duplicate\/abuse prevention, limit\/quota boundary\./
+    );
+    assert.doesNotMatch(fullReport, /You forgot|did not write tests|Negative test is missing/i);
+    assert.doesNotMatch(summary, /You forgot|did not write tests|Negative test is missing/i);
+  });
+
   it("uses summary style when requested by the generic renderer", () => {
     const report = makeReport();
 

@@ -92,6 +92,27 @@ describe("buildActionableGuidance", () => {
     assert.equal(guidance[0].action, "Create or update nearby unit tests for touched source files.");
   });
 
+  it("uses QA test signal evidence for specific advisory guidance", () => {
+    const guidance = buildActionableGuidance([
+      qaFinding("Source change without related test signal", "medium", ["Review related referral test coverage"], {
+        id: "qa-source-without-nearby-test",
+        affectedFiles: ["src/referral/rewardRules.ts", "src/referral/rewardService.ts"],
+        testSignalEvidence: {
+          changedFiles: ["src/referral/rewardRules.ts", "src/referral/rewardService.ts"],
+          expectedTestSignals: ["src/referral/*.test.ts", "tests/referral/*"],
+          detectedTestChanges: [],
+          suggestedCoverage: ["happy path", "duplicate/abuse prevention", "limit/quota boundary"],
+          reason: "No related test change detected."
+        }
+      })
+    ]);
+
+    assert.equal(
+      guidance[0].action,
+      "Review test coverage for `src/referral/*`; no related test change was detected. Suggested coverage: happy path, duplicate/abuse prevention, limit/quota boundary."
+    );
+  });
+
   it("keeps the highest-risk item when duplicate guidance exists", () => {
     const guidance = buildActionableGuidance([
       qaFinding("Missing integration test", "medium", ["Review shared behavior"]),
@@ -130,7 +151,7 @@ function qaFinding(
   title: string,
   riskLevel: RiskLevel,
   suggestedTests: string[],
-  options: { id?: string; affectedFiles?: string[] } = {}
+  options: { id?: string; affectedFiles?: string[]; testSignalEvidence?: QaFinding["testSignalEvidence"] } = {}
 ): QaFinding {
   return {
     id: options.id ?? title.toLowerCase().replaceAll(" ", "-"),
@@ -139,7 +160,8 @@ function qaFinding(
     description: `${title}.`,
     riskLevel,
     affectedFiles: options.affectedFiles ?? ["src/example.ts"],
-    suggestedTests
+    suggestedTests,
+    ...(options.testSignalEvidence === undefined ? {} : { testSignalEvidence: options.testSignalEvidence })
   };
 }
 

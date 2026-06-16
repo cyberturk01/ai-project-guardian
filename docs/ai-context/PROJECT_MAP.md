@@ -11,7 +11,7 @@
 ## Generated Repo Map
 
 ### Main Purpose
-ai-project-guardian is a TypeScript CLI for analyzing another repository and producing QA, release, security, workflow, coverage, and external-scanner risk reports that can be published from GitHub Actions.
+Repository risk review for AI-assisted development, QA, release, and security checks.
 
 ### Key Directories
 - `src/cli` - CLI commands and command entrypoints
@@ -24,6 +24,7 @@ ai-project-guardian is a TypeScript CLI for analyzing another repository and pro
 - `templates` - templates/prompts/examples
 - `examples` - examples and usage samples
 - `tests` - test coverage, fixtures, and regression cases
+- `scripts` - automation and maintenance scripts
 - `.github/workflows` - CI and release automation
 - `docs/ai-context` - generated agent context
 - `.repo-context-center` - tool config
@@ -37,7 +38,7 @@ ai-project-guardian is a TypeScript CLI for analyzing another repository and pro
 | --- | --- |
 | Repo understanding level | High |
 | Entrypoints detected | 2 |
-| Key directories detected | 13 |
+| Key directories detected | 14 |
 | Modules detected | 7 |
 | Dependency hints mode | Conservative |
 | Generated/noise filtering | Active (4 ignored/noise areas separated) |
@@ -61,9 +62,9 @@ ai-project-guardian is a TypeScript CLI for analyzing another repository and pro
 - `tests/baseline.test.ts`
 - `tests/businessAreaAnalyzer.test.ts`
 - `tests/cliArgs.test.ts`
+- `tests/cliBin.test.ts`
 - `tests/config.test.ts`
 - `tests/coverageAnalyzer.test.ts`
-- `tests/customRuleEvaluator.test.ts`
 
 ### Generated / Ignored Areas
 - `__snapshots__/`
@@ -113,16 +114,16 @@ ai-project-guardian is a TypeScript CLI for analyzing another repository and pro
 ### Production-Critical Flows
 | Flow | Why critical | First check |
 | --- | --- | --- |
-| CLI: `src/cli/index.ts`, `src/cli/runGuardian.ts` | CLI behavior changes can break scripts, help text, JSON output, or exit codes. | npm run build |
+| CLI: `src/cli/index.ts`, `src/cli/initGuardian.ts`, `src/cli/runGuardian.ts` | CLI behavior changes can break scripts, help text, JSON output, or exit codes. | npm run build |
 | Configuration: `examples/ai-restaurants/guardian.config.json`, `examples/generic-saas/guardian.config.json`, `examples/togetherly/guardian.config.json` | Config mistakes can misroute agent work or break validation. | npm run build |
 | Analyzers / Risk Rules: `src/analyzers/businessAreaAnalyzer.ts`, `src/analyzers/coverageAnalyzer.ts`, `src/analyzers/customRuleEvaluator.ts` | Risk guidance affects what agents inspect before changes. | npm run build |
-| Renderers / Reports: `src/core/reportDecisionSupport.ts`, `src/renderers/markdownReport.ts`, `src/renderers/markdownSummary.ts` | Report rendering changes can break generated markdown, JSON consumers, or marker preservation. | npm run build |
-| Repository scanning: `src/repo/fileClassifier.ts`, `src/repo/getChangedFiles.ts`, `src/repo/index.ts` | File classification changes can cause future agents to read too much or miss important files. | npm run build |
+| Renderers / Reports: `src/core/reportDecisionSupport.ts`, `src/renderers/decisionSummary.ts`, `src/renderers/markdownNotes.ts` | Report rendering changes can break generated markdown, JSON consumers, or marker preservation. | npm run build |
+| Repository scanning: `src/repo/fileClassifier.ts`, `src/repo/getChangedFiles.ts`, `src/repo/ignoredChangedFiles.ts` | File classification changes can cause future agents to read too much or miss important files. | npm run build |
 | Templates: `src/project-brain/index.ts`, `src/project-brain/loadProjectBrain.ts`, `src/project-brain/types.ts` | Template changes can propagate stale or oversized context into new repos. | npm run build |
 | Tests / Fixtures: `tests/__snapshots__/guardian-report.md`, `tests/fixtures/project-brain/complete/.project-brain/architecture.md`, `tests/fixtures/project-brain/complete/.project-brain/deployment-rules.md` | Fixture changes can make tests pass while real map output gets worse. | npm run build |
 | Auth/access: `src/analyzers/securityAnalyzer.ts`, `templates/project-brain/security-rules.md` | Auth changes can expose accounts or bypass permissions. | npm run build |
 | Context docs: `.project-brain/metrics/ANALYZER_ACCURACY_REPORT.md`, `.project-brain/metrics/COLLECTION_GUIDE.md`, `.project-brain/metrics/LAST_20_HISTORY_AUDIT.md` | Context doc changes affect future agent routing and token use. | npm run build |
-| Release workflow: `.github/workflows/guardian-self-check.yml`, `.github/workflows/test.yml`, `src/analyzers/releaseAnalyzer.ts` | Workflow changes can block releases or deploy broken builds. | npm run build |
+| Release workflow: `.github/workflows/guardian-self-check.yml`, `.github/workflows/test.yml`, `RELEASE_NOTES.md` | Workflow changes can block releases or deploy broken builds. | npm run build |
 | Fixture/snapshot drift: `tests/__snapshots__/guardian-report.md`, `tests/fixtures/project-brain/complete/.project-brain/architecture.md`, `tests/fixtures/project-brain/complete/.project-brain/deployment-rules.md` | Fixtures and expected output can drift from generated map behavior. | npm run build |
 
 _Generated by repo-context-center. Edit outside this section._

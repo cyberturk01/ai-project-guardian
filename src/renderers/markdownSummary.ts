@@ -34,6 +34,8 @@ ${renderDecisionSummary(report)}
 - Workflow: ${report.workflowFindings.length}
 - External scanners: ${report.enterpriseRiskCorrelation.externalFindings.length}
 
+${renderQaEvidenceSummary(report)}
+
 ${renderScoreBreakdownSection(report)}
 
 ## Required Deploy Actions
@@ -63,6 +65,35 @@ function renderShortTaskList(items: string[], emptyText = "No required actions."
   }
 
   return [...visibleItems, `- ${hiddenCount} more action(s) in the full report.`].join("\n");
+}
+
+function renderQaEvidenceSummary(report: GuardianReport): string {
+  const evidenceItems = report.qaFindings.filter((finding) => finding.testSignalEvidence !== undefined);
+
+  if (evidenceItems.length === 0) {
+    return "";
+  }
+
+  const visibleItems = evidenceItems.slice(0, 3).map((finding) => {
+    const evidence = finding.testSignalEvidence;
+
+    if (evidence === undefined) {
+      return "";
+    }
+
+    const changedFiles = summarizeInlineList(evidence.changedFiles);
+    const expectedSignals = summarizeInlineList(evidence.expectedTestSignals);
+    const detectedChanges =
+      evidence.detectedTestChanges.length === 0 ? "None" : summarizeInlineList(evidence.detectedTestChanges);
+
+    return `- ${finding.title}: ${evidence.reason} Changed: ${changedFiles}. Expected: ${expectedSignals}. Detected: ${detectedChanges}.`;
+  });
+  const hiddenCount = evidenceItems.length - visibleItems.length;
+  const hiddenText = hiddenCount > 0 ? `\n- ${hiddenCount} more QA evidence item(s) in the full report.` : "";
+
+  return `## QA Test Signal Evidence
+
+${visibleItems.join("\n")}${hiddenText}`;
 }
 
 function renderScoreBreakdownSection(report: GuardianReport): string {
@@ -112,6 +143,13 @@ function renderWarnings(warnings: string[]): string {
   }
 
   return warnings.map((warning) => `- ${warning}`).join("\n");
+}
+
+function summarizeInlineList(items: string[]): string {
+  const visibleItems = items.slice(0, 3);
+  const suffix = items.length > visibleItems.length ? `, +${items.length - visibleItems.length} more` : "";
+
+  return visibleItems.length === 0 ? "None" : `${visibleItems.join(", ")}${suffix}`;
 }
 
 function renderRiskLabel(riskLevel: RiskLevel): string {

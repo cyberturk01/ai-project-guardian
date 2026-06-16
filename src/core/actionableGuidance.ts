@@ -61,6 +61,17 @@ function guidanceItemsForFinding(finding: GuardianFinding): ActionableGuidanceIt
 }
 
 function groupedQaGuidanceAction(finding: Extract<GuardianFinding, { area: "qa" }>): string | undefined {
+  if (finding.testSignalEvidence !== undefined) {
+    const scope = guidanceScope(finding.testSignalEvidence.changedFiles);
+    const detection =
+      finding.testSignalEvidence.detectedTestChanges.length === 0
+        ? "no related test change was detected"
+        : `related test changes detected: ${finding.testSignalEvidence.detectedTestChanges.join(", ")}`;
+    const coverage = summarizeCoverage(finding.testSignalEvidence.suggestedCoverage);
+
+    return `Review test coverage for ${scope}; ${detection}. Suggested coverage: ${coverage}.`;
+  }
+
   if (finding.id === "qa-ui-without-cypress-test" && finding.affectedFiles.length > 1) {
     return "Add component tests for touched UI components, or Cypress/e2e coverage for page flows.";
   }
@@ -70,6 +81,35 @@ function groupedQaGuidanceAction(finding: Extract<GuardianFinding, { area: "qa" 
   }
 
   return undefined;
+}
+
+function guidanceScope(paths: string[]): string {
+  if (paths.length === 0) {
+    return "changed source files";
+  }
+
+  const directories = paths.map((path) => {
+    const lastSlash = path.lastIndexOf("/");
+    return lastSlash === -1 ? "." : path.slice(0, lastSlash);
+  });
+  const sharedDirectory = directories[0];
+
+  if (paths.length > 1 && sharedDirectory !== undefined && directories.every((directory) => directory === sharedDirectory)) {
+    return `\`${sharedDirectory}/*\``;
+  }
+
+  if (paths.length === 1) {
+    return `\`${paths[0]}\``;
+  }
+
+  return `${paths.slice(0, 3).map((path) => `\`${path}\``).join(", ")}${paths.length > 3 ? `, +${paths.length - 3} more` : ""}`;
+}
+
+function summarizeCoverage(coverage: string[]): string {
+  const visibleCoverage = coverage.slice(0, 4);
+  const suffix = coverage.length > visibleCoverage.length ? `, +${coverage.length - visibleCoverage.length} more` : "";
+
+  return `${visibleCoverage.join(", ")}${suffix}`;
 }
 
 function baseGuidanceItem(finding: GuardianFinding, action: string, index: number): ActionableGuidanceItem {

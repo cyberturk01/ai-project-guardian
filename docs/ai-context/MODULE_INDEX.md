@@ -56,7 +56,7 @@ Fallback map for missing routing or tasks that span modules.
 
 ## CLI
 - Purpose: Command parsing and user-facing output.
-- Primary files: `src/cli/index.ts`, `src/cli/runGuardian.ts`.
+- Primary files: `src/cli/index.ts`, `src/cli/initGuardian.ts`, `src/cli/runGuardian.ts`.
 - Common tasks: add flags, adjust help text, change stdout/stderr, set exit codes.
 - Related tests: none detected.
 - Dependency hints: src/core/actionableGuidance.ts.
@@ -80,10 +80,10 @@ Fallback map for missing routing or tasks that span modules.
 
 ## Renderers / Reports
 - Purpose: Generated CLI reports and markdown output.
-- Primary files: `src/renderers/markdownReport.ts`, `src/renderers/markdownSummary.ts`, `src/renderers/prComment.ts`, `src/renderers/renderReport.ts`.
+- Primary files: `src/renderers/decisionSummary.ts`, `src/renderers/markdownNotes.ts`, `src/renderers/markdownReport.ts`, `src/renderers/markdownSummary.ts`.
 - Common tasks: format markdown, format JSON, preserve generated markers, summarize report output.
-- Related tests: `tests/markdownReport.test.ts`, `tests/prComment.test.ts`, `tests/sarifReport.test.ts`.
-- Dependency hints: src/renderers/markdownReport.ts, tests/*.
+- Related tests: `tests/markdownReport.test.ts`.
+- Dependency hints: src/renderers/decisionSummary.ts, tests/*.
 - Risks: broken generated markers, unstable markdown ordering.
 
 ## Core / Orchestration
@@ -96,9 +96,9 @@ Fallback map for missing routing or tasks that span modules.
 
 ## Repository scanning
 - Purpose: Repo inspection and lightweight analysis.
-- Primary files: `src/repo/fileClassifier.ts`, `src/repo/getChangedFiles.ts`, `src/repo/index.ts`, `src/repo/listRepoFiles.ts`.
+- Primary files: `src/repo/fileClassifier.ts`, `src/repo/getChangedFiles.ts`, `src/repo/ignoredChangedFiles.ts`, `src/repo/index.ts`.
 - Common tasks: classify files, ignore generated areas, detect symbols, match tests.
-- Related tests: `tests/fileClassifier.test.ts`, `tests/getChangedFiles.test.ts`.
+- Related tests: `tests/fileClassifier.test.ts`, `tests/getChangedFiles.test.ts`, `tests/ignoredChangedFiles.test.ts`.
 - Dependency hints: src/repo/fileClassifier.ts, tests/*.
 - Risks: generated files included, real source files missed.
 
@@ -126,6 +126,14 @@ Fallback map for missing routing or tasks that span modules.
 - Dependency hints: none.
 - Risks: permission bypass, session handling regression.
 
+## Staff/POS/public flows
+- Purpose: Public, staff, owner, POS, and QR flows.
+- Primary files: `calibration.repos.example.json`, `calibration.repos.local.json`, `scripts/calibrate-real-repos.mjs`.
+- Common tasks: public UI, staff workflow, POS.
+- Related tests: none detected.
+- Dependency hints: none.
+- Risks: review real callers before editing.
+
 ## Context docs
 - Purpose: Agent routing, context maps, and workflow notes.
 - Primary files: `AGENTS.md`, `docs/ai-context/TASK_ROUTING.md`, `docs/ai-context/MODULE_INDEX.md`, `docs/ai-context/PROJECT_MAP.md`, `.repo-context-center/config.json`.
@@ -136,7 +144,7 @@ Fallback map for missing routing or tasks that span modules.
 
 ## Release workflow
 - Purpose: CI, deployment, and release configuration.
-- Primary files: `.github/workflows/guardian-self-check.yml`, `.github/workflows/test.yml`, `src/analyzers/releaseAnalyzer.ts`, `templates/project-brain/deployment-rules.md`.
+- Primary files: `.github/workflows/guardian-self-check.yml`, `.github/workflows/test.yml`, `src/analyzers/releaseAnalyzer.ts`, `RELEASE_NOTES.md`.
 - Common tasks: CI, deployment, release.
 - Related tests: `tests/releaseAnalyzer.test.ts`.
 - Dependency hints: .github/workflows/*, package.json.
