@@ -1,0 +1,17 @@
+[
+  {
+    "name": "ai-project-guardian",
+    "path": ".",
+    "expectedRisk": "low"
+  },
+  {
+    "name": "repo-context-center",
+    "path": "../repo-context-center",
+    "expectedRisk": "low-medium"
+  },
+  {
+    "name": "wallet-health-ui",
+    "path": "../wallet-health-ui",
+    "expectedRisk": "medium"
+  }
+]

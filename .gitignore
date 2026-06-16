@@ -9,6 +9,9 @@ lerna-debug.log*
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
+# Local Guardian calibration outputs
+.calibration/
+
 # Runtime data
 pids
 *.pid
@@ -143,3 +146,5 @@ vite.config.ts.timestamp-*
 .vite/
 .DS_Store
 Thumbs.db
+calibration.repos.local.json
+guardian-summary.md

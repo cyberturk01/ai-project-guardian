@@ -3,7 +3,7 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 type InitAction = "create" | "overwrite" | "skip";
-export type InitPreset = "generic" | "node-api" | "web-app" | "python" | "monorepo";
+export type InitPreset = "generic" | "generic-cli" | "node-api" | "web-app" | "python" | "monorepo";
 
 export type InitArgs = {
   repo?: string;
@@ -44,11 +44,11 @@ const projectBrainTemplateFiles = [
 export const initHelpText = `ai-project-guardian init
 
 Usage:
-  ai-project-guardian init [--repo <path>] [--preset generic|node-api|web-app|python|monorepo] [--dry-run] [--force]
+  ai-project-guardian init [--repo <path>] [--preset generic|generic-cli|node-api|web-app|python|monorepo] [--dry-run] [--force]
 
 Options:
   --repo <path>   Target repository path. Defaults to the current working directory.
-  --preset <name> Config preset: generic, node-api, web-app, python, or monorepo. Defaults to best-effort detection.
+  --preset <name> Config preset: generic, generic-cli, node-api, web-app, python, or monorepo. Defaults to best-effort detection.
   --dry-run       Print planned file changes without writing files.
   --force         Overwrite existing Guardian bootstrap files.
   --help          Show this help message.
@@ -149,11 +149,18 @@ function parseInitPreset(value: string): InitPreset {
     return value;
   }
 
-  throw new Error(`Unsupported --preset value: ${value}. Expected "generic", "node-api", "web-app", "python", or "monorepo".`);
+  throw new Error(`Unsupported --preset value: ${value}. Expected "generic", "generic-cli", "node-api", "web-app", "python", or "monorepo".`);
 }
 
 function isInitPreset(value: string): value is InitPreset {
-  return value === "generic" || value === "node-api" || value === "web-app" || value === "python" || value === "monorepo";
+  return (
+    value === "generic" ||
+    value === "generic-cli" ||
+    value === "node-api" ||
+    value === "web-app" ||
+    value === "python" ||
+    value === "monorepo"
+  );
 }
 
 type PlannedInitFile = {
@@ -210,6 +217,15 @@ function buildGuardianConfigObject(repoPath: string, preset: InitPreset): Record
     };
   }
 
+  if (preset === "generic-cli") {
+    return {
+      ...baseConfig,
+      riskFolders: ["src", "bin", "cli", "scripts"],
+      testFolders: ["tests", "__tests__"],
+      releaseSensitiveFiles: ["package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", ".github/workflows"]
+    };
+  }
+
   if (preset === "web-app") {
     return {
       ...baseConfig,
@@ -245,24 +261,30 @@ function buildGuardianConfigObject(repoPath: string, preset: InitPreset): Record
 }
 
 async function detectInitPreset(repoPath: string): Promise<InitPreset> {
-  if (await hasAnyPath(repoPath, ["pyproject.toml", "requirements.txt", "setup.py", "setup.cfg", "tox.ini"])) {
-    return "python";
-  }
-
-  if (await hasAnyPath(repoPath, ["pnpm-workspace.yaml", "turbo.json", "nx.json", "packages", "apps", "libs"])) {
+  if (await hasMonorepoMarkers(repoPath)) {
     return "monorepo";
   }
 
-  if (!(await fileExists(join(repoPath, "package.json")))) {
+  if (await hasPythonMarkers(repoPath)) {
+    return "python";
+  }
+
+  const packageJson = await readPackageJson(repoPath);
+
+  if (packageJson === undefined) {
     return "generic";
   }
 
-  if ((await fileExists(join(repoPath, "src", "routes"))) || (await fileExists(join(repoPath, "src", "services")))) {
+  if (await hasWebAppMarkers(repoPath, packageJson)) {
+    return "web-app";
+  }
+
+  if (await hasNodeApiMarkers(repoPath, packageJson)) {
     return "node-api";
   }
 
-  if ((await fileExists(join(repoPath, "src", "pages"))) || (await fileExists(join(repoPath, "app"))) || (await hasViteConfig(repoPath))) {
-    return "web-app";
+  if (hasCliMarkers(packageJson)) {
+    return "generic-cli";
   }
 
   return "generic";
@@ -289,6 +311,146 @@ async function hasViteConfig(repoPath: string): Promise<boolean> {
 
     throw error;
   }
+}
+
+async function hasPythonMarkers(repoPath: string): Promise<boolean> {
+  if (await hasAnyPath(repoPath, ["pyproject.toml", "requirements.txt", "setup.py", "setup.cfg", "tox.ini", "Pipfile", "poetry.lock"])) {
+    return true;
+  }
+
+  return (
+    (await fileExists(join(repoPath, "app", "main.py"))) ||
+    (await fileExists(join(repoPath, "main.py"))) ||
+    (await fileExists(join(repoPath, "manage.py")))
+  );
+}
+
+async function hasMonorepoMarkers(repoPath: string): Promise<boolean> {
+  if (await hasAnyPath(repoPath, ["pnpm-workspace.yaml", "turbo.json", "nx.json", "lerna.json", "rush.json"])) {
+    return true;
+  }
+
+  const workspacePackage = await readPackageJson(repoPath);
+  if (Array.isArray(workspacePackage?.workspaces) || isObject(workspacePackage?.workspaces)) {
+    return true;
+  }
+
+  return (await countPackageBoundaryMarkers(repoPath, ["packages", "apps", "libs"])) >= 2;
+}
+
+async function countPackageBoundaryMarkers(repoPath: string, rootFolders: string[]): Promise<number> {
+  let count = 0;
+
+  for (const rootFolder of rootFolders) {
+    const rootPath = join(repoPath, rootFolder);
+
+    try {
+      const entries = await readdir(rootPath, { withFileTypes: true });
+
+      for (const entry of entries) {
+        if (!entry.isDirectory()) {
+          continue;
+        }
+
+        if (
+          (await fileExists(join(rootPath, entry.name, "package.json"))) ||
+          (await fileExists(join(rootPath, entry.name, "pyproject.toml")))
+        ) {
+          count += 1;
+        }
+      }
+    } catch (error: unknown) {
+      if (!isMissingFileError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  return count;
+}
+
+async function hasWebAppMarkers(repoPath: string, packageJson: Record<string, unknown>): Promise<boolean> {
+  if (
+    hasAnyDependency(packageJson, [
+      "@angular/core",
+      "@sveltejs/kit",
+      "@vitejs/plugin-react",
+      "astro",
+      "next",
+      "react",
+      "svelte",
+      "vite",
+      "vue"
+    ])
+  ) {
+    return true;
+  }
+
+  return (
+    (await fileExists(join(repoPath, "next.config.js"))) ||
+    (await fileExists(join(repoPath, "next.config.mjs"))) ||
+    (await fileExists(join(repoPath, "next.config.ts"))) ||
+    (await fileExists(join(repoPath, "angular.json"))) ||
+    (await fileExists(join(repoPath, "svelte.config.js"))) ||
+    (await fileExists(join(repoPath, "src", "pages"))) ||
+    (await fileExists(join(repoPath, "pages"))) ||
+    ((await fileExists(join(repoPath, "app"))) && hasAnyDependency(packageJson, ["next", "react"])) ||
+    (await hasViteConfig(repoPath))
+  );
+}
+
+async function hasNodeApiMarkers(repoPath: string, packageJson: Record<string, unknown>): Promise<boolean> {
+  if (hasAnyDependency(packageJson, ["@nestjs/core", "apollo-server", "express", "fastify", "hapi", "koa"])) {
+    return true;
+  }
+
+  return (
+    (await fileExists(join(repoPath, "src", "routes"))) ||
+    (await fileExists(join(repoPath, "src", "services"))) ||
+    (await fileExists(join(repoPath, "src", "controllers"))) ||
+    (await fileExists(join(repoPath, "src", "middleware")))
+  );
+}
+
+function hasCliMarkers(packageJson: Record<string, unknown>): boolean {
+  return (
+    isObject(packageJson.bin) ||
+    typeof packageJson.bin === "string" ||
+    hasAnyDependency(packageJson, ["cac", "commander", "meow", "oclif", "yargs"])
+  );
+}
+
+async function readPackageJson(repoPath: string): Promise<Record<string, unknown> | undefined> {
+  try {
+    const contents = await readFile(join(repoPath, "package.json"), "utf8");
+    const parsed = JSON.parse(contents) as unknown;
+
+    return isObject(parsed) ? parsed : undefined;
+  } catch (error: unknown) {
+    if (isMissingFileError(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
+function hasAnyDependency(packageJson: Record<string, unknown>, names: string[]): boolean {
+  const dependencyNames = new Set([
+    ...Object.keys(asObject(packageJson.dependencies)),
+    ...Object.keys(asObject(packageJson.devDependencies)),
+    ...Object.keys(asObject(packageJson.peerDependencies))
+  ]);
+
+  return names.some((name) => dependencyNames.has(name));
+}
+
+function asObject(value: unknown): Record<string, unknown> {
+  return isObject(value) ? value : {};
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 async function readProjectBrainTemplate(fileName: string): Promise<string> {

@@ -45,11 +45,13 @@ const sourceLikeCategories = new Set(["source", "security", "i18n", "migration",
 const testPathPattern = /(^|\/)(__tests__|tests?|spec|cypress|playwright)(\/|$)|(\.|-)(cy|spec|test)\.[^.]+$/i;
 const apiPathPattern = /(^|\/)(api|apis|routes?|controllers?|handlers?|endpoints?)(\/|$)|(\.|-|_)(route|routes|controller|handler|api)\.[^.]+$/i;
 const uiPathPattern = /(^|\/)(components?|pages?|views?|screens?|ui|frontend|client|web|public)(\/|$)|(\.|-|_)(component|page|view|screen)\.[^.]+$/i;
+const servicePathPattern = /(^|\/)(services?|domain|business|use-cases?|usecases?|interactors?|logic)(\/|$)|(\.|-|_)(service|usecase|interactor)\.[^.]+$/i;
 const migrationPathPattern = /(^|\/)(migrations?|schema|prisma\/migrations)(\/|$)/i;
 const i18nPathPattern = /(^|\/)(i18n|l10n|locales?|translations?|lang|messages)(\/|$)/i;
 const authSecurityPathPattern = /(^|\/)(auth|authentication|authorization|crypto|jwt|oauth|password|permissions|secrets?|security|session)(\/|\.|-|_|$)/i;
 const projectBrainPathPattern = /(^|\/)\.project-brain(\/|$)/i;
 const apiTestPattern = /(^|\/)(api|integration|e2e|request|requests|supertest)(\/|\.|-|_)/i;
+const uiTestPattern = /(^|\/)(components?|pages?|views?|screens?|ui|frontend|client|web|e2e|cypress|playwright)(\/|\.|-|_)|(\.|-|_)(component|page|view|screen|cy|e2e)\.[^.]+$/i;
 const dbTestPattern = /(^|\/)(db|database|integration|migrations?|repository|repositories)(\/|\.|-|_)/i;
 const localizationTestPattern = /(^|\/)(i18n|l10n|localization|locales?|translations?)(\/|\.|-|_)/i;
 const negativeSecurityTestPattern = /(^|\/)(auth|security|permissions?|authorization|session|jwt)(\/|\.|-|_).*(negative|invalid|forbidden|unauthorized|denied)|(\.|-|_)(negative|invalid|forbidden|unauthorized|denied)(\.|-|_)/i;
@@ -58,11 +60,11 @@ const qaRules: QaRule[] = [
   {
     id: "qa-source-without-nearby-test",
     title: "Source changed without nearby test coverage",
-    description: "One or more source files changed, but no nearby unit or component test was found in the repository.",
+    description: "One or more source files changed, but no nearby unit test was found in the repository.",
     riskLevel: "medium",
     matches: (file) => isGenericSourceFile(file),
     hasCoverage: (file, context) => hasNearbyTest(file.path, context.testFiles, context.config),
-    suggestedTests: (file) => [`Add or update a nearby unit test for ${file.path}.`]
+    suggestedTests: (file) => [`Create or update a nearby unit test for ${file.path}.`]
   },
   {
     id: "qa-api-without-integration-test",
@@ -75,12 +77,15 @@ const qaRules: QaRule[] = [
   },
   {
     id: "qa-ui-without-cypress-test",
-    title: "UI changed without Cypress coverage",
-    description: "A UI-facing file changed, but no relevant Cypress test was found in the repository.",
+    title: "UI changed without component or e2e coverage",
+    description: "A UI-facing file changed, but no relevant component, Cypress, or e2e test was found in the repository.",
     riskLevel: "medium",
     matches: (file) => isProductionChangedCodeFile(file) && !isDocumentationContextFile(file) && uiPathPattern.test(normalizePath(file.path)),
-    hasCoverage: (file, context) => hasTopicalTest(file.path, context.cypressFiles, /cypress|\.cy\./i),
-    suggestedTests: (file) => [`Add or update a Cypress test for the UI behavior touched by ${file.path}.`]
+    hasCoverage: (file, context) =>
+      hasNearbyTest(file.path, context.testFiles, context.config) ||
+      hasTopicalTest(file.path, context.testFiles, uiTestPattern) ||
+      hasTopicalTest(file.path, context.cypressFiles, /cypress|\.cy\./i),
+    suggestedTests: (file) => [`Add a component test or Cypress/e2e test for the UI behavior touched by ${file.path}.`]
   },
   {
     id: "qa-migration-without-db-test",
@@ -167,11 +172,17 @@ function buildFinding(rule: QaRule, changedFiles: ChangedFile[], context: QaCont
 
 function suggestedTestsForAffectedFiles(rule: QaRule, affectedFiles: string[], context: QaContext): string[] {
   if (rule.id === "qa-source-without-nearby-test") {
-    return [`Add or update nearby unit tests for affected source files: ${affectedFiles.join(", ")}.`];
+    const sourceType = affectedFiles.every(isServiceOrBusinessLogicPath) ? "service/business logic" : "source";
+
+    return [`Create or update nearby unit tests for touched ${sourceType} files (${summarizePaths(affectedFiles)}).`];
   }
 
   if (rule.id === "qa-ui-without-cypress-test") {
-    return [`Add or update Cypress coverage for affected UI files: ${affectedFiles.join(", ")}.`];
+    return [`Add component tests for touched UI components, or Cypress/e2e coverage for page flows (${summarizePaths(affectedFiles)}).`];
+  }
+
+  if (rule.id === "qa-api-without-integration-test" && affectedFiles.length > 1) {
+    return [`Add API/integration tests for touched routes, controllers, or handlers (${summarizePaths(affectedFiles)}).`];
   }
 
   return uniqueSorted(
@@ -217,6 +228,10 @@ function hasTopicalTest(path: string, testFiles: string[], topicPattern: RegExp)
 
     return topicPattern.test(normalizedTestFile) && (token === "" || normalizedTestFile.toLowerCase().includes(token));
   });
+}
+
+function isServiceOrBusinessLogicPath(path: string): boolean {
+  return servicePathPattern.test(normalizePath(path));
 }
 
 function isGenericSourceFile(file: ChangedFile): boolean {
@@ -266,7 +281,14 @@ function isCypressTestFile(path: string): boolean {
 }
 
 function mainPathToken(path: string): string {
-  return stripKnownExtensions(basename(normalizePath(path))).toLowerCase();
+  const normalizedPath = normalizePath(path);
+  const directToken = stripKnownExtensions(basename(normalizedPath)).toLowerCase();
+
+  if (directToken !== "" && !isGenericRouteFileToken(directToken)) {
+    return directToken;
+  }
+
+  return stripKnownExtensions(basename(dirname(normalizedPath))).toLowerCase();
 }
 
 function stripKnownExtensions(path: string): string {
@@ -278,6 +300,18 @@ function stripKnownExtensions(path: string): string {
 
 function normalizeAndSort(paths: string[]): string[] {
   return uniqueSorted(paths.map(normalizePath));
+}
+
+function summarizePaths(paths: string[]): string {
+  const visiblePaths = paths.slice(0, 4);
+  const hiddenCount = paths.length - visiblePaths.length;
+  const suffix = hiddenCount > 0 ? `, +${hiddenCount} more` : "";
+
+  return `examples: ${visiblePaths.join(", ")}${suffix}`;
+}
+
+function isGenericRouteFileToken(token: string): boolean {
+  return ["api", "controller", "handler", "index", "route", "routes"].includes(token);
 }
 
 function uniqueSorted(values: string[]): string[] {

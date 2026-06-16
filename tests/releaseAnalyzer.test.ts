@@ -74,6 +74,19 @@ describe("analyzeRelease", () => {
     assert.deepEqual(findings, []);
   });
 
+  it("does not create release findings for docs-only changes", () => {
+    const findings = analyzeRelease({
+      changedFiles: [
+        changedFile("README.md", "documentation"),
+        changedFile("docs/deployment.md", "documentation"),
+        changedFile("docs/package-updates.md", "documentation")
+      ],
+      config
+    });
+
+    assert.deepEqual(findings, []);
+  });
+
   it("ignores Project Brain files even when names match release heuristics", () => {
     const findings = analyzeRelease({
       changedFiles: [

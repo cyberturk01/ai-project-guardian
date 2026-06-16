@@ -46,6 +46,10 @@ export function buildReportDecisionSupport(input: ReportDecisionSupportInput): R
     ...input.externalFindings.filter(isBlockingSecurityRisk),
     ...input.correlatedFindings.filter(isBlockingSecurityRisk)
   ];
+  const hasBlockingSecurityFindings =
+    input.securityFindings.some(isBlockingSecurityRisk) ||
+    input.externalFindings.some(isBlockingSecurityRisk) ||
+    input.correlatedFindings.some(isBlockingSecurityRisk);
   const checklistFindings = input.releaseFindings;
   const blockingFindingsCount = blockingFindings.length;
   const checklistFindingsCount = checklistFindings.length;
@@ -63,7 +67,8 @@ export function buildReportDecisionSupport(input: ReportDecisionSupportInput): R
       checklistFindingsCount,
       codeRisk,
       overallRisk: input.overallRisk,
-      authSecurityCriticalFloorApplied: hasAuthSecurityCriticalFloor(input.scoreBreakdown)
+      authSecurityCriticalFloorApplied: hasAuthSecurityCriticalFloor(input.scoreBreakdown),
+      hasBlockingSecurityFindings
     }),
     codeRisk,
     releaseChecklistRisk,
@@ -73,10 +78,7 @@ export function buildReportDecisionSupport(input: ReportDecisionSupportInput): R
       checklistFindingsCount,
       codeRisk,
       releaseChecklistRisk,
-      hasSecurityFindings:
-        input.securityFindings.some(isBlockingSecurityRisk) ||
-        input.externalFindings.some(isBlockingSecurityRisk) ||
-        input.correlatedFindings.some(isBlockingSecurityRisk),
+      hasSecurityFindings: hasBlockingSecurityFindings,
       criticalFloorReason: input.scoreBreakdown.criticalFloorApplied?.reason
     })
   };
@@ -92,13 +94,18 @@ function recommendMerge(input: {
   codeRisk: RiskLevel;
   overallRisk: RiskLevel;
   authSecurityCriticalFloorApplied: boolean;
+  hasBlockingSecurityFindings: boolean;
 }): MergeRecommendation {
   if (input.authSecurityCriticalFloorApplied) {
     return "blocked";
   }
 
   if (input.blockingFindingsCount > 0) {
-    return input.codeRisk === "high" || input.codeRisk === "critical" ? "blocked" : "review_required";
+    if (input.hasBlockingSecurityFindings || input.codeRisk === "critical") {
+      return "blocked";
+    }
+
+    return "review_required";
   }
 
   if (input.checklistFindingsCount > 0) {

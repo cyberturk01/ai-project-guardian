@@ -336,7 +336,7 @@ function isNonRuntimeContextPath(path: string): boolean {
   return (
     isTestFile(normalized) ||
     isGeneratedAssetPath(normalized) ||
-    /(^|\/)(__fixtures__|fixtures?|mocks?|samples?|examples?|templates?)(\/|$)/i.test(normalized) ||
+    /(^|\/)(__fixtures__|__snapshots__|fixtures?|mocks?|samples?|examples?|snapshots?|templates?)(\/|$)/i.test(normalized) ||
     /(^|\/)(docs?|documentation)(\/|$)/i.test(normalized) ||
     /\.(md|mdx|txt)$/i.test(normalized)
   );

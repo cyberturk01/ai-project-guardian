@@ -133,14 +133,60 @@ describe("renderMarkdownReport", () => {
         'guardian.config.json was not found; using default config for project "demo".',
         "guardian.config.json was not found; using safe defaults.",
         "Project Brain context was not found; continuing without repository-specific context.",
-        "Project Brain context was not found; continuing without repository-specific context."
+        "Project Brain context was not found; continuing without repository-specific context.",
+        "Default base ref origin/main could not be used; using main."
       ]
     };
 
-    assert.equal(countOccurrences(renderMarkdownReport(report), missingConfigOnboardingNote), 1);
-    assert.equal(countOccurrences(renderMarkdownReport(report), missingProjectBrainOnboardingNote), 1);
-    assert.equal(countOccurrences(renderMarkdownSummary(report), missingConfigOnboardingNote), 1);
-    assert.equal(countOccurrences(renderMarkdownSummary(report), missingProjectBrainOnboardingNote), 1);
+    const fullReport = renderMarkdownReport(report);
+    const summary = renderMarkdownSummary(report);
+    const configNote = 'guardian.config.json was not found; using default config for project "AI Restaurants".';
+    const rawProjectBrainNote = "Project Brain context was not found; continuing without repository-specific context.";
+
+    assert.equal(countOccurrences(fullReport, missingConfigOnboardingNote), 1);
+    assert.equal(countOccurrences(fullReport, missingProjectBrainOnboardingNote), 1);
+    assert.equal(countOccurrences(fullReport, configNote), 1);
+    assert.equal(countOccurrences(fullReport, rawProjectBrainNote), 0);
+    assert.equal(countOccurrences(fullReport, "Default base ref origin/main could not be used; using main."), 1);
+
+    assert.equal(countOccurrences(summary, missingConfigOnboardingNote), 1);
+    assert.equal(countOccurrences(summary, missingProjectBrainOnboardingNote), 1);
+    assert.equal(countOccurrences(summary, configNote), 1);
+    assert.equal(countOccurrences(summary, rawProjectBrainNote), 0);
+    assert.equal(countOccurrences(summary, "Default base ref origin/main could not be used; using main."), 1);
+  });
+
+  it("keeps summary notes readable while deduplicating Project Brain and config warnings", () => {
+    const report = {
+      ...makeReport(),
+      projectName: "guardian-risk-fixture",
+      warnings: [
+        "Project Brain context was not found; continuing without repository-specific context.",
+        'guardian.config.json was not found; using default config for project "guardian-risk-fixture".',
+        "Default base ref origin/main could not be used; using main.",
+        "Local working tree changes were included in changed-file detection."
+      ]
+    };
+    const summary = renderMarkdownSummary(report);
+
+    assert.match(
+      summary,
+      /## Notes\n\n- Run with `--full-report` for changed files, detailed findings, accepted findings, and suggested tests\.\n- Tip: Run `npx ai-project-guardian init` to generate config, Project Brain templates, and GitHub Actions workflow\.\n- Project Brain context was not found\. Add `\.project-brain\/` repository-specific context to improve report quality\.\n- guardian\.config\.json was not found; using default config for project "guardian-risk-fixture"\.\n- Default base ref origin\/main could not be used; using main\.\n- Local working tree changes were included in changed-file detection\./
+    );
+  });
+
+  it("deduplicates Project Brain notes in the full Markdown report", () => {
+    const report = {
+      ...makeReport(),
+      warnings: [
+        "Project Brain context was not found; continuing without repository-specific context.",
+        "Project Brain context was not found; continuing without repository-specific context."
+      ]
+    };
+    const fullReport = renderMarkdownReport(report);
+
+    assert.equal(countOccurrences(fullReport, missingProjectBrainOnboardingNote), 1);
+    assert.equal(countOccurrences(fullReport, "Project Brain context was not found; continuing without repository-specific context."), 0);
   });
 
   it("keeps onboarding guidance out of PR comments, JSON reports, and SARIF reports", () => {

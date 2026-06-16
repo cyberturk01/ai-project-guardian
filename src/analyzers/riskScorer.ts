@@ -101,6 +101,7 @@ const securityFindingWeights: Record<RiskLevel, number> = {
 };
 
 const criticalCombinationMinimumScore = 91;
+const criticalScannerMinimumScore = 81;
 const changedFileOnlyScoreCap = 60;
 
 export function scoreRisk(input: RiskScoreInput): RiskScoreResult {
@@ -120,7 +121,7 @@ export function calculateRiskScore(input: RiskScoreInput): RiskScoreResult {
   const componentScores = scoreWeightedSignals(input, band.name);
   const weightedSignal = totalWeightedSignal(componentScores);
   const bandedScore = Math.min(band.max, band.base + Math.ceil(Math.sqrt(weightedSignal) * band.factor));
-  const criticalFloor = criticalCombination(input);
+  const criticalFloor = scoreFloor(input);
   const cappedBandedScore = capChangedFileOnlyScore(bandedScore, input);
   const scoreBeforeClamp = criticalFloor === undefined ? cappedBandedScore : Math.max(cappedBandedScore, criticalFloor.floor);
   const score = clampScore(scoreBeforeClamp);
@@ -246,8 +247,8 @@ function scoreSecurityFindings(findings: SecurityFinding[]): number {
 
 function scoreExternalFindings(findings: ExternalFinding[]): number {
   return Math.min(
-    20,
-    findings.reduce((score, finding) => score + Math.ceil(securityFindingWeights[finding.riskLevel] / 3), 0)
+    60,
+    findings.reduce((score, finding) => score + externalFindingWeight(finding.riskLevel), 0)
   );
 }
 
@@ -272,7 +273,7 @@ function totalWeightedSignal(scores: ReturnType<typeof scoreWeightedSignals>): n
   );
 }
 
-function criticalCombination(input: RiskScoreInput): { floor: number; reason: string } | undefined {
+function scoreFloor(input: RiskScoreInput): { floor: number; reason: string } | undefined {
   if (hasMigrationWithoutDbTest(input)) {
     return {
       floor: criticalCombinationMinimumScore,
@@ -294,6 +295,20 @@ function criticalCombination(input: RiskScoreInput): { floor: number; reason: st
     };
   }
 
+  if (hasCriticalExternalScannerFinding(input)) {
+    return {
+      floor: criticalScannerMinimumScore,
+      reason: "Critical external scanner finding"
+    };
+  }
+
+  if (hasMultiToolCriticalCorrelation(input)) {
+    return {
+      floor: criticalScannerMinimumScore,
+      reason: "Critical multi-tool scanner correlation"
+    };
+  }
+
   return undefined;
 }
 
@@ -308,7 +323,12 @@ function overallRiskForScore(score: number, input: RiskScoreInput): RiskLevel {
 }
 
 function hasCriticalPrerequisite(input: RiskScoreInput): boolean {
-  return hasHighOrCriticalSecurityFinding(input) || hasMultiToolCriticalCorrelation(input) || hasScoreElevatingCriticalCombination(input);
+  return (
+    hasHighOrCriticalSecurityFinding(input) ||
+    hasCriticalExternalScannerFinding(input) ||
+    hasMultiToolCriticalCorrelation(input) ||
+    hasScoreElevatingCriticalCombination(input)
+  );
 }
 
 function hasScoreElevatingCriticalCombination(input: RiskScoreInput): boolean {
@@ -337,6 +357,10 @@ function hasMultiToolCriticalCorrelation(input: RiskScoreInput): boolean {
   return (input.correlatedFindings ?? []).some((finding) => finding.confidence === "multi-tool" && finding.riskLevel === "critical");
 }
 
+function hasCriticalExternalScannerFinding(input: RiskScoreInput): boolean {
+  return (input.externalFindings ?? []).some((finding) => finding.riskLevel === "critical");
+}
+
 function hasBlockingSecuritySignals(input: RiskScoreInput): boolean {
   return (
     hasHighOrCriticalSecurityFinding(input) ||
@@ -351,6 +375,26 @@ function hasHighOrCriticalSecurityFinding(input: RiskScoreInput): boolean {
 
 function isHighOrCriticalFinding(finding: { riskLevel: RiskLevel }): boolean {
   return finding.riskLevel === "high" || finding.riskLevel === "critical";
+}
+
+function externalFindingWeight(riskLevel: RiskLevel): number {
+  if (riskLevel === "critical") {
+    return 60;
+  }
+
+  if (riskLevel === "high") {
+    return 24;
+  }
+
+  if (riskLevel === "medium") {
+    return 8;
+  }
+
+  if (riskLevel === "low") {
+    return 3;
+  }
+
+  return 0;
 }
 
 function hasMigrationWithoutDbTest(input: RiskScoreInput): boolean {

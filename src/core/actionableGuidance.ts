@@ -62,11 +62,11 @@ function guidanceItemsForFinding(finding: GuardianFinding): ActionableGuidanceIt
 
 function groupedQaGuidanceAction(finding: Extract<GuardianFinding, { area: "qa" }>): string | undefined {
   if (finding.id === "qa-ui-without-cypress-test" && finding.affectedFiles.length > 1) {
-    return "Add or update Cypress coverage for touched UI components.";
+    return "Add component tests for touched UI components, or Cypress/e2e coverage for page flows.";
   }
 
   if (finding.id === "qa-source-without-nearby-test" && finding.affectedFiles.length > 1) {
-    return "Add or update nearby unit/component tests for touched source files.";
+    return "Create or update nearby unit tests for touched source files.";
   }
 
   return undefined;

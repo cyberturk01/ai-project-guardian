@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { calculateRiskScore, riskLevelForScore, scoreRisk } from "../src/analyzers/riskScorer.js";
-import type { ChangedFile, QaFinding, ReleaseFinding, SecurityFinding, WorkflowFinding } from "../src/core/types.js";
+import type { ChangedFile, ExternalFinding, QaFinding, ReleaseFinding, SecurityFinding, WorkflowFinding } from "../src/core/types.js";
 
 describe("riskLevelForScore", () => {
   it("maps scores to the configured risk scale", () => {
@@ -129,6 +129,23 @@ describe("scoreRisk", () => {
     assert.notEqual(result.overallRisk, "critical");
   });
 
+  it("keeps dependency-only changes below high without scanner findings", () => {
+    const result = scoreRisk({
+      changedFiles: [
+        changedFile({ path: "package.json", category: "config", riskLevel: "high" }),
+        changedFile({ path: "package-lock.json", category: "config", riskLevel: "high" })
+      ],
+      qaFindings: [],
+      releaseFindings: [releaseFinding({ id: "release-package-dependency-changed", riskLevel: "medium" })],
+      securityFindings: []
+    });
+
+    assert.equal(result.scoreBreakdown.selectedBand, "config");
+    assert.ok(result.score <= 60);
+    assert.notEqual(result.overallRisk, "high");
+    assert.notEqual(result.overallRisk, "critical");
+  });
+
   it("keeps migration changes in the 50-80 range when DB tests are not missing", () => {
     const result = scoreRisk({
       changedFiles: [
@@ -208,6 +225,24 @@ describe("scoreRisk", () => {
     assert.notEqual(result.overallRisk, "critical");
   });
 
+  it("does not select the security band for medium heuristic security findings", () => {
+    const result = scoreRisk({
+      changedFiles: [changedFile({ path: "src/routes/publicRoutes.ts", category: "source", riskLevel: "medium" })],
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: [
+        securityFinding({
+          id: "security-cors-wildcard",
+          riskLevel: "medium",
+          filePath: "src/routes/publicRoutes.ts"
+        })
+      ]
+    });
+
+    assert.notEqual(result.scoreBreakdown.selectedBand, "security");
+    assert.ok(result.score <= 60);
+  });
+
   it("allows security findings to become critical when the score crosses the critical threshold", () => {
     const result = scoreRisk({
       changedFiles: [
@@ -274,6 +309,37 @@ describe("scoreRisk", () => {
     assert.equal(correlatedResult.overallRisk, "critical");
   });
 
+  it("treats high external scanner findings as high risk", () => {
+    const result = scoreRisk({
+      changedFiles: [changedFile({ path: "src/api/reservations.ts", category: "source", riskLevel: "medium" })],
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: [],
+      externalFindings: [externalFinding({ riskLevel: "high" })]
+    });
+
+    assert.equal(result.scoreBreakdown.selectedBand, "security");
+    assert.equal(result.overallRisk, "high");
+  });
+
+  it("treats critical external scanner findings as critical risk", () => {
+    const result = scoreRisk({
+      changedFiles: [changedFile({ path: "src/api/reservations.ts", category: "source", riskLevel: "medium" })],
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: [],
+      externalFindings: [externalFinding({ riskLevel: "critical" })]
+    });
+
+    assert.equal(result.score, 87);
+    assert.equal(result.overallRisk, "critical");
+    assert.deepEqual(result.scoreBreakdown.criticalFloorApplied, {
+      applied: false,
+      floor: 81,
+      reason: "Critical external scanner finding"
+    });
+  });
+
   it("prevents documentation changes from inflating non-documentation risk", () => {
     const result = scoreRisk({
       changedFiles: [
@@ -326,6 +392,26 @@ describe("scoreRisk", () => {
     });
 
     assert.equal(result.score, 40);
+    assert.notEqual(result.overallRisk, "critical");
+  });
+
+  it("keeps workflow changes in review territory without security signals", () => {
+    const result = scoreRisk({
+      changedFiles: [
+        changedFile({
+          path: ".github/workflows/deploy.yml",
+          category: "ci",
+          riskLevel: "high"
+        })
+      ],
+      qaFindings: [],
+      releaseFindings: [releaseFinding({ id: "release-github-actions-changed", riskLevel: "high" })],
+      securityFindings: [],
+      workflowFindings: [workflowFinding({ riskLevel: "high" })]
+    });
+
+    assert.equal(result.scoreBreakdown.selectedBand, "workflow");
+    assert.equal(result.score, 31);
     assert.notEqual(result.overallRisk, "critical");
   });
 
@@ -697,6 +783,21 @@ function workflowFinding(overrides: Partial<WorkflowFinding> = {}): WorkflowFind
     missingCheck: "npm test",
     workflowFile: ".github/workflows/ci.yml",
     recommendation: "Add the missing check.",
+    ...overrides
+  };
+}
+
+function externalFinding(overrides: Partial<ExternalFinding> = {}): ExternalFinding {
+  return {
+    id: "external-finding",
+    source: "semgrep",
+    ruleId: "external.rule",
+    title: "External finding",
+    description: "External finding.",
+    riskLevel: "low",
+    filePath: "src/api/reservations.ts",
+    lineNumber: 12,
+    artifactPath: "semgrep.json",
     ...overrides
   };
 }

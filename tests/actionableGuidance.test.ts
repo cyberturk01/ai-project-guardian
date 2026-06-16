@@ -64,10 +64,10 @@ describe("buildActionableGuidance", () => {
     assert.equal(guidance[0].action, "Add integration coverage");
   });
 
-  it("groups repeated UI Cypress guidance into one concise action", () => {
+  it("groups repeated UI component/e2e guidance into one concise action", () => {
     const guidance = buildActionableGuidance([
-      qaFinding("UI changed without Cypress coverage", "medium", [
-        "Add or update Cypress coverage for affected UI files: src/components/MenuCard.tsx, src/pages/CheckoutPage.tsx."
+      qaFinding("UI changed without component or e2e coverage", "medium", [
+        "Add component tests for touched UI components, or Cypress/e2e coverage for page flows (examples: src/components/MenuCard.tsx, src/pages/CheckoutPage.tsx)."
       ], {
         id: "qa-ui-without-cypress-test",
         affectedFiles: ["src/components/MenuCard.tsx", "src/pages/CheckoutPage.tsx"]
@@ -75,13 +75,13 @@ describe("buildActionableGuidance", () => {
     ]);
 
     assert.equal(guidance.length, 1);
-    assert.equal(guidance[0].action, "Add or update Cypress coverage for touched UI components.");
+    assert.equal(guidance[0].action, "Add component tests for touched UI components, or Cypress/e2e coverage for page flows.");
   });
 
   it("groups repeated nearby unit guidance into one concise action", () => {
     const guidance = buildActionableGuidance([
       qaFinding("Source changed without nearby test coverage", "medium", [
-        "Add or update nearby unit tests for affected source files: src/services/menuService.ts, src/domain/pricing.ts."
+        "Create or update nearby unit tests for touched source files (examples: src/services/menuService.ts, src/domain/pricing.ts)."
       ], {
         id: "qa-source-without-nearby-test",
         affectedFiles: ["src/services/menuService.ts", "src/domain/pricing.ts"]
@@ -89,7 +89,7 @@ describe("buildActionableGuidance", () => {
     ]);
 
     assert.equal(guidance.length, 1);
-    assert.equal(guidance[0].action, "Add or update nearby unit/component tests for touched source files.");
+    assert.equal(guidance[0].action, "Create or update nearby unit tests for touched source files.");
   });
 
   it("keeps the highest-risk item when duplicate guidance exists", () => {
