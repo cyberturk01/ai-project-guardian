@@ -167,7 +167,7 @@ export function riskLevelForScore(score: number): RiskLevel {
 }
 
 function selectRiskBand(input: RiskScoreInput): RiskBand {
-  if (input.securityFindings.length > 0 || (input.externalFindings ?? []).length > 0 || (input.correlatedFindings ?? []).length > 0) {
+  if (hasBlockingSecuritySignals(input)) {
     return riskBands.security;
   }
 
@@ -308,7 +308,7 @@ function overallRiskForScore(score: number, input: RiskScoreInput): RiskLevel {
 }
 
 function hasCriticalPrerequisite(input: RiskScoreInput): boolean {
-  return input.securityFindings.length > 0 || hasMultiToolCriticalCorrelation(input) || hasScoreElevatingCriticalCombination(input);
+  return hasHighOrCriticalSecurityFinding(input) || hasMultiToolCriticalCorrelation(input) || hasScoreElevatingCriticalCombination(input);
 }
 
 function hasScoreElevatingCriticalCombination(input: RiskScoreInput): boolean {
@@ -335,6 +335,22 @@ function emptyScoreBreakdown(): ScoreBreakdown {
 
 function hasMultiToolCriticalCorrelation(input: RiskScoreInput): boolean {
   return (input.correlatedFindings ?? []).some((finding) => finding.confidence === "multi-tool" && finding.riskLevel === "critical");
+}
+
+function hasBlockingSecuritySignals(input: RiskScoreInput): boolean {
+  return (
+    hasHighOrCriticalSecurityFinding(input) ||
+    (input.externalFindings ?? []).some(isHighOrCriticalFinding) ||
+    (input.correlatedFindings ?? []).some(isHighOrCriticalFinding)
+  );
+}
+
+function hasHighOrCriticalSecurityFinding(input: RiskScoreInput): boolean {
+  return input.securityFindings.some(isHighOrCriticalFinding);
+}
+
+function isHighOrCriticalFinding(finding: { riskLevel: RiskLevel }): boolean {
+  return finding.riskLevel === "high" || finding.riskLevel === "critical";
 }
 
 function hasMigrationWithoutDbTest(input: RiskScoreInput): boolean {

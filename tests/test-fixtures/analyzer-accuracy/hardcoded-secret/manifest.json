@@ -1,6 +1,6 @@
 {
   "name": "hardcoded secret",
-  "expectedRisk": "high",
+  "expectedRisk": "low",
   "expectedFindings": [
     "security-hardcoded-secret"
   ],

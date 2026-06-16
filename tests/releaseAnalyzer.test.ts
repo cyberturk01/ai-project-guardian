@@ -39,6 +39,12 @@ describe("analyzeRelease", () => {
     assert.deepEqual(migrationFinding?.affectedFiles, ["src/db/migrations/018_add_reservation_rewards.sql"]);
     assert.match(migrationFinding?.whyItMatters ?? "", /irreversible/);
     assert.ok(migrationFinding?.requiredBeforeDeploy.some((action) => /rollback/.test(action)));
+
+    const dependencyFinding = findings.find((finding) => finding.id === "release-package-dependency-changed");
+    assert.equal(dependencyFinding?.riskLevel, "medium");
+    assert.ok(dependencyFinding?.requiredBeforeDeploy.some((action) => /clean dependency install/.test(action)));
+    assert.ok(dependencyFinding?.requiredBeforeDeploy.some((action) => /build, and test/.test(action)));
+    assert.ok(dependencyFinding?.requiredBeforeDeploy.some((action) => /dependency audit/.test(action)));
   });
 
   it("detects stage and production environment changes", () => {

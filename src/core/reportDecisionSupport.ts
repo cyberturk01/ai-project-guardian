@@ -41,10 +41,10 @@ const riskRank: Record<RiskLevel, number> = {
 export function buildReportDecisionSupport(input: ReportDecisionSupportInput): ReportDecisionSupport {
   const blockingFindings = [
     ...input.qaFindings,
-    ...input.securityFindings,
+    ...input.securityFindings.filter(isBlockingSecurityRisk),
     ...input.workflowFindings,
-    ...input.externalFindings,
-    ...input.correlatedFindings
+    ...input.externalFindings.filter(isBlockingSecurityRisk),
+    ...input.correlatedFindings.filter(isBlockingSecurityRisk)
   ];
   const checklistFindings = input.releaseFindings;
   const blockingFindingsCount = blockingFindings.length;
@@ -73,10 +73,17 @@ export function buildReportDecisionSupport(input: ReportDecisionSupportInput): R
       checklistFindingsCount,
       codeRisk,
       releaseChecklistRisk,
-      hasSecurityFindings: input.securityFindings.length > 0 || input.externalFindings.length > 0 || input.correlatedFindings.length > 0,
+      hasSecurityFindings:
+        input.securityFindings.some(isBlockingSecurityRisk) ||
+        input.externalFindings.some(isBlockingSecurityRisk) ||
+        input.correlatedFindings.some(isBlockingSecurityRisk),
       criticalFloorReason: input.scoreBreakdown.criticalFloorApplied?.reason
     })
   };
+}
+
+function isBlockingSecurityRisk(finding: { riskLevel: RiskLevel }): boolean {
+  return finding.riskLevel === "high" || finding.riskLevel === "critical";
 }
 
 function recommendMerge(input: {
