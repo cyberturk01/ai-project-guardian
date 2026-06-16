@@ -1,6 +1,6 @@
 import type { ChangedFile, GuardianReport, RiskLevel } from "../core/types.js";
 import { renderDecisionSummary } from "./decisionSummary.js";
-import { buildOnboardingGuidance } from "./onboardingGuidance.js";
+import { buildMarkdownNotes } from "./markdownNotes.js";
 
 export function renderMarkdownReport(report: GuardianReport): string {
   return `${renderHeader(report)}
@@ -355,11 +355,9 @@ function renderActionableGuidance(report: GuardianReport): string {
 }
 
 function renderNotes(report: GuardianReport): string {
-  const notes = [
-    "This report is generated from repository heuristics and should support, not replace, human review.",
-    ...buildOnboardingGuidance(report.warnings),
-    ...report.warnings
-  ];
+  const notes = buildMarkdownNotes(report, [
+    "This report is generated from repository heuristics and should support, not replace, human review."
+  ]);
 
   return renderList(notes);
 }
