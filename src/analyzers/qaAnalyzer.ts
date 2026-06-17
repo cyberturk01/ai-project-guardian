@@ -1,5 +1,5 @@
 import { basename, dirname, extname } from "node:path";
-import type { ChangedFile, GuardianConfig, QaFinding, RiskLevel } from "../core/types.js";
+import type { ChangedFile, GuardianConfig, QaFinding, RiskLevel, TestSignalEvidence } from "../core/types.js";
 import type { ProjectBrain } from "../project-brain/types.js";
 import { evaluateCustomQaRules } from "./customRuleEvaluator.js";
 
@@ -48,7 +48,9 @@ const uiPathPattern = /(^|\/)(components?|pages?|views?|screens?|ui|frontend|cli
 const servicePathPattern = /(^|\/)(services?|domain|business|use-cases?|usecases?|interactors?|logic)(\/|$)|(\.|-|_)(service|usecase|interactor)\.[^.]+$/i;
 const migrationPathPattern = /(^|\/)(migrations?|schema|prisma\/migrations)(\/|$)/i;
 const i18nPathPattern = /(^|\/)(i18n|l10n|locales?|translations?|lang|messages)(\/|$)/i;
-const authSecurityPathPattern = /(^|\/)(auth|authentication|authorization|crypto|jwt|oauth|password|permissions|secrets?|security|session)(\/|\.|-|_|$)/i;
+const authSecurityPathPattern = /(^|\/)(admin|auth|authentication|authorization|crypto|jwt|login|oauth|password|permissions?|roles?|secrets?|security|sessions?|tokens?)(\/|\.|-|_|$)/i;
+const businessRiskPathPattern = /(^|\/)(billing|coupon|discount|loyalty|payment|quota|referrals?|rewards?)(\/|\.|-|_|$)/i;
+const e2eRelevantPathPattern = /(^|\/)(auth|checkout|dashboard|forms?|loyalty|onboarding|pages?|public|referrals?|rewards?|routes?)(\/|\.|-|_|$)/i;
 const projectBrainPathPattern = /(^|\/)\.project-brain(\/|$)/i;
 const apiTestPattern = /(^|\/)(api|integration|e2e|request|requests|supertest)(\/|\.|-|_)/i;
 const uiTestPattern = /(^|\/)(components?|pages?|views?|screens?|ui|frontend|client|web|e2e|cypress|playwright)(\/|\.|-|_)|(\.|-|_)(component|page|view|screen|cy|e2e)\.[^.]+$/i;
@@ -158,6 +160,7 @@ function buildFinding(rule: QaRule, changedFiles: ChangedFile[], context: QaCont
   }
 
   const suggestedTests = suggestedTestsForAffectedFiles(rule, affectedFiles, context);
+  const testSignalEvidence = testSignalEvidenceForFinding(rule, affectedFiles, changedFiles);
 
   return {
     id: rule.id,
@@ -166,8 +169,143 @@ function buildFinding(rule: QaRule, changedFiles: ChangedFile[], context: QaCont
     description: rule.description,
     riskLevel: rule.riskLevel,
     affectedFiles,
-    suggestedTests
+    suggestedTests,
+    testSignalEvidence
   };
+}
+
+function testSignalEvidenceForFinding(
+  rule: QaRule,
+  affectedFiles: string[],
+  changedFiles: ChangedFile[]
+): TestSignalEvidence {
+  const expectedTestSignals = expectedTestSignalsForAffectedFiles(rule, affectedFiles);
+  const changedTestFiles = normalizeAndSort(changedFiles.filter((file) => file.status !== "deleted").map((file) => file.path).filter(isTestFile));
+  const detectedTestChanges = relatedTestChanges(affectedFiles, changedTestFiles);
+
+  return {
+    changedFiles: affectedFiles,
+    expectedTestSignals,
+    detectedTestChanges,
+    suggestedCoverage: suggestedCoverageForAffectedFiles(rule, affectedFiles),
+    reason:
+      detectedTestChanges.length === 0
+        ? "No related test change detected."
+        : "Related test changes were detected; review whether they cover the changed behavior."
+  };
+}
+
+function expectedTestSignalsForAffectedFiles(rule: QaRule, affectedFiles: string[]): string[] {
+  if (affectedFiles.length > 1) {
+    const groupedSignals = groupedExpectedSignals(rule, affectedFiles);
+
+    if (groupedSignals.length > 0) {
+      return groupedSignals;
+    }
+  }
+
+  return uniqueSorted(affectedFiles.flatMap((path) => expectedTestSignalsForFile(rule, path)));
+}
+
+function groupedExpectedSignals(rule: QaRule, affectedFiles: string[]): string[] {
+  const sharedDirectory = commonDirectory(affectedFiles);
+
+  if (sharedDirectory === undefined || sharedDirectory === "." || sharedDirectory === "") {
+    return [];
+  }
+
+  const feature = basename(sharedDirectory);
+  const extensions = expectedTestExtensions(affectedFiles);
+  const signals = extensions.flatMap((extension) => [`${sharedDirectory}/*.test${extension}`, `${sharedDirectory}/*.spec${extension}`]);
+  signals.push(`tests/${feature}/*`);
+
+  if (rule.id === "qa-ui-without-cypress-test" || affectedFiles.some(isE2eRelevantPath)) {
+    signals.push(`cypress/e2e/${feature}.cy.ts`, `cypress/e2e/${feature}.cy.js`, `e2e/${feature}.spec.ts`);
+  }
+
+  return uniqueSorted(signals);
+}
+
+function expectedTestSignalsForFile(rule: QaRule, path: string): string[] {
+  const normalizedPath = normalizePath(path);
+  const directory = dirname(normalizedPath);
+  const base = stripKnownExtensions(basename(normalizedPath));
+  const withoutExtension = stripKnownExtensions(normalizedPath);
+  const testExtension = preferredTestExtension(path);
+  const testPath = withoutExtension.startsWith("src/") ? withoutExtension.slice("src/".length) : withoutExtension;
+  const signals = [
+    `${withoutExtension}.test${testExtension}`,
+    `${withoutExtension}.spec${testExtension}`,
+    `tests/${testPath}.test${testExtension}`,
+    `tests/${base}.test${testExtension}`
+  ];
+
+  if (rule.id === "qa-api-without-integration-test") {
+    signals.push(`tests/${testPath}.test${testExtension}`, `${directory}/${base}.test${testExtension}`);
+  }
+
+  if (rule.id === "qa-ui-without-cypress-test" || isE2eRelevantPath(normalizedPath)) {
+    const feature = featureToken(normalizedPath);
+    signals.push(`cypress/e2e/${feature}.cy.ts`, `cypress/e2e/${feature}.cy.js`, `e2e/${feature}.spec.ts`);
+  }
+
+  return uniqueSorted(signals);
+}
+
+function relatedTestChanges(affectedFiles: string[], changedTestFiles: string[]): string[] {
+  return changedTestFiles.filter((testFile) => affectedFiles.some((sourceFile) => isRelatedTestChange(sourceFile, testFile)));
+}
+
+function isRelatedTestChange(sourceFile: string, testFile: string): boolean {
+  const normalizedTestFile = normalizePath(testFile).toLowerCase();
+  const sourceToken = mainPathToken(sourceFile).toLowerCase();
+  const feature = featureToken(sourceFile).toLowerCase();
+  const folderToken = basename(dirname(normalizePath(sourceFile))).toLowerCase();
+
+  if (sourceToken !== "" && normalizedTestFile.includes(sourceToken)) {
+    return true;
+  }
+
+  return (
+    feature !== "" && normalizedTestFile.includes(`/${feature}/`) ||
+    folderToken !== "" && folderToken !== "." && normalizedTestFile.includes(`/${folderToken}/`)
+  );
+}
+
+function suggestedCoverageForAffectedFiles(rule: QaRule, affectedFiles: string[]): string[] {
+  const coverage = new Set<string>(["happy path"]);
+
+  if (rule.id === "qa-api-without-integration-test") {
+    coverage.add("API/integration path");
+    coverage.add("invalid input/error path");
+  } else if (rule.id === "qa-ui-without-cypress-test") {
+    coverage.add("component rendering path");
+    coverage.add("validation/error path");
+  } else if (rule.id === "qa-migration-without-db-test") {
+    coverage.add("migration apply path");
+    coverage.add("rollback or compatibility path");
+  } else if (rule.id === "qa-i18n-without-localization-test") {
+    coverage.add("localized rendering path");
+    coverage.add("missing key fallback");
+  } else {
+    coverage.add("validation/error path");
+  }
+
+  if (affectedFiles.some((path) => authSecurityPathPattern.test(normalizePath(path)))) {
+    coverage.add("negative unauthorized path");
+    coverage.add("role/permission denial");
+    coverage.add("invalid token/session case");
+  }
+
+  if (affectedFiles.some((path) => businessRiskPathPattern.test(normalizePath(path)))) {
+    coverage.add("duplicate/abuse prevention");
+    coverage.add("limit/quota boundary");
+    coverage.add("invalid input/error path");
+  }
+
+  coverage.add("regression test if this change fixes a bug");
+
+  return [...coverage].sort((left, right) => left.localeCompare(right));
 }
 
 function suggestedTestsForAffectedFiles(rule: QaRule, affectedFiles: string[], context: QaContext): string[] {
@@ -289,6 +427,45 @@ function mainPathToken(path: string): string {
   }
 
   return stripKnownExtensions(basename(dirname(normalizedPath))).toLowerCase();
+}
+
+function commonDirectory(paths: string[]): string | undefined {
+  const directories = paths.map((path) => dirname(normalizePath(path)));
+  const firstDirectory = directories[0];
+
+  if (firstDirectory === undefined || directories.some((directory) => directory !== firstDirectory)) {
+    return undefined;
+  }
+
+  return firstDirectory;
+}
+
+function expectedTestExtensions(paths: string[]): string[] {
+  return uniqueSorted(paths.map(preferredTestExtension));
+}
+
+function preferredTestExtension(path: string): string {
+  const extension = extname(path).toLowerCase();
+
+  if (extension === ".tsx" || extension === ".jsx") {
+    return extension;
+  }
+
+  return ".ts";
+}
+
+function featureToken(path: string): string {
+  const token = mainPathToken(path);
+
+  if (token !== "") {
+    return token;
+  }
+
+  return basename(dirname(normalizePath(path))).toLowerCase();
+}
+
+function isE2eRelevantPath(path: string): boolean {
+  return e2eRelevantPathPattern.test(normalizePath(path));
 }
 
 function stripKnownExtensions(path: string): string {

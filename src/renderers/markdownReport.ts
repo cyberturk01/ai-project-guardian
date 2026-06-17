@@ -167,13 +167,40 @@ function renderQaFindings(findings: GuardianReport["qaFindings"]): string {
 | Risk | ${renderRiskLabel(finding.riskLevel)} |
 | Affected files | ${renderInlineList(finding.affectedFiles)} |
 
-${finding.description}
+${finding.description}${renderQaEvidence(finding)}
 
 **Suggested tests**
 
 ${renderList(finding.suggestedTests)}`;
     })
     .join("\n\n");
+}
+
+function renderQaEvidence(finding: GuardianReport["qaFindings"][number]): string {
+  const evidence = finding.testSignalEvidence;
+
+  if (evidence === undefined) {
+    return "";
+  }
+
+  return `
+
+**Test signal evidence**
+
+Changed files:
+${renderPathList(evidence.changedFiles)}
+
+Expected test signals:
+${renderPathList(evidence.expectedTestSignals)}
+
+Detected related test changes:
+${evidence.detectedTestChanges.length === 0 ? "- None" : renderPathList(evidence.detectedTestChanges)}
+
+Suggested coverage to review:
+${renderList(evidence.suggestedCoverage)}
+
+${evidence.reason}
+`;
 }
 
 function renderBlockingFindings(report: GuardianReport): string {
@@ -368,6 +395,14 @@ function renderList(items: string[]): string {
   }
 
   return items.map((item) => `- ${item}`).join("\n");
+}
+
+function renderPathList(items: string[]): string {
+  if (items.length === 0) {
+    return "None.";
+  }
+
+  return items.map((item) => `- \`${item}\``).join("\n");
 }
 
 function renderTaskList(items: string[], emptyText = "No required actions."): string {

@@ -313,6 +313,143 @@ describe("analyzeQa", () => {
     );
   });
 
+  it("attaches test signal evidence for changed source files without a nearby test signal", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/services/walletHealthService.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        }
+      ],
+      repoFiles: ["src/services/walletHealthService.ts"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const sourceFinding = findings.find((finding) => finding.id === "qa-source-without-nearby-test");
+
+    assert.deepEqual(sourceFinding?.testSignalEvidence?.changedFiles, ["src/services/walletHealthService.ts"]);
+    assert.deepEqual(sourceFinding?.testSignalEvidence?.expectedTestSignals, [
+      "src/services/walletHealthService.spec.ts",
+      "src/services/walletHealthService.test.ts",
+      "tests/services/walletHealthService.test.ts",
+      "tests/walletHealthService.test.ts"
+    ]);
+    assert.deepEqual(sourceFinding?.testSignalEvidence?.detectedTestChanges, []);
+    assert.equal(sourceFinding?.testSignalEvidence?.reason, "No related test change detected.");
+  });
+
+  it("adds UI component and e2e test signal evidence for frontend changes", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/components/WalletSummary.tsx",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        }
+      ],
+      repoFiles: ["src/components/WalletSummary.tsx"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const uiFinding = findings.find((finding) => finding.id === "qa-ui-without-cypress-test");
+
+    assert.ok(uiFinding?.testSignalEvidence?.expectedTestSignals.includes("src/components/WalletSummary.test.tsx"));
+    assert.ok(uiFinding?.testSignalEvidence?.expectedTestSignals.includes("src/components/WalletSummary.spec.tsx"));
+    assert.ok(uiFinding?.testSignalEvidence?.expectedTestSignals.includes("cypress/e2e/walletsummary.cy.ts"));
+    assert.ok(uiFinding?.testSignalEvidence?.suggestedCoverage.includes("component rendering path"));
+    assert.ok(uiFinding?.testSignalEvidence?.suggestedCoverage.includes("validation/error path"));
+  });
+
+  it("suggests auth-sensitive coverage without claiming a test is definitely missing", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/admin/tokens.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "high"
+        }
+      ],
+      repoFiles: ["src/admin/tokens.ts"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const authFinding = findings.find((finding) => finding.id === "qa-auth-security-without-negative-test");
+
+    assert.ok(authFinding?.testSignalEvidence?.suggestedCoverage.includes("negative unauthorized path"));
+    assert.ok(authFinding?.testSignalEvidence?.suggestedCoverage.includes("role/permission denial"));
+    assert.ok(authFinding?.testSignalEvidence?.suggestedCoverage.includes("invalid token/session case"));
+    assert.doesNotMatch(authFinding?.testSignalEvidence?.reason ?? "", /forgot|missing/i);
+  });
+
+  it("suggests business-risk coverage and shows related changed test signals when detected", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/referral/rewardService.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        },
+        {
+          path: "tests/referral/rewardRules.test.ts",
+          status: "modified",
+          category: "test",
+          riskLevel: "low"
+        }
+      ],
+      repoFiles: ["src/referral/rewardService.ts", "tests/referral/rewardRules.test.ts"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const sourceFinding = findings.find((finding) => finding.id === "qa-source-without-nearby-test");
+
+    assert.deepEqual(sourceFinding?.testSignalEvidence?.detectedTestChanges, ["tests/referral/rewardRules.test.ts"]);
+    assert.ok(sourceFinding?.testSignalEvidence?.suggestedCoverage.includes("duplicate/abuse prevention"));
+    assert.ok(sourceFinding?.testSignalEvidence?.suggestedCoverage.includes("limit/quota boundary"));
+    assert.ok(sourceFinding?.testSignalEvidence?.suggestedCoverage.includes("invalid input/error path"));
+  });
+
+  it("groups repeated nearby files into compact expected test signal patterns", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/referral/rewardService.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        },
+        {
+          path: "src/referral/rewardRules.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        }
+      ],
+      repoFiles: ["src/referral/rewardService.ts", "src/referral/rewardRules.ts"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const sourceFinding = findings.find((finding) => finding.id === "qa-source-without-nearby-test");
+
+    assert.deepEqual(sourceFinding?.testSignalEvidence?.expectedTestSignals, [
+      "cypress/e2e/referral.cy.js",
+      "cypress/e2e/referral.cy.ts",
+      "e2e/referral.spec.ts",
+      "src/referral/*.spec.ts",
+      "src/referral/*.test.ts",
+      "tests/referral/*"
+    ]);
+  });
+
   it("still reports missing negative tests for real auth and security code", () => {
     const findings = analyzeQa({
       changedFiles: [

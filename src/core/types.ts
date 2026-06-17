@@ -66,10 +66,19 @@ export type FindingBase = {
   accepted?: boolean;
 };
 
+export type TestSignalEvidence = {
+  changedFiles: string[];
+  expectedTestSignals: string[];
+  detectedTestChanges: string[];
+  suggestedCoverage: string[];
+  reason: string;
+};
+
 export type QaFinding = FindingBase & {
   area: "qa";
   affectedFiles: string[];
   suggestedTests: string[];
+  testSignalEvidence?: TestSignalEvidence;
 };
 
 export type ReleaseFinding = FindingBase & {
