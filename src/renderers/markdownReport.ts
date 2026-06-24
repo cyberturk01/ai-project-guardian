@@ -226,6 +226,14 @@ function renderEvidenceGroups(evidence: NonNullable<GuardianReport["qaFindings"]
 }
 
 function renderEvidenceGroup(group: EvidenceGroup): string {
+  const suggestedReview =
+    group.suggestedReview.length === 0
+      ? ""
+      : `
+
+Suggested review:
+${renderList(group.suggestedReview)}`;
+
   return `QA Evidence Group: ${group.name}
 
 Changed files:
@@ -235,10 +243,7 @@ Detected tests:
 ${renderBaseNameList(group.detectedTests)}
 
 Detected coverage signals:
-${renderCoverageSignalList(group.detectedCoverageSignals)}
-
-Suggested review:
-${renderList(group.suggestedReview)}`;
+${renderCoverageSignalList(group.detectedCoverageSignals)}${suggestedReview}`;
 }
 
 function renderFlatQaEvidence(evidence: NonNullable<GuardianReport["qaFindings"][number]["testSignalEvidence"]>): string {

@@ -733,6 +733,61 @@ describe("scoreRisk", () => {
     assert.equal(breakdownResult.scoreBreakdown.weightedSignal, 47);
   });
 
+  it("does not change risk scoring when QA evidence groups are present", () => {
+    const baseInput = {
+      changedFiles: [
+        changedFile({
+          path: "src/auth/session.ts",
+          category: "security",
+          riskLevel: "high"
+        })
+      ],
+      qaFindings: [
+        qaFinding({
+          id: "qa-auth-security-without-negative-test",
+          riskLevel: "high",
+          confidence: 84,
+          affectedFiles: ["src/auth/session.ts"],
+          testSignalEvidence: {
+            changedFiles: ["src/auth/session.ts"],
+            expectedTestSignals: ["tests/auth/session.test.ts"],
+            detectedTestChanges: ["tests/auth/session.test.ts"],
+            detectedRelatedTests: [{ path: "tests/auth/session.test.ts", score: "strong" as const }],
+            detectedCoverageSignals: ["authorization" as const],
+            unconfirmedCoverageSignals: ["negative_path" as const],
+            suggestedCoverage: ["negative unauthorized path"],
+            reason: "Related test changes were detected; review whether they cover the changed behavior."
+          }
+        })
+      ],
+      releaseFindings: [],
+      securityFindings: [],
+      workflowFindings: [],
+      externalFindings: [],
+      correlatedFindings: []
+    };
+    const groupedInput = {
+      ...baseInput,
+      qaFindings: baseInput.qaFindings.map((finding) => ({
+        ...finding,
+        testSignalEvidence: {
+          ...finding.testSignalEvidence!,
+          evidenceGroups: [
+            {
+              name: "src/auth/*",
+              changedFiles: ["src/auth/session.ts"],
+              detectedTests: ["tests/auth/session.test.ts"],
+              detectedCoverageSignals: ["authorization" as const],
+              suggestedReview: ["authorization", "negative unauthorized path"]
+            }
+          ]
+        }
+      }))
+    };
+
+    assert.deepEqual(scoreRisk(groupedInput), scoreRisk(baseInput));
+  });
+
   it("explains the critical floor when a critical combination elevates the score", () => {
     const result = calculateRiskScore({
       changedFiles: [

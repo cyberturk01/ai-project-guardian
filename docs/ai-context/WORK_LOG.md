@@ -33,4 +33,14 @@ Lightweight RCC memory from completed agent work.
 - Summary: Implemented QA evidence grouping with EvidenceGroup metadata and grouped Markdown rendering while preserving existing QA findings, scoring, and blocking behavior.
 - Changed files: `auto`
 - Verification: npm test
+
+## 2026-06-24T19:54:30.765Z
+- Summary: Merged origin/dev into local dev and verified the merged branch.
+- Changed files: `auto`
+- Verification: npm test
+
+## 2026-06-24T19:59:29.667Z
+- Summary: Prepared v0.2.0 release hardening with output contract tests for Markdown, JSON, SARIF, grouped QA evidence compactness, risk/decision invariance, docs, release notes, and package version update.
+- Changed files: `auto`
+- Verification: npm test; npm run build; npm pack --dry-run
 <!-- repo-context-center:work-log:end -->

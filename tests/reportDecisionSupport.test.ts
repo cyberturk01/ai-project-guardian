@@ -53,6 +53,47 @@ describe("buildReportDecisionSupport", () => {
     assert.equal(decisionSupport.riskReason, "Security findings require review.");
   });
 
+  it("does not change severity or blocking logic when QA evidence groups are present", () => {
+    const baseFinding = authQaFinding({ confidence: 84, relatedScore: "strong" });
+    const groupedFinding: QaFinding = {
+      ...baseFinding,
+      testSignalEvidence: {
+        ...baseFinding.testSignalEvidence!,
+        evidenceGroups: [
+          {
+            name: "src/auth/*",
+            changedFiles: ["src/auth/session.ts"],
+            detectedTests: ["tests/auth/session.test.ts"],
+            detectedCoverageSignals: ["authorization"],
+            suggestedReview: ["authorization", "negative unauthorized path"]
+          }
+        ]
+      }
+    };
+    const baseDecisionSupport = buildReportDecisionSupport({
+      overallRisk: "high",
+      scoreBreakdown: scoreBreakdown(),
+      qaFindings: [baseFinding],
+      releaseFindings: [],
+      securityFindings: [],
+      workflowFindings: [],
+      externalFindings: [],
+      correlatedFindings: []
+    });
+    const groupedDecisionSupport = buildReportDecisionSupport({
+      overallRisk: "high",
+      scoreBreakdown: scoreBreakdown(),
+      qaFindings: [groupedFinding],
+      releaseFindings: [],
+      securityFindings: [],
+      workflowFindings: [],
+      externalFindings: [],
+      correlatedFindings: []
+    });
+
+    assert.deepEqual(groupedDecisionSupport, baseDecisionSupport);
+  });
+
   it("recommends safe when there are no active findings and the score risk is low or medium", () => {
     const decisionSupport = buildReportDecisionSupport({
       overallRisk: "medium",
