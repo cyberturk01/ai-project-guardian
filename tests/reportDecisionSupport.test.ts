@@ -126,6 +126,42 @@ describe("buildReportDecisionSupport", () => {
     assert.equal(decisionSupport.riskReason, "No blocking findings remain.");
   });
 
+  it("does not double-count single-tool correlations as blocking findings", () => {
+    const decisionSupport = buildReportDecisionSupport({
+      overallRisk: "high",
+      scoreBreakdown: scoreBreakdown(),
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: [securityFinding("high")],
+      workflowFindings: [],
+      externalFindings: [],
+      correlatedFindings: [correlatedFinding("high", "single-tool")]
+    });
+
+    assert.equal(decisionSupport.blockingFindingsCount, 1);
+    assert.equal(decisionSupport.mergeRecommendation, "blocked");
+    assert.equal(decisionSupport.codeRisk, "high");
+    assert.equal(decisionSupport.riskReason, "Security findings require review.");
+  });
+
+  it("counts multi-tool correlations as blocking findings", () => {
+    const decisionSupport = buildReportDecisionSupport({
+      overallRisk: "critical",
+      scoreBreakdown: scoreBreakdown(),
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: [],
+      workflowFindings: [],
+      externalFindings: [],
+      correlatedFindings: [correlatedFinding("high", "multi-tool")]
+    });
+
+    assert.equal(decisionSupport.blockingFindingsCount, 1);
+    assert.equal(decisionSupport.mergeRecommendation, "blocked");
+    assert.equal(decisionSupport.codeRisk, "high");
+    assert.equal(decisionSupport.riskReason, "Security findings require review.");
+  });
+
   it("blocks when the auth/security critical floor applies", () => {
     const decisionSupport = buildReportDecisionSupport({
       overallRisk: "critical",
@@ -320,13 +356,13 @@ function externalFinding(riskLevel: RiskLevel): ExternalFinding {
   };
 }
 
-function correlatedFinding(riskLevel: RiskLevel): CorrelatedFinding {
+function correlatedFinding(riskLevel: RiskLevel, confidence: CorrelatedFinding["confidence"] = "multi-tool"): CorrelatedFinding {
   return {
     id: "correlated-finding",
     title: "Correlated finding",
     riskLevel,
     sources: ["guardian", "semgrep"],
     findingIds: ["security-finding", "external-finding"],
-    confidence: "multi-tool"
+    confidence
   };
 }

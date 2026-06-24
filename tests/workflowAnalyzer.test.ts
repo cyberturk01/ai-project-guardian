@@ -92,6 +92,58 @@ describe("analyzeWorkflows", () => {
       assert.deepEqual(findings, []);
     });
   });
+
+  it("does not create findings when a workflow delegates required checks to a package script", async () => {
+    await withRepo(async (repoPath) => {
+      await mkdir(join(repoPath, ".github", "workflows"), { recursive: true });
+      await mkdir(join(repoPath, "scripts"), { recursive: true });
+      await writeFile(
+        join(repoPath, "package.json"),
+        JSON.stringify(
+          {
+            scripts: {
+              "release:check": "node scripts/release-check.js"
+            }
+          },
+          null,
+          2
+        ),
+        "utf8"
+      );
+      await writeFile(
+        join(repoPath, "scripts", "release-check.js"),
+        [
+          "const checks = [",
+          "  'npm test',",
+          "  'npm pack --dry-run'",
+          "];",
+          "console.log(checks.join('\\n'));",
+          ""
+        ].join("\n"),
+        "utf8"
+      );
+      await writeFile(
+        join(repoPath, ".github", "workflows", "ci.yml"),
+        [
+          "name: CI",
+          "jobs:",
+          "  test:",
+          "    steps:",
+          "      - run: npm run release:check",
+          ""
+        ].join("\n"),
+        "utf8"
+      );
+
+      const findings = await analyzeWorkflows({
+        repoPath,
+        repoFiles: [".github/workflows/ci.yml", "package.json", "scripts/release-check.js"],
+        config: configWithRequiredChecks(["npm test", "npm pack --dry-run"])
+      });
+
+      assert.deepEqual(findings, []);
+    });
+  });
 });
 
 async function withRepo(test: (repoPath: string) => Promise<void>): Promise<void> {

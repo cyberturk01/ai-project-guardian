@@ -44,12 +44,12 @@ export function buildReportDecisionSupport(input: ReportDecisionSupportInput): R
     ...input.securityFindings.filter(isBlockingSecurityRisk),
     ...input.workflowFindings,
     ...input.externalFindings.filter(isBlockingSecurityRisk),
-    ...input.correlatedFindings.filter(isBlockingSecurityRisk)
+    ...input.correlatedFindings.filter(isBlockingCorrelatedRisk)
   ];
   const hasBlockingSecurityFindings =
     input.securityFindings.some(isBlockingSecurityRisk) ||
     input.externalFindings.some(isBlockingSecurityRisk) ||
-    input.correlatedFindings.some(isBlockingSecurityRisk);
+    input.correlatedFindings.some(isBlockingCorrelatedRisk);
   const checklistFindings = input.releaseFindings;
   const blockingFindingsCount = blockingFindings.length;
   const checklistFindingsCount = checklistFindings.length;
@@ -86,6 +86,10 @@ export function buildReportDecisionSupport(input: ReportDecisionSupportInput): R
 
 function isBlockingSecurityRisk(finding: { riskLevel: RiskLevel }): boolean {
   return finding.riskLevel === "high" || finding.riskLevel === "critical";
+}
+
+function isBlockingCorrelatedRisk(finding: CorrelatedFinding): boolean {
+  return finding.confidence === "multi-tool" && isBlockingSecurityRisk(finding);
 }
 
 function recommendMerge(input: {
