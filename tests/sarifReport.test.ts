@@ -70,6 +70,7 @@ describe("renderSarifReport", () => {
 
   it("keeps QA evidence details out of compact SARIF messages", () => {
     const report = makeReport();
+    report.suggestedReview = ["auth: unauthorized access", "auth: permission denied"];
     report.qaFindings = [
       {
         ...report.qaFindings[0],
@@ -83,6 +84,15 @@ describe("renderSarifReport", () => {
           detectedCoverageSignals: ["authorization"],
           unconfirmedCoverageSignals: ["negative_path"],
           suggestedCoverage: ["negative unauthorized path"],
+          evidenceGroups: [
+            {
+              name: "src/auth/*",
+              changedFiles: ["src/auth/session.ts"],
+              detectedTests: ["tests/auth/session.test.ts"],
+              detectedCoverageSignals: ["authorization"],
+              suggestedReview: ["unauthorized access", "permission denied"]
+            }
+          ],
           reason: "Related test changes were detected; review whether they cover the changed behavior."
         }
       }
@@ -91,7 +101,7 @@ describe("renderSarifReport", () => {
     const serialized = JSON.stringify(renderSarifReport(report));
 
     assert.match(serialized, /Auth\/security-sensitive files changed; negative-path coverage not confirmed/);
-    assert.doesNotMatch(serialized, /detectedRelatedTests|detectedCoverageSignals|unconfirmedCoverageSignals/);
+    assert.doesNotMatch(serialized, /detectedRelatedTests|detectedCoverageSignals|unconfirmedCoverageSignals|evidenceGroups|suggestedReview/);
     assertNoOldNegativeCoverageWording(serialized);
   });
 

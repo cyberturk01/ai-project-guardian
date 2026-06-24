@@ -123,6 +123,92 @@ describe("renderMarkdownReport", () => {
     assert.doesNotMatch(summary, /overclaiming coverage failure/i);
   });
 
+  it("renders suggested review only when domain suggestions exist", () => {
+    const report = makeReport();
+    report.suggestedReview = ["api: success response", "api: bad request"];
+
+    const fullReport = renderMarkdownReport(report);
+    const withoutSuggestions = renderMarkdownReport({ ...makeReport(), suggestedReview: [] });
+
+    assert.match(fullReport, /Suggested review:\n\n- api: success response\n- api: bad request/);
+    assert.doesNotMatch(withoutSuggestions, /Suggested review:/);
+  });
+
+  it("renders grouped QA evidence in full Markdown reports", () => {
+    const report = makeReport();
+    report.qaFindings = [
+      {
+        ...report.qaFindings[0],
+        title: "Source change without related test signal",
+        affectedFiles: ["src/cli/work/renderAgent.ts", "src/cli/work/taskFileRecommendations.ts"],
+        suggestedTests: ["Review CLI work coverage."],
+        testSignalEvidence: {
+          changedFiles: ["src/cli/work/renderAgent.ts", "src/cli/work/taskFileRecommendations.ts"],
+          expectedTestSignals: ["src/cli/work/*.test.ts", "tests/work/*"],
+          detectedTestChanges: ["tests/cli/work.test.ts", "tests/cli/workOutputContract.test.ts"],
+          detectedRelatedTests: [
+            { path: "tests/cli/work.test.ts", score: "medium" },
+            { path: "tests/cli/workOutputContract.test.ts", score: "weak" }
+          ],
+          detectedCoverageSignals: ["regression", "output_contract"],
+          unconfirmedCoverageSignals: ["boundary"],
+          suggestedCoverage: ["output contract", "regression", "edge cases"],
+          evidenceGroups: [
+            {
+              name: "src/cli/work/*",
+              changedFiles: ["src/cli/work/renderAgent.ts", "src/cli/work/taskFileRecommendations.ts"],
+              detectedTests: ["tests/cli/work.test.ts", "tests/cli/workOutputContract.test.ts"],
+              detectedCoverageSignals: ["regression", "output_contract"],
+              suggestedReview: ["output contract", "regression", "edge cases"]
+            }
+          ],
+          reason: "Related test changes were detected; review whether they cover the changed behavior."
+        }
+      }
+    ];
+
+    const fullReport = renderMarkdownReport(report);
+
+    assert.match(fullReport, /QA Evidence Group: src\/cli\/work\/\*/);
+    assert.match(fullReport, /Changed files:\n- renderAgent\.ts\n- taskFileRecommendations\.ts/);
+    assert.match(fullReport, /Detected tests:\n- work\.test\.ts\n- workOutputContract\.test\.ts/);
+    assert.match(fullReport, /Detected coverage signals:\n- regression\n- output contract/);
+    assert.match(fullReport, /Suggested review:\n- output contract\n- regression\n- edge cases/);
+    assert.doesNotMatch(fullReport, /Expected test signals:\n- `src\/cli\/work\/\*\.test\.ts`/);
+  });
+
+  it("renders multiple grouped QA evidence blocks including fallback groups and keeps summary compact", () => {
+    const report = makeReportWithGroupedQaEvidence([
+      {
+        name: "src/api/orders/*",
+        changedFiles: ["src/api/orders/route.ts"],
+        detectedTests: ["tests/ordersCoverage.test.ts"],
+        detectedCoverageSignals: ["happy_path", "validation"],
+        suggestedReview: ["api: success response", "api: bad request", "suggested review"]
+      },
+      {
+        name: "server*",
+        changedFiles: ["server.ts"],
+        detectedTests: [],
+        detectedCoverageSignals: [],
+        suggestedReview: []
+      }
+    ]);
+    const fullReport = renderMarkdownReport(report);
+    const summary = renderMarkdownSummary(report);
+
+    assert.match(fullReport, /QA Evidence Group: src\/api\/orders\/\*/);
+    assert.match(fullReport, /Changed files:\n- route\.ts/);
+    assert.match(fullReport, /Detected tests:\n- ordersCoverage\.test\.ts/);
+    assert.match(fullReport, /Detected coverage signals:\n- happy path\n- validation/);
+    assert.match(fullReport, /Suggested review:\n- api: success response\n- api: bad request\n- suggested review/);
+    assert.match(fullReport, /QA Evidence Group: server\*/);
+    assert.match(fullReport, /QA Evidence Group: server\*[\s\S]*Detected tests:\nNone\./);
+    assert.doesNotMatch(sectionFor(fullReport, "QA Evidence Group: server*"), /Suggested review:/);
+    assert.doesNotMatch(summary, /QA Evidence Group:/);
+    assert.doesNotMatch(summary, /Suggested review:/);
+  });
+
   it("keeps JSON report QA evidence fields stable", () => {
     const report = makeReportWithQaEvidence();
     const parsed = JSON.parse(renderReport(report, "json")) as GuardianReport;
@@ -141,6 +227,32 @@ describe("renderMarkdownReport", () => {
     assert.deepEqual(evidence?.detectedCoverageSignals, ["regression", "output_contract"]);
     assert.deepEqual(evidence?.unconfirmedCoverageSignals, ["negative_path"]);
     assert.equal(parsed.qaFindings[0]?.confidence, 84);
+  });
+
+  it("keeps JSON output contract for domain suggestions and grouped QA evidence", () => {
+    const report = makeReportWithGroupedQaEvidence([
+      {
+        name: "src/cli/work/*",
+        changedFiles: ["src/cli/work/renderAgent.ts", "src/cli/work/taskFileRecommendations.ts"],
+        detectedTests: ["tests/cli/work.test.ts"],
+        detectedCoverageSignals: ["regression"],
+        suggestedReview: ["output contract", "regression"]
+      }
+    ]);
+    report.suggestedReview = ["cli: valid command", "cli: output contract"];
+
+    const parsed = JSON.parse(renderReport(report, "json")) as GuardianReport;
+
+    assert.deepEqual(parsed.suggestedReview, ["cli: valid command", "cli: output contract"]);
+    assert.deepEqual(parsed.qaFindings[0].testSignalEvidence?.evidenceGroups, [
+      {
+        name: "src/cli/work/*",
+        changedFiles: ["src/cli/work/renderAgent.ts", "src/cli/work/taskFileRecommendations.ts"],
+        detectedTests: ["tests/cli/work.test.ts"],
+        detectedCoverageSignals: ["regression"],
+        suggestedReview: ["output contract", "regression"]
+      }
+    ]);
   });
 
   it("keeps report output compact while showing scored QA evidence", () => {
@@ -504,6 +616,41 @@ function makeReportWithQaEvidence(overrides: Partial<GuardianReport["qaFindings"
   return report;
 }
 
+function makeReportWithGroupedQaEvidence(
+  evidenceGroups: NonNullable<NonNullable<GuardianReport["qaFindings"][number]["testSignalEvidence"]>["evidenceGroups"]>
+): GuardianReport {
+  const report = makeReport();
+
+  report.qaFindings = [
+    {
+      ...report.qaFindings[0],
+      title: "Source change without related test signal",
+      affectedFiles: evidenceGroups.flatMap((group) => group.changedFiles),
+      suggestedTests: ["Review grouped QA evidence."],
+      confidence: 84,
+      testSignalEvidence: {
+        changedFiles: evidenceGroups.flatMap((group) => group.changedFiles),
+        expectedTestSignals: ["src/**/*.test.ts", "tests/**/*"],
+        detectedTestChanges: evidenceGroups.flatMap((group) => group.detectedTests),
+        detectedRelatedTests: evidenceGroups.flatMap((group) => group.detectedTests.map((path) => ({ path, score: "medium" as const }))),
+        detectedCoverageSignals: ["regression", "output_contract"],
+        unconfirmedCoverageSignals: ["negative_path"],
+        suggestedCoverage: ["output contract", "regression", "edge cases"],
+        evidenceGroups,
+        reason: "Related test changes were detected; review whether they cover the changed behavior."
+      }
+    }
+  ];
+  report.actionableGuidance = buildActionableGuidance([
+    ...report.releaseFindings,
+    ...report.qaFindings,
+    ...report.securityFindings,
+    ...report.workflowFindings
+  ]);
+
+  return report;
+}
+
 function readSnapshot(fileName: string): string {
   const compiledTestDir = dirname(fileURLToPath(import.meta.url));
   return readFileSync(join(compiledTestDir, "../../tests/__snapshots__", fileName), "utf8");
@@ -530,10 +677,22 @@ function countOccurrences(value: string, search: string): number {
   return value.split(search).length - 1;
 }
 
+function sectionFor(value: string, heading: string): string {
+  const start = value.indexOf(heading);
+
+  if (start === -1) {
+    return "";
+  }
+
+  const next = value.indexOf("\n\nQA Evidence Group:", start + heading.length);
+  return next === -1 ? value.slice(start) : value.slice(start, next);
+}
+
 function assertNoOldNegativeCoverageWording(value: string): void {
   for (const phrase of [
     ["without negative", "test coverage"],
     ["missing negative", "test coverage"],
+    ["missing negative", "coverage"],
     ["no negative", "test coverage"]
   ]) {
     assert.doesNotMatch(value, new RegExp(phrase.join(" "), "i"));

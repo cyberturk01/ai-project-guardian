@@ -23,4 +23,24 @@ Lightweight RCC memory from completed agent work.
 - Summary: Implemented fixture-aware secret handling: test and mock fixture secrets stay visible as low, non-blocking findings while production/config/provider-like keys remain protected.
 - Changed files: `src/analyzers/securityAnalyzer.ts src/core/reportDecisionSupport.ts src/core/types.ts tests/securityAnalyzer.test.ts tests/reportDecisionSupport.test.ts tests/...`
 - Verification: npm run build; node --test dist/tests/securityAnalyzer.test.js dist/tests/reportDecisionSupport.test.js dist/tests/markdownReport.test.js; npm test; AI-Restaurants Guardian JSON spot-check
+
+## 2026-06-24T19:37:27.962Z
+- Summary: Implemented domain coverage suggestions with advisory Suggested review rendering for recognized auth, api, cli, workflow, and config path domains.
+- Changed files: `auto`
+- Verification: npm test
+
+## 2026-06-24T19:41:57.456Z
+- Summary: Implemented QA evidence grouping with EvidenceGroup metadata and grouped Markdown rendering while preserving existing QA findings, scoring, and blocking behavior.
+- Changed files: `auto`
+- Verification: npm test
+
+## 2026-06-24T19:54:30.765Z
+- Summary: Merged origin/dev into local dev and verified the merged branch.
+- Changed files: `auto`
+- Verification: npm test
+
+## 2026-06-24T19:59:29.667Z
+- Summary: Prepared v0.2.0 release hardening with output contract tests for Markdown, JSON, SARIF, grouped QA evidence compactness, risk/decision invariance, docs, release notes, and package version update.
+- Changed files: `auto`
+- Verification: npm test; npm run build; npm pack --dry-run
 <!-- repo-context-center:work-log:end -->

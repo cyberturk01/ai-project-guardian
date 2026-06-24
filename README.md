@@ -54,6 +54,8 @@ Guardian currently supports:
 
 - Changed-file classification across source, tests, migrations, config, CI, documentation, i18n, security, generated reports, and Project Brain context files.
 - QA/test heuristics for missing nearby tests, API/integration coverage, component/e2e coverage, DB/migration tests, localization tests, and negative auth/security tests.
+- Domain-specific suggested review guidance for changed auth, API, CLI, workflow, and config paths.
+- Grouped QA evidence in full reports so related changed files, detected tests, coverage signals, and suggested review items stay readable.
 - Release checklist findings for migrations, dependency changes, environment config changes, GitHub Actions changes, and repository-defined deploy rules.
 - Security heuristics for hardcoded secrets, API keys, JWT/default secret fallbacks, sensitive logs, SQL interpolation, auth bypasses, CORS wildcards, route auth, and rate limiting.
 - Workflow checks for required GitHub Actions commands configured per repository.
@@ -93,6 +95,37 @@ Blocking findings: 0
 Release checklist findings: 1
 Security findings: 0
 Actionable guidance items: 5
+```
+
+Full reports may include compact review guidance when Guardian recognizes changed-file domains:
+
+```md
+Suggested review:
+- api: success response
+- api: bad request
+```
+
+QA evidence is grouped by related folders or feature names when available:
+
+```md
+QA Evidence Group: src/cli/work/*
+
+Changed files:
+- renderAgent.ts
+- taskFileRecommendations.ts
+
+Detected tests:
+- work.test.ts
+- workOutputContract.test.ts
+
+Detected coverage signals:
+- regression
+- output contract
+
+Suggested review:
+- output contract
+- regression
+- edge cases
 ```
 
 Merge recommendations:

@@ -91,7 +91,16 @@ export type TestSignalEvidence = {
   detectedCoverageSignals: CoverageSignal[];
   unconfirmedCoverageSignals: CoverageSignal[];
   suggestedCoverage: string[];
+  evidenceGroups?: EvidenceGroup[];
   reason: string;
+};
+
+export type EvidenceGroup = {
+  name: string;
+  changedFiles: string[];
+  detectedTests: string[];
+  detectedCoverageSignals: CoverageSignal[];
+  suggestedReview: string[];
 };
 
 export type QaFinding = FindingBase & {
@@ -208,6 +217,7 @@ export type GuardianReport = {
   acceptedFindings: GuardianFinding[];
   requiredDeployActions: string[];
   actionableGuidance: ActionableGuidanceItem[];
+  suggestedReview?: string[];
   requiredActions: string[];
   warnings: string[];
 };
