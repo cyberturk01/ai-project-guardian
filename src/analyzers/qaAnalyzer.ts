@@ -2,6 +2,7 @@ import { basename, dirname, extname } from "node:path";
 import type {
   ChangedFile,
   CoverageSignal,
+  EvidenceGroup,
   GuardianConfig,
   QaFinding,
   RelatedTestSignal,
@@ -201,6 +202,7 @@ function testSignalEvidenceForFinding(
   const detectedTestChanges = detectedRelatedTests.map((test) => test.path);
   const detectedCoverageSignals = detectedCoverageSignalsForTests(detectedTestChanges, context.testFileContents);
   const unconfirmedCoverageSignals = unconfirmedCoverageSignalsForFinding(rule, detectedCoverageSignals);
+  const suggestedCoverage = suggestedCoverageForAffectedFiles(rule, affectedFiles);
 
   return {
     changedFiles: affectedFiles,
@@ -209,9 +211,80 @@ function testSignalEvidenceForFinding(
     detectedRelatedTests,
     detectedCoverageSignals,
     unconfirmedCoverageSignals,
-    suggestedCoverage: suggestedCoverageForAffectedFiles(rule, affectedFiles),
+    suggestedCoverage,
+    evidenceGroups: buildEvidenceGroups({
+      affectedFiles,
+      detectedRelatedTests,
+      suggestedCoverage,
+      testFileContents: context.testFileContents
+    }),
     reason: testSignalReason(detectedRelatedTests)
   };
+}
+
+function buildEvidenceGroups(input: {
+  affectedFiles: string[];
+  detectedRelatedTests: RelatedTestSignal[];
+  suggestedCoverage: string[];
+  testFileContents: Record<string, string>;
+}): EvidenceGroup[] {
+  const groupsByName = new Map<string, string[]>();
+
+  for (const path of input.affectedFiles) {
+    const groupName = evidenceGroupName(path);
+    groupsByName.set(groupName, [...(groupsByName.get(groupName) ?? []), normalizePath(path)]);
+  }
+
+  return [...groupsByName.entries()]
+    .map(([name, changedFiles]) => {
+      const detectedTests = input.detectedRelatedTests
+        .filter((test) => bestRelatednessScore(changedFiles, test.path) !== undefined)
+        .map((test) => test.path);
+      const detectedCoverageSignals = detectedCoverageSignalsForTests(detectedTests, input.testFileContents);
+
+      return {
+        name,
+        changedFiles: normalizeAndSort(changedFiles),
+        detectedTests: normalizeAndSort(detectedTests),
+        detectedCoverageSignals,
+        suggestedReview: suggestedReviewForGroup(changedFiles, input.suggestedCoverage, detectedCoverageSignals)
+      };
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function evidenceGroupName(path: string): string {
+  const normalizedPath = normalizePath(path);
+  const directory = dirname(normalizedPath);
+
+  if (directory !== "." && directory !== "") {
+    return `${directory}/*`;
+  }
+
+  const keyword = featureKeywords(normalizedPath)[0] ?? stripKnownExtensions(basename(normalizedPath));
+  return keyword === "" ? "changed files" : `${keyword}*`;
+}
+
+function suggestedReviewForGroup(changedFiles: string[], suggestedCoverage: string[], detectedSignals: CoverageSignal[]): string[] {
+  const review = new Set<string>(suggestedCoverage);
+
+  for (const signal of detectedSignals) {
+    review.add(coverageSignalReviewLabel(signal));
+  }
+
+  if (changedFiles.some((path) => featureKeywords(path).some((keyword) => ["edge", "boundary", "limit", "quota"].includes(keyword)))) {
+    review.add("edge cases");
+  }
+
+  return [...review].sort((left, right) => left.localeCompare(right));
+}
+
+function coverageSignalReviewLabel(signal: CoverageSignal): string {
+  if (signal === "boundary") {
+    return "edge cases";
+  }
+
+  return signal.replaceAll("_", " ");
 }
 
 function descriptionForFinding(rule: QaRule, evidence: TestSignalEvidence, confidence: number): string {

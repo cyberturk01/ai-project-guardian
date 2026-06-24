@@ -1,4 +1,5 @@
-import type { ChangedFile, GuardianReport, RelatedTestSignal, RiskLevel } from "../core/types.js";
+import { basename } from "node:path";
+import type { ChangedFile, EvidenceGroup, GuardianReport, RelatedTestSignal, RiskLevel } from "../core/types.js";
 import { renderDecisionSummary } from "./decisionSummary.js";
 import { buildMarkdownNotes } from "./markdownNotes.js";
 
@@ -19,7 +20,7 @@ ${renderScoreBreakdown(report)}
 
 ## Changed Files
 
-${renderChangedFiles(report.changedFiles)}
+${renderChangedFiles(report.changedFiles)}${renderSuggestedReview(report)}
 
 ## Blocking Findings
 
@@ -161,6 +162,20 @@ function renderChangedFiles(changedFiles: ChangedFile[]): string {
 ${rows.join("\n")}`;
 }
 
+function renderSuggestedReview(report: GuardianReport): string {
+  const suggestions = uniqueInOrder(report.suggestedReview ?? []);
+
+  if (suggestions.length === 0) {
+    return "";
+  }
+
+  return `
+
+Suggested review:
+
+${renderList(suggestions)}`;
+}
+
 function renderQaFindings(findings: GuardianReport["qaFindings"]): string {
   if (findings.length === 0) {
     return "No QA findings.";
@@ -195,7 +210,39 @@ function renderQaEvidence(finding: GuardianReport["qaFindings"][number]): string
 
 **Test signal evidence**
 
+${renderEvidenceGroups(evidence)}
+
+${evidence.reason}
+`;
+}
+
+function renderEvidenceGroups(evidence: NonNullable<GuardianReport["qaFindings"][number]["testSignalEvidence"]>): string {
+  if (evidence.evidenceGroups !== undefined && evidence.evidenceGroups.length > 0) {
+    return evidence.evidenceGroups.map(renderEvidenceGroup).join("\n\n");
+  }
+
+  return `${renderFlatQaEvidence(evidence)}
+`;
+}
+
+function renderEvidenceGroup(group: EvidenceGroup): string {
+  return `QA Evidence Group: ${group.name}
+
 Changed files:
+${renderBaseNameList(group.changedFiles)}
+
+Detected tests:
+${renderBaseNameList(group.detectedTests)}
+
+Detected coverage signals:
+${renderCoverageSignalList(group.detectedCoverageSignals)}
+
+Suggested review:
+${renderList(group.suggestedReview)}`;
+}
+
+function renderFlatQaEvidence(evidence: NonNullable<GuardianReport["qaFindings"][number]["testSignalEvidence"]>): string {
+  return `Changed files:
 ${renderPathList(evidence.changedFiles)}
 
 Expected test signals:
@@ -207,8 +254,6 @@ ${renderCoverageSignals(evidence)}
 
 Suggested coverage to review:
 ${renderList(evidence.suggestedCoverage)}
-
-${evidence.reason}
 `;
 }
 
@@ -508,6 +553,14 @@ function renderPathList(items: string[]): string {
   return items.map((item) => `- \`${item}\``).join("\n");
 }
 
+function renderBaseNameList(items: string[]): string {
+  if (items.length === 0) {
+    return "None.";
+  }
+
+  return items.map((item) => `- ${basename(item)}`).join("\n");
+}
+
 function renderTaskList(items: string[], emptyText = "No required actions."): string {
   if (items.length === 0) {
     return emptyText;
@@ -569,6 +622,10 @@ function highestRiskLevel(riskLevels: RiskLevel[]): RiskLevel {
 
 function uniqueSorted(values: string[]): string[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+}
+
+function uniqueInOrder(values: string[]): string[] {
+  return [...new Set(values)];
 }
 
 function escapeTableCell(value: string): string {

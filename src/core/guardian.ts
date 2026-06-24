@@ -8,6 +8,7 @@ import { analyzeSecurity } from "../analyzers/securityAnalyzer.js";
 import { analyzeEnterpriseRiskCorrelation } from "../analyzers/enterpriseRiskCorrelation.js";
 import { analyzeBusinessAreas } from "../analyzers/businessAreaAnalyzer.js";
 import { analyzeWorkflows } from "../analyzers/workflowAnalyzer.js";
+import { buildDomainCoverageSuggestions } from "../analyzers/domainCoverageAnalyzer.js";
 import { scoreRisk } from "../analyzers/riskScorer.js";
 import { loadProjectBrain } from "../project-brain/loadProjectBrain.js";
 import { classifyFile } from "../repo/fileClassifier.js";
@@ -95,6 +96,7 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     ...activeSecurityFindings,
     ...activeWorkflowFindings
   ]);
+  const suggestedReview = buildDomainCoverageSuggestions(changedFiles);
   const riskScore = scoreRisk({
     changedFiles,
     qaFindings: activeQaFindings,
@@ -131,6 +133,7 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
     acceptedFindings: baselineApplied.acceptedFindings,
     requiredDeployActions,
     actionableGuidance,
+    ...(suggestedReview.length === 0 ? {} : { suggestedReview }),
     requiredActions: requiredDeployActions,
     warnings: [
       ...config.warnings,

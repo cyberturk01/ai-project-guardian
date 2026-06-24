@@ -123,6 +123,60 @@ describe("renderMarkdownReport", () => {
     assert.doesNotMatch(summary, /overclaiming coverage failure/i);
   });
 
+  it("renders suggested review only when domain suggestions exist", () => {
+    const report = makeReport();
+    report.suggestedReview = ["api: success response", "api: bad request"];
+
+    const fullReport = renderMarkdownReport(report);
+    const withoutSuggestions = renderMarkdownReport({ ...makeReport(), suggestedReview: [] });
+
+    assert.match(fullReport, /Suggested review:\n\n- api: success response\n- api: bad request/);
+    assert.doesNotMatch(withoutSuggestions, /Suggested review:/);
+  });
+
+  it("renders grouped QA evidence in full Markdown reports", () => {
+    const report = makeReport();
+    report.qaFindings = [
+      {
+        ...report.qaFindings[0],
+        title: "Source change without related test signal",
+        affectedFiles: ["src/cli/work/renderAgent.ts", "src/cli/work/taskFileRecommendations.ts"],
+        suggestedTests: ["Review CLI work coverage."],
+        testSignalEvidence: {
+          changedFiles: ["src/cli/work/renderAgent.ts", "src/cli/work/taskFileRecommendations.ts"],
+          expectedTestSignals: ["src/cli/work/*.test.ts", "tests/work/*"],
+          detectedTestChanges: ["tests/cli/work.test.ts", "tests/cli/workOutputContract.test.ts"],
+          detectedRelatedTests: [
+            { path: "tests/cli/work.test.ts", score: "medium" },
+            { path: "tests/cli/workOutputContract.test.ts", score: "weak" }
+          ],
+          detectedCoverageSignals: ["regression", "output_contract"],
+          unconfirmedCoverageSignals: ["boundary"],
+          suggestedCoverage: ["output contract", "regression", "edge cases"],
+          evidenceGroups: [
+            {
+              name: "src/cli/work/*",
+              changedFiles: ["src/cli/work/renderAgent.ts", "src/cli/work/taskFileRecommendations.ts"],
+              detectedTests: ["tests/cli/work.test.ts", "tests/cli/workOutputContract.test.ts"],
+              detectedCoverageSignals: ["regression", "output_contract"],
+              suggestedReview: ["output contract", "regression", "edge cases"]
+            }
+          ],
+          reason: "Related test changes were detected; review whether they cover the changed behavior."
+        }
+      }
+    ];
+
+    const fullReport = renderMarkdownReport(report);
+
+    assert.match(fullReport, /QA Evidence Group: src\/cli\/work\/\*/);
+    assert.match(fullReport, /Changed files:\n- renderAgent\.ts\n- taskFileRecommendations\.ts/);
+    assert.match(fullReport, /Detected tests:\n- work\.test\.ts\n- workOutputContract\.test\.ts/);
+    assert.match(fullReport, /Detected coverage signals:\n- regression\n- output contract/);
+    assert.match(fullReport, /Suggested review:\n- output contract\n- regression\n- edge cases/);
+    assert.doesNotMatch(fullReport, /Expected test signals:\n- `src\/cli\/work\/\*\.test\.ts`/);
+  });
+
   it("keeps JSON report QA evidence fields stable", () => {
     const report = makeReportWithQaEvidence();
     const parsed = JSON.parse(renderReport(report, "json")) as GuardianReport;

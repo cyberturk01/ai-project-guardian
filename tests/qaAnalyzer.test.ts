@@ -714,6 +714,193 @@ describe("analyzeQa", () => {
     ]);
   });
 
+  it("groups QA evidence for files with a shared parent folder", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/cli/work/renderAgent.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        },
+        {
+          path: "src/cli/work/taskFileRecommendations.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        },
+        {
+          path: "tests/cli/work.test.ts",
+          status: "modified",
+          category: "test",
+          riskLevel: "low"
+        },
+        {
+          path: "tests/cli/workOutputContract.test.ts",
+          status: "modified",
+          category: "test",
+          riskLevel: "low"
+        }
+      ],
+      repoFiles: [
+        "src/cli/work/renderAgent.ts",
+        "src/cli/work/taskFileRecommendations.ts",
+        "tests/cli/work.test.ts",
+        "tests/cli/workOutputContract.test.ts"
+      ],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture,
+      testFileContents: {
+        "tests/cli/work.test.ts": "it('covers a regression edge case', () => expect(run()).toBe('ok'));",
+        "tests/cli/workOutputContract.test.ts": "it('matches the output contract snapshot', () => expect(run()).toMatchSnapshot());"
+      }
+    });
+
+    const sourceFinding = findings.find((finding) => finding.id === "qa-source-without-nearby-test");
+
+    assert.deepEqual(sourceFinding?.testSignalEvidence?.evidenceGroups, [
+      {
+        name: "src/cli/work/*",
+        changedFiles: ["src/cli/work/renderAgent.ts", "src/cli/work/taskFileRecommendations.ts"],
+        detectedTests: ["tests/cli/work.test.ts", "tests/cli/workOutputContract.test.ts"],
+        detectedCoverageSignals: ["happy_path", "regression", "output_contract", "boundary"],
+        suggestedReview: [
+          "edge cases",
+          "happy path",
+          "output contract",
+          "regression",
+          "regression test if this change fixes a bug",
+          "validation/error path"
+        ]
+      }
+    ]);
+  });
+
+  it("creates multiple evidence groups for separate parent folders", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/services/menuService.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        },
+        {
+          path: "src/domain/pricing.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        },
+        {
+          path: "tests/services/menuService.test.ts",
+          status: "modified",
+          category: "test",
+          riskLevel: "low"
+        },
+        {
+          path: "tests/domain/pricing.test.ts",
+          status: "modified",
+          category: "test",
+          riskLevel: "low"
+        }
+      ],
+      repoFiles: [
+        "src/services/menuService.ts",
+        "src/domain/pricing.ts",
+        "tests/services/menuService.test.ts",
+        "tests/domain/pricing.test.ts"
+      ],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const sourceFinding = findings.find((finding) => finding.id === "qa-source-without-nearby-test");
+
+    assert.deepEqual(
+      sourceFinding?.testSignalEvidence?.evidenceGroups?.map((group) => ({
+        name: group.name,
+        changedFiles: group.changedFiles,
+        detectedTests: group.detectedTests
+      })),
+      [
+        {
+          name: "src/domain/*",
+          changedFiles: ["src/domain/pricing.ts"],
+          detectedTests: ["tests/domain/pricing.test.ts"]
+        },
+        {
+          name: "src/services/*",
+          changedFiles: ["src/services/menuService.ts"],
+          detectedTests: ["tests/services/menuService.test.ts"]
+        }
+      ]
+    );
+  });
+
+  it("keeps mixed domain evidence in separate groups", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/auth/session.ts",
+          status: "modified",
+          category: "security",
+          riskLevel: "high"
+        },
+        {
+          path: "src/api/orders/route.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "high"
+        },
+        {
+          path: "tests/auth/session.test.ts",
+          status: "modified",
+          category: "test",
+          riskLevel: "low"
+        },
+        {
+          path: "tests/ordersCoverage.test.ts",
+          status: "modified",
+          category: "test",
+          riskLevel: "low"
+        }
+      ],
+      repoFiles: [
+        "src/auth/session.ts",
+        "src/api/orders/route.ts",
+        "tests/auth/session.test.ts",
+        "tests/ordersCoverage.test.ts"
+      ],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const groupNames = findings.flatMap((finding) => finding.testSignalEvidence?.evidenceGroups?.map((group) => group.name) ?? []);
+
+    assert.ok(groupNames.includes("src/auth/*"));
+    assert.ok(groupNames.includes("src/api/orders/*"));
+  });
+
+  it("uses a keyword fallback evidence group for root files", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "server.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        }
+      ],
+      repoFiles: ["server.ts"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const sourceFinding = findings.find((finding) => finding.id === "qa-source-without-nearby-test");
+
+    assert.equal(sourceFinding?.testSignalEvidence?.evidenceGroups?.[0]?.name, "server*");
+  });
+
   it("still reports unconfirmed negative-path coverage for real auth and security code", () => {
     const findings = analyzeQa({
       changedFiles: [
