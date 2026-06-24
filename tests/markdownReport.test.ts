@@ -195,7 +195,7 @@ describe("renderMarkdownReport", () => {
         recommendation: "review_required",
         blockingFindingsCount: 1,
         checklistFindingsCount: 0,
-        expected: "Merge requires review because 1 code/test/security finding(s) need attention before merge."
+        expected: "Merge requires review because 1 review-required code/test/security finding(s) need attention before merge."
       },
       {
         recommendation: "safe_after_checklist",
@@ -227,7 +227,7 @@ describe("renderMarkdownReport", () => {
       checklistFindingsCount: 0
     });
 
-    assert.match(renderMarkdownSummary(report), /Merge requires review because 1 code\/test\/security finding\(s\) need attention before merge\./);
+    assert.match(renderMarkdownSummary(report), /Merge requires review because 1 review-required code\/test\/security finding\(s\) need attention before merge\./);
   });
 
   it("adds missing config onboarding guidance to Markdown reports", () => {
@@ -383,8 +383,8 @@ function makeReport(): GuardianReport {
       {
         id: "qa-api-without-integration-test",
         area: "qa",
-        title: "Route or API changed without API/integration test coverage",
-        description: "A route, controller, handler, or API file changed without a matching API or integration test.",
+        title: "Route or API changed without clear API/integration test signal",
+        description: "A route, controller, handler, or API file appears to have changed without a clear API or integration test signal.",
         riskLevel: "high",
         confidence: 84,
         affectedFiles: ["src/api/reservations.ts"],

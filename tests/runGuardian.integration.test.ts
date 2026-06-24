@@ -434,7 +434,7 @@ describe("runGuardianCli integration", () => {
               },
               {
                 type: "qa",
-                title: "Migration changed without DB/integration test coverage"
+                title: "Migration changed without clear DB/integration test signal"
               },
               {
                 type: "release",

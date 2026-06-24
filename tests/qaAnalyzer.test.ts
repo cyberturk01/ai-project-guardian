@@ -262,7 +262,7 @@ describe("analyzeQa", () => {
 
     const uiFinding = findings.find((finding) => finding.id === "qa-ui-without-cypress-test");
 
-    assert.equal(uiFinding?.title, "UI changed without component or e2e coverage");
+    assert.equal(uiFinding?.title, "UI changed without clear component or e2e test signal");
     assert.deepEqual(uiFinding?.affectedFiles, ["src/components/WalletSummary.tsx"]);
     assert.match(uiFinding?.suggestedTests[0] ?? "", /component tests/);
     assert.match(uiFinding?.suggestedTests[0] ?? "", /Cypress\/e2e/);

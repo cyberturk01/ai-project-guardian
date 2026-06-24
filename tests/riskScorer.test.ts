@@ -756,7 +756,7 @@ describe("scoreRisk", () => {
     assert.deepEqual(result.scoreBreakdown.criticalFloorApplied, {
       applied: true,
       floor: 91,
-      reason: "Migration changed without DB/integration test coverage"
+      reason: "Migration changed without clear DB/integration test signal"
     });
   });
 });

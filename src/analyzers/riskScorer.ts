@@ -277,7 +277,7 @@ function scoreFloor(input: RiskScoreInput): { floor: number; reason: string } | 
   if (hasMigrationWithoutDbTest(input)) {
     return {
       floor: criticalCombinationMinimumScore,
-      reason: "Migration changed without DB/integration test coverage"
+      reason: "Migration changed without clear DB/integration test signal"
     };
   }
 
@@ -291,7 +291,7 @@ function scoreFloor(input: RiskScoreInput): { floor: number; reason: string } | 
   if (hasPaymentChangeWithoutIntegrationTest(input)) {
     return {
       floor: criticalCombinationMinimumScore,
-      reason: "Payment code changed without API/integration test coverage"
+      reason: "Payment code changed without clear API/integration test signal"
     };
   }
 

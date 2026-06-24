@@ -136,8 +136,8 @@ function makeReport(): GuardianReport {
       {
         id: "qa-api-without-integration-test",
         area: "qa",
-        title: "Route or API changed without API/integration test coverage",
-        description: "A route, controller, handler, or API file changed without a matching API or integration test.",
+        title: "Route or API changed without clear API/integration test signal",
+        description: "A route, controller, handler, or API file appears to have changed without a clear API or integration test signal.",
         riskLevel: "high",
         affectedFiles: ["src/api/reservations.ts"],
         suggestedTests: ["Add an API or integration test that exercises src/api/reservations.ts."]

@@ -72,8 +72,8 @@ const negativeSecurityTestPattern = /(^|\/)(auth|security|permissions?|authoriza
 const qaRules: QaRule[] = [
   {
     id: "qa-source-without-nearby-test",
-    title: "Source changed without nearby test coverage",
-    description: "One or more source files changed, but no nearby unit test was found in the repository.",
+    title: "Source changed without nearby test signal",
+    description: "One or more source files changed, and Guardian did not find a clear nearby unit test signal.",
     riskLevel: "medium",
     matches: (file) => isGenericSourceFile(file),
     hasCoverage: (file, context) => hasNearbyTest(file.path, context.testFiles, context.config),
@@ -81,8 +81,8 @@ const qaRules: QaRule[] = [
   },
   {
     id: "qa-api-without-integration-test",
-    title: "Route or API changed without API/integration test coverage",
-    description: "A route, controller, handler, or API file changed without a matching API or integration test.",
+    title: "Route or API changed without clear API/integration test signal",
+    description: "A route, controller, handler, or API file appears to have changed without a clear API or integration test signal.",
     riskLevel: "high",
     matches: (file) => isProductionChangedCodeFile(file) && !isDocumentationContextFile(file) && apiPathPattern.test(normalizePath(file.path)),
     hasCoverage: (file, context) => hasTopicalTest(file.path, context.testFiles, apiTestPattern),
@@ -90,8 +90,8 @@ const qaRules: QaRule[] = [
   },
   {
     id: "qa-ui-without-cypress-test",
-    title: "UI changed without component or e2e coverage",
-    description: "A UI-facing file changed, but no relevant component, Cypress, or e2e test was found in the repository.",
+    title: "UI changed without clear component or e2e test signal",
+    description: "A UI-facing file appears to have changed, but Guardian did not find a clear component, Cypress, or e2e test signal.",
     riskLevel: "medium",
     matches: (file) => isProductionChangedCodeFile(file) && !isDocumentationContextFile(file) && uiPathPattern.test(normalizePath(file.path)),
     hasCoverage: (file, context) =>
@@ -102,8 +102,8 @@ const qaRules: QaRule[] = [
   },
   {
     id: "qa-migration-without-db-test",
-    title: "Migration changed without DB/integration test coverage",
-    description: "A database migration or schema file changed without a matching database or integration test.",
+    title: "Migration changed without clear DB/integration test signal",
+    description: "A database migration or schema file appears to have changed without a clear database or integration test signal.",
     riskLevel: "high",
     matches: (file) =>
       isProductionChangedFile(file) &&
@@ -114,8 +114,8 @@ const qaRules: QaRule[] = [
   },
   {
     id: "qa-i18n-without-localization-test",
-    title: "i18n changed without localization test coverage",
-    description: "Localization files changed without a matching localization test.",
+    title: "i18n changed without clear localization test signal",
+    description: "Localization files appear to have changed without a clear localization test signal.",
     riskLevel: "low",
     matches: (file) => isProductionChangedFile(file) && (file.category === "i18n" || i18nPathPattern.test(normalizePath(file.path))),
     hasCoverage: (file, context) => hasTopicalTest(file.path, context.testFiles, localizationTestPattern),
@@ -320,12 +320,7 @@ function relatedTestConfidence(tests: RelatedTestSignal[]): number {
 }
 
 function softenQaDescription(description: string): string {
-  return description
-    .replace("One or more source files changed, but no nearby unit test was found", "One or more source files changed, and Guardian did not find a clear nearby unit test signal")
-    .replace("A route, controller, handler, or API file changed without", "A route, controller, handler, or API file appears to have changed without")
-    .replace("A UI-facing file changed, but no relevant", "A UI-facing file appears to have changed, but Guardian did not find a clear")
-    .replace("A database migration or schema file changed without", "A database migration or schema file appears to have changed without")
-    .replace("Localization files changed without", "Localization files appear to have changed without");
+  return description;
 }
 
 function clampConfidence(value: number): number {
