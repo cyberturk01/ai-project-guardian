@@ -111,6 +111,8 @@ export type ReleaseFinding = FindingBase & {
 export type SecurityFinding = FindingBase & {
   area: "security";
   lineNumber?: number;
+  blocking?: boolean;
+  fixture_like?: boolean;
 };
 
 export type WorkflowFinding = FindingBase & {

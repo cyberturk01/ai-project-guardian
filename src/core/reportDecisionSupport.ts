@@ -96,8 +96,8 @@ function isBlockingQaFinding(finding: QaFinding): boolean {
   );
 }
 
-function isBlockingSecurityRisk(finding: { riskLevel: RiskLevel }): boolean {
-  return finding.riskLevel === "high" || finding.riskLevel === "critical";
+function isBlockingSecurityRisk(finding: { riskLevel: RiskLevel; blocking?: boolean }): boolean {
+  return finding.blocking !== false && (finding.riskLevel === "high" || finding.riskLevel === "critical");
 }
 
 function isBlockingCorrelatedRisk(finding: CorrelatedFinding): boolean {

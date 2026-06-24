@@ -154,23 +154,26 @@ export async function analyzeSecurity(input: AnalyzeSecurityInput): Promise<Secu
         continue;
       }
 
-      const confidence = confidenceForSecurityFinding(rule, scannedFile.file, scannedFile.content);
+      const matchingLine = lines[matchingLineIndex] ?? "";
+      const fixtureLike = isFixtureLikeSecretFinding(rule, scannedFile.file, matchingLine);
+      const confidence = confidenceForSecurityFinding(rule, scannedFile.file, scannedFile.content, fixtureLike);
 
       findings.push({
         id: rule.id,
         area: "security",
         title: rule.title,
-        description: descriptionForSecurityFinding(rule, scannedFile.file, confidence),
-        riskLevel: riskLevelForRule(rule, scannedFile.file),
+        description: descriptionForSecurityFinding(rule, confidence, fixtureLike),
+        riskLevel: riskLevelForRule(rule, scannedFile.file, fixtureLike),
         confidence,
         filePath: normalizePath(scannedFile.file.path),
         lineNumber: matchingLineIndex + 1,
-        recommendation: rule.recommendation
+        recommendation: rule.recommendation,
+        ...(fixtureLike ? { blocking: false, fixture_like: true } : {})
       });
     }
   }
 
-  return dedupeGeneratedAssetFindings(dedupeSameLineJwtSecretFindings(findings), scannedFiles).sort(compareFindings);
+  return dedupeGeneratedAssetFindings(dedupeSameLineSpecificSecretFindings(findings), scannedFiles).sort(compareFindings);
 }
 
 async function readChangedTextFiles(input: AnalyzeSecurityInput): Promise<ScannedFile[]> {
@@ -204,7 +207,7 @@ function hasHardcodedSecret(line: string, context: RuleContext): boolean {
   }
 
   const value = match[1] ?? "";
-  return !isObviousTestFixtureSecret(value, context) && isPotentialRealSecret(value);
+  return isPotentialRealSecret(value) || isObviousTestFixtureSecret(value, context);
 }
 
 function hasHardcodedAdminPassword(line: string, context: RuleContext): boolean {
@@ -212,7 +215,7 @@ function hasHardcodedAdminPassword(line: string, context: RuleContext): boolean 
 
   if (match !== null) {
     const value = match[1] ?? "";
-    return !isObviousTestFixtureSecret(value, context) && isPotentialRealSecret(value);
+    return isPotentialRealSecret(value) || isObviousTestFixtureSecret(value, context);
   }
 
   const adminObjectMatch = line.match(/\badmin\b[^;\n]{0,80}\bpassword\b\s*[:=]\s*["']([^"']{6,})["']/i);
@@ -222,27 +225,19 @@ function hasHardcodedAdminPassword(line: string, context: RuleContext): boolean 
   }
 
   const value = adminObjectMatch[1] ?? "";
-  return !isObviousTestFixtureSecret(value, context) && isPotentialRealSecret(value);
+  return isPotentialRealSecret(value) || isObviousTestFixtureSecret(value, context);
 }
 
 function hasApiKey(line: string, context: RuleContext): boolean {
-  if (hasTestFixtureSecretAssignment(line, context)) {
-    return false;
-  }
-
   return (
     /\b[A-Za-z0-9_-]*(?:api[_-]?key|apikey)[A-Za-z0-9_-]*\b\s*[:=]\s*["'][A-Za-z0-9_\-]{16,}["']/i.test(line) ||
-    /\b(?:sk_live|sk_test|pk_live|ghp|github_pat|xoxb|xoxp|AIza)[A-Za-z0-9_\-]{10,}/.test(line) ||
+    /\b(?:sk_live_|rk_live_|ghp_|github_pat_|xoxb-|xoxp-|AIza|SG\.|resend_|re_)[A-Za-z0-9_.-]{8,}/.test(line) ||
     /\bAKIA[0-9A-Z]{16}\b/.test(line)
   );
 }
 
 function hasJwtSecretDefault(line: string, context: RuleContext): boolean {
   const normalized = line.trim();
-
-  if (hasTestFixtureSecretAssignment(normalized, context)) {
-    return false;
-  }
 
   return (
     /\b[A-Za-z0-9_.-]*(?:JWT_SECRET|JWT_PRIVATE_KEY|JWT_SIGNING_KEY|jwtSecret|jwtPrivateKey|jwtSigningKey)[A-Za-z0-9_.-]*\b.*(?:\|\||\?\?)\s*["'][^"']{4,}["']/i.test(normalized) ||
@@ -259,7 +254,7 @@ function hasSecretEnvDefault(line: string, context: RuleContext): boolean {
   }
 
   const [, envName = "", defaultValue = ""] = match;
-  return secretNamePattern.test(envName) && !isObviousTestFixtureSecret(defaultValue, context) && (isPotentialRealSecret(defaultValue) || isKnownWeakSecretDefault(defaultValue));
+  return secretNamePattern.test(envName) && (isPotentialRealSecret(defaultValue) || isKnownWeakSecretDefault(defaultValue) || isObviousTestFixtureSecret(defaultValue, context));
 }
 
 function isKnownWeakSecretDefault(value: string): boolean {
@@ -325,15 +320,19 @@ function hasDisabledRateLimiting(line: string): boolean {
   );
 }
 
-function riskLevelForRule(rule: SecurityRule, file: ChangedFile): RiskLevel {
-  if (isNonRuntimeContextPath(file.path)) {
+function riskLevelForRule(rule: SecurityRule, file: ChangedFile, fixtureLike: boolean): RiskLevel {
+  if (fixtureLike) {
+    return "low";
+  }
+
+  if (isNonRuntimeContextPath(file.path) && !isProtectedProductionPath(file.path)) {
     return "low";
   }
 
   return rule.riskLevel;
 }
 
-function confidenceForSecurityFinding(rule: SecurityRule, file: ChangedFile, content: string): number {
+function confidenceForSecurityFinding(rule: SecurityRule, file: ChangedFile, content: string, fixtureLike: boolean): number {
   let score = 48;
 
   if (file.category === "security" || isSecuritySensitivePath(file.path)) {
@@ -344,7 +343,9 @@ function confidenceForSecurityFinding(rule: SecurityRule, file: ChangedFile, con
     score += 6;
   }
 
-  if (isNonRuntimeContextPath(file.path)) {
+  if (fixtureLike) {
+    score -= 36;
+  } else if (isNonRuntimeContextPath(file.path) && !isProtectedProductionPath(file.path)) {
     score -= 28;
   }
 
@@ -367,7 +368,11 @@ function confidenceForSecurityFinding(rule: SecurityRule, file: ChangedFile, con
   return clampConfidence(score);
 }
 
-function descriptionForSecurityFinding(rule: SecurityRule, file: ChangedFile, confidence: number): string {
+function descriptionForSecurityFinding(rule: SecurityRule, confidence: number, fixtureLike: boolean): string {
+  if (fixtureLike) {
+    return "Possible test fixture secret detected. Review if this is real; not treated as a confirmed production leak.";
+  }
+
   if (confidence < 50) {
     return `${rule.title} may apply in a changed file. This is a low-confidence heuristic signal and not a confirmed vulnerability.`;
   }
@@ -384,6 +389,16 @@ function isHighPrecisionSecurityRule(ruleId: string): boolean {
     "security-env-secret-default",
     "security-sql-string-interpolation",
     "security-disabled-auth-check"
+  ].includes(ruleId);
+}
+
+function isSecretRule(ruleId: string): boolean {
+  return [
+    "security-hardcoded-secret",
+    "security-hardcoded-admin-password",
+    "security-api-key",
+    "security-jwt-secret-default",
+    "security-env-secret-default"
   ].includes(ruleId);
 }
 
@@ -437,14 +452,8 @@ function isPotentialRealSecret(value: string): boolean {
   return /[A-Za-z]/.test(value) && /[0-9]/.test(value);
 }
 
-function hasTestFixtureSecretAssignment(line: string, context: RuleContext): boolean {
-  const match = line.match(/\b(?:process\.env\.)?[A-Za-z0-9_-]*(?:password|passwd|secret|client_secret|private_key|access_token|refresh_token|token|api[_-]?key|apikey|authorization)[A-Za-z0-9_-]*\b\s*[:=]\s*["']([^"']{4,})["']/i);
-
-  return match !== null && isObviousTestFixtureSecret(match[1] ?? "", context);
-}
-
 function isObviousTestFixtureSecret(value: string, context: RuleContext): boolean {
-  if (!isTestFile(context.file.path) || isRealisticLookingSecret(value)) {
+  if (!isTestOrFixturePath(context.file.path) || isProtectedProductionPath(context.file.path) || isRealisticLookingSecret(value)) {
     return false;
   }
 
@@ -453,9 +462,41 @@ function isObviousTestFixtureSecret(value: string, context: RuleContext): boolea
 
 function isRealisticLookingSecret(value: string): boolean {
   return (
-    /\b(?:sk_live|sk_test|pk_live|ghp|github_pat|xoxb|xoxp|AIza)[A-Za-z0-9_-]{10,}/.test(value) ||
+    /\b(?:sk_live|rk_live|ghp|github_pat|xoxb-|xoxp|AIza|SG\.|resend_|re_)[A-Za-z0-9_.-]{8,}/.test(value) ||
     /\bAKIA[0-9A-Z]{16}\b/.test(value) ||
     (/^[A-Za-z0-9_./+=-]{24,}$/.test(value) && /[A-Z]/.test(value) && /[a-z]/.test(value) && /[0-9]/.test(value))
+  );
+}
+
+function isFixtureLikeSecretFinding(rule: SecurityRule, file: ChangedFile, line: string): boolean {
+  return (
+    isSecretRule(rule.id) &&
+    isTestOrFixturePath(file.path) &&
+    !isProtectedProductionPath(file.path) &&
+    !containsRealProviderKey(line)
+  );
+}
+
+function containsRealProviderKey(value: string): boolean {
+  return /\b(?:sk_live_|rk_live_|ghp_|github_pat_|xoxb-|AKIA|SG\.|resend_|re_)[A-Za-z0-9_.-]{8,}/.test(value);
+}
+
+function isTestOrFixturePath(path: string): boolean {
+  const normalized = normalizePath(path);
+
+  return /(^|\/)(tests?|__tests__|fixtures?|mocks?)(\/|$)|\.(?:test|spec)\.[^.]+$/i.test(normalized);
+}
+
+function isProtectedProductionPath(path: string): boolean {
+  const normalized = normalizePath(path);
+
+  return (
+    /(^|\/)(src|app|lib|config|\.github)(\/|$)/i.test(normalized) ||
+    /(^|\/)Dockerfile$/i.test(normalized) ||
+    /(^|\/)docker-compose[^/]*$/i.test(normalized) ||
+    /(^|\/)[^/]*\.env$/i.test(normalized) ||
+    /(^|\/)[^/]*\.ya?ml$/i.test(normalized) ||
+    /(^|\/)package(?:-lock)?\.json$/i.test(normalized)
   );
 }
 
@@ -544,10 +585,10 @@ function compareFindings(left: SecurityFinding, right: SecurityFinding): number 
   return left.id.localeCompare(right.id);
 }
 
-function dedupeSameLineJwtSecretFindings(findings: SecurityFinding[]): SecurityFinding[] {
-  const jwtSecretLocations = new Set(
+function dedupeSameLineSpecificSecretFindings(findings: SecurityFinding[]): SecurityFinding[] {
+  const specificSecretLocations = new Set(
     findings
-      .filter((finding) => finding.id === "security-jwt-secret-default")
+      .filter((finding) => finding.id === "security-jwt-secret-default" || finding.id === "security-hardcoded-admin-password")
       .map((finding) => `${finding.filePath ?? ""}:${finding.lineNumber ?? ""}`)
   );
 
@@ -556,7 +597,7 @@ function dedupeSameLineJwtSecretFindings(findings: SecurityFinding[]): SecurityF
       return true;
     }
 
-    return !jwtSecretLocations.has(`${finding.filePath ?? ""}:${finding.lineNumber ?? ""}`);
+    return !specificSecretLocations.has(`${finding.filePath ?? ""}:${finding.lineNumber ?? ""}`);
   });
 }
 

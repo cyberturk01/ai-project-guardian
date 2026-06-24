@@ -43,6 +43,30 @@ describe("renderMarkdownReport", () => {
     assert.doesNotMatch(actual, /src\/api\/reservations\.ts:18/);
   });
 
+  it("renders fixture secret findings without overclaiming a production leak", () => {
+    const report = makeReport();
+    report.securityFindings = [
+      {
+        id: "security-hardcoded-secret",
+        area: "security",
+        title: "Possible hardcoded secret",
+        description: "Possible test fixture secret detected. Review if this is real; not treated as a confirmed production leak.",
+        riskLevel: "low",
+        confidence: 42,
+        filePath: "tests/auth/sessionFixture.test.ts",
+        lineNumber: 7,
+        blocking: false,
+        fixture_like: true,
+        recommendation: "Move secrets to a managed secret store or environment variable, then rotate the exposed value if it is real."
+      }
+    ];
+
+    const fullReport = renderMarkdownReport(report);
+
+    assert.match(fullReport, /Possible test fixture secret detected\. Review if this is real; not treated as a confirmed production leak\./);
+    assert.doesNotMatch(fullReport, /secret leaked|production secret exposed|critical leak/i);
+  });
+
   it("renders QA test signal evidence in full and summary Markdown reports", () => {
     const report = makeReport();
     report.qaFindings = [

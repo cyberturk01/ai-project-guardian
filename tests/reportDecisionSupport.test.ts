@@ -126,6 +126,24 @@ describe("buildReportDecisionSupport", () => {
     assert.equal(decisionSupport.riskReason, "No blocking findings remain.");
   });
 
+  it("does not block merge for security findings explicitly marked non-blocking", () => {
+    const decisionSupport = buildReportDecisionSupport({
+      overallRisk: "medium",
+      scoreBreakdown: scoreBreakdown(),
+      qaFindings: [],
+      releaseFindings: [],
+      securityFindings: [securityFinding("high", { blocking: false, fixture_like: true })],
+      workflowFindings: [],
+      externalFindings: [],
+      correlatedFindings: []
+    });
+
+    assert.equal(decisionSupport.blockingFindingsCount, 0);
+    assert.equal(decisionSupport.mergeRecommendation, "safe");
+    assert.equal(decisionSupport.codeRisk, "info");
+    assert.equal(decisionSupport.riskReason, "No blocking findings remain.");
+  });
+
   it("does not double-count single-tool correlations as blocking findings", () => {
     const decisionSupport = buildReportDecisionSupport({
       overallRisk: "high",
@@ -378,14 +396,15 @@ function releaseFinding(riskLevel: RiskLevel): ReleaseFinding {
   };
 }
 
-function securityFinding(riskLevel: RiskLevel): SecurityFinding {
+function securityFinding(riskLevel: RiskLevel, overrides: Partial<SecurityFinding> = {}): SecurityFinding {
   return {
     id: "security-finding",
     area: "security",
     title: "Security finding",
     description: "Security finding.",
     riskLevel,
-    filePath: "src/example.ts"
+    filePath: "src/example.ts",
+    ...overrides
   };
 }
 

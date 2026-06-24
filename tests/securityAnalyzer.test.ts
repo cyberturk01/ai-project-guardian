@@ -91,7 +91,6 @@ describe("analyzeSecurity", () => {
         "security-disabled-rate-limiting",
         "security-env-secret-default",
         "security-hardcoded-admin-password",
-        "security-hardcoded-secret",
         "security-jwt-secret-default",
         "security-sql-string-interpolation",
         "security-new-route-missing-auth-middleware",
@@ -183,28 +182,127 @@ describe("analyzeSecurity", () => {
     assert.equal(findings[0]?.filePath, "src/db/reservations.ts");
   });
 
-  it("suppresses obvious test fixture secrets while keeping realistic-looking test secrets", async () => {
+  it("downgrades test fixture secrets while keeping them visible", async () => {
     const findings = await analyzeSecurity({
       repoPath,
       changedFiles: [
         changedFile("tests/envFixture.test.ts"),
-        changedFile("tests/realisticSecret.test.ts")
+        changedFile("tests/realisticSecret.test.ts"),
+        changedFile("tests/adminFixture.test.ts")
       ],
       readFile: fakeReader({
         "tests/envFixture.test.ts": [
           "process.env.JWT_SECRET = 'test-secret-key-12345';",
           "process.env.INTERNAL_API_KEY = 'test-internal-key';"
         ].join("\n"),
-        "tests/realisticSecret.test.ts": "process.env.INTERNAL_API_KEY = 'A1b2C3d4E5f6G7h8I9j0K1l2';"
+        "tests/realisticSecret.test.ts": "process.env.INTERNAL_API_KEY = 'A1b2C3d4E5f6G7h8I9j0K1l2';",
+        "tests/adminFixture.test.ts": "const adminPassword = 'test-admin-password-12345';"
       })
     });
 
     assert.deepEqual(
-      findings.map((finding) => finding.id),
-      ["security-api-key"]
+      findings.map((finding) => `${finding.id}:${finding.riskLevel}:${finding.filePath}:${finding.fixture_like}:${finding.blocking}`),
+      [
+        "security-hardcoded-admin-password:low:tests/adminFixture.test.ts:true:false",
+        "security-api-key:low:tests/envFixture.test.ts:true:false",
+        "security-jwt-secret-default:low:tests/envFixture.test.ts:true:false",
+        "security-api-key:low:tests/realisticSecret.test.ts:true:false"
+      ]
     );
-    assert.equal(findings[0]?.filePath, "tests/realisticSecret.test.ts");
-    assert.equal(findings[0]?.riskLevel, "low");
+    assert.ok(findings.every((finding) => (finding.confidence ?? 100) < 50));
+    assert.ok(findings.every((finding) => /Possible test fixture secret detected/.test(finding.description)));
+    assert.ok(findings.every((finding) => !/production secret exposed|critical leak|secret leaked/i.test(finding.description)));
+  });
+
+  it("downgrades mock fixture secrets", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [changedFile("mocks/auth/sessionMock.ts")],
+      readFile: fakeReader({
+        "mocks/auth/sessionMock.ts": "export const access_token = 'mock-access-token-12345';"
+      })
+    });
+
+    assert.deepEqual(
+      findings.map((finding) => `${finding.id}:${finding.riskLevel}:${finding.filePath}:${finding.fixture_like}:${finding.blocking}`),
+      ["security-hardcoded-secret:low:mocks/auth/sessionMock.ts:true:false"]
+    );
+  });
+
+  it("does not downgrade production source secrets", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [changedFile("src/auth/session.ts")],
+      readFile: fakeReader({
+        "src/auth/session.ts": "export const access_token = 'prod-access-token-12345';"
+      })
+    });
+
+    assert.deepEqual(
+      findings.map((finding) => `${finding.id}:${finding.riskLevel}:${finding.filePath}:${finding.fixture_like ?? false}:${finding.blocking ?? true}`),
+      ["security-hardcoded-secret:high:src/auth/session.ts:false:true"]
+    );
+  });
+
+  it("does not downgrade env or config secrets", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [
+        changedFile(".env"),
+        changedFile("config/secrets.ts")
+      ],
+      readFile: fakeReader({
+        ".env": "JWT_SECRET='prod-jwt-secret-12345'",
+        "config/secrets.ts": "export const apiSecret = 'prod-api-secret-12345';"
+      })
+    });
+
+    assert.deepEqual(
+      findings.map((finding) => `${finding.id}:${finding.riskLevel}:${finding.filePath}:${finding.fixture_like ?? false}:${finding.blocking ?? true}`),
+      [
+        "security-jwt-secret-default:high:.env:false:true",
+        "security-hardcoded-secret:high:config/secrets.ts:false:true"
+      ]
+    );
+  });
+
+  it("does not downgrade provider-like live keys in test files", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [changedFile("tests/providerKeys.test.ts")],
+      readFile: fakeReader({
+        "tests/providerKeys.test.ts": "process.env.INTERNAL_API_KEY = 'ghp_1234567890abcdefghij';"
+      })
+    });
+
+    assert.deepEqual(
+      findings.map((finding) => `${finding.id}:${finding.riskLevel}:${finding.filePath}:${finding.fixture_like ?? false}:${finding.blocking ?? true}`),
+      ["security-api-key:low:tests/providerKeys.test.ts:false:true"]
+    );
+    assert.ok((findings[0]?.confidence ?? 0) < 50);
+    assert.match(findings[0]?.description ?? "", /low-confidence heuristic signal|possible security risk/);
+  });
+
+  it("keeps production severity when fixture and production secrets are mixed", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [
+        changedFile("tests/envFixture.test.ts"),
+        changedFile("src/config/secrets.ts")
+      ],
+      readFile: fakeReader({
+        "tests/envFixture.test.ts": "process.env.JWT_SECRET = 'test-secret-key-12345';",
+        "src/config/secrets.ts": "const PAYMENT_SECRET = 'RealSecret12345';"
+      })
+    });
+
+    assert.deepEqual(
+      findings.map((finding) => `${finding.id}:${finding.riskLevel}:${finding.filePath}:${finding.fixture_like ?? false}:${finding.blocking ?? true}`),
+      [
+        "security-hardcoded-secret:high:src/config/secrets.ts:false:true",
+        "security-jwt-secret-default:low:tests/envFixture.test.ts:true:false"
+      ]
+    );
   });
 
   it("deduplicates hardcoded-secret when jwt-secret-default triggers on the same line", async () => {
@@ -349,7 +447,7 @@ describe("analyzeSecurity", () => {
     assert.deepEqual(
       findings.map((finding) => `${finding.id}:${finding.riskLevel}:${finding.filePath}`),
       [
-        "security-jwt-secret-default:low:src/__snapshots__/authSnapshot.ts",
+        "security-jwt-secret-default:high:src/__snapshots__/authSnapshot.ts",
         "security-disabled-auth-check:low:templates/auth/sample.ts"
       ]
     );
@@ -412,7 +510,7 @@ describe("analyzeSecurity", () => {
     const finding = findings.find((candidate) => candidate.id === "security-api-key");
 
     assert.ok((finding?.confidence ?? 100) < 50);
-    assert.match(finding?.description ?? "", /low-confidence heuristic signal/);
+    assert.match(finding?.description ?? "", /Possible test fixture secret detected/);
   });
 });
 
