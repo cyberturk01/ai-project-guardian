@@ -415,7 +415,7 @@ describe("scoreRisk", () => {
     assert.notEqual(result.overallRisk, "critical");
   });
 
-  it("does not mark high auth scores as critical without missing negative tests", () => {
+  it("does not mark high auth scores as critical without an unconfirmed negative-path finding", () => {
     const result = scoreRisk({
       changedFiles: Array.from({ length: 20 }, (_, index) =>
         changedFile({
@@ -595,7 +595,7 @@ describe("scoreRisk", () => {
     assert.equal(result.overallRisk, "critical");
   });
 
-  it("marks auth plus missing negative test coverage as critical", () => {
+  it("marks auth plus no related negative-path test signal as critical", () => {
     const result = scoreRisk({
       changedFiles: [
         changedFile({
@@ -616,6 +616,44 @@ describe("scoreRisk", () => {
 
     assert.equal(result.score, 91);
     assert.equal(result.overallRisk, "critical");
+  });
+
+  it("does not apply the auth critical floor when a related test signal exists", () => {
+    const result = scoreRisk({
+      changedFiles: [
+        changedFile({
+          path: "src/auth/session.ts",
+          category: "security",
+          riskLevel: "high"
+        }),
+        changedFile({
+          path: "tests/auth/session.test.ts",
+          category: "test",
+          riskLevel: "low"
+        })
+      ],
+      qaFindings: [
+        qaFinding({
+          id: "qa-auth-security-without-negative-test",
+          riskLevel: "high",
+          testSignalEvidence: {
+            changedFiles: ["src/auth/session.ts"],
+            expectedTestSignals: ["tests/auth/session.unauthorized.test.ts"],
+            detectedTestChanges: ["tests/auth/session.test.ts"],
+            detectedRelatedTests: [{ path: "tests/auth/session.test.ts", score: "strong" }],
+            detectedCoverageSignals: [],
+            unconfirmedCoverageSignals: [],
+            suggestedCoverage: ["negative unauthorized path"],
+            reason: "Related test changes were detected; review whether they cover the changed behavior."
+          }
+        })
+      ],
+      releaseFindings: [],
+      securityFindings: []
+    });
+
+    assert.notEqual(result.scoreBreakdown.criticalFloorApplied?.applied, true);
+    assert.notEqual(result.overallRisk, "critical");
   });
 
   it("marks payment plus missing integration test coverage as critical", () => {
@@ -718,7 +756,7 @@ describe("scoreRisk", () => {
     assert.deepEqual(result.scoreBreakdown.criticalFloorApplied, {
       applied: true,
       floor: 91,
-      reason: "Migration changed without DB/integration test coverage"
+      reason: "Migration changed without clear DB/integration test signal"
     });
   });
 });

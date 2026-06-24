@@ -66,7 +66,7 @@ describe("buildActionableGuidance", () => {
 
   it("groups repeated UI component/e2e guidance into one concise action", () => {
     const guidance = buildActionableGuidance([
-      qaFinding("UI changed without component or e2e coverage", "medium", [
+      qaFinding("UI changed without clear component or e2e test signal", "medium", [
         "Add component tests for touched UI components, or Cypress/e2e coverage for page flows (examples: src/components/MenuCard.tsx, src/pages/CheckoutPage.tsx)."
       ], {
         id: "qa-ui-without-cypress-test",
@@ -80,7 +80,7 @@ describe("buildActionableGuidance", () => {
 
   it("groups repeated nearby unit guidance into one concise action", () => {
     const guidance = buildActionableGuidance([
-      qaFinding("Source changed without nearby test coverage", "medium", [
+      qaFinding("Source changed without nearby test signal", "medium", [
         "Create or update nearby unit tests for touched source files (examples: src/services/menuService.ts, src/domain/pricing.ts)."
       ], {
         id: "qa-source-without-nearby-test",
@@ -101,6 +101,9 @@ describe("buildActionableGuidance", () => {
           changedFiles: ["src/referral/rewardRules.ts", "src/referral/rewardService.ts"],
           expectedTestSignals: ["src/referral/*.test.ts", "tests/referral/*"],
           detectedTestChanges: [],
+          detectedRelatedTests: [],
+          detectedCoverageSignals: [],
+          unconfirmedCoverageSignals: [],
           suggestedCoverage: ["happy path", "duplicate/abuse prevention", "limit/quota boundary"],
           reason: "No related test change detected."
         }

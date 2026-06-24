@@ -1,4 +1,4 @@
-import type { ChangedFile, GuardianReport, RiskLevel } from "../core/types.js";
+import type { ChangedFile, GuardianReport, RelatedTestSignal, RiskLevel } from "../core/types.js";
 import { renderDecisionSummary } from "./decisionSummary.js";
 import { buildMarkdownNotes } from "./markdownNotes.js";
 
@@ -24,6 +24,14 @@ ${renderChangedFiles(report.changedFiles)}
 ## Blocking Findings
 
 ${renderBlockingFindings(report)}
+
+## Review Findings
+
+${renderReviewFindings(report)}
+
+## Advisory Findings
+
+${renderAdvisoryFindings(report)}
 
 ## Release Checklist
 
@@ -165,7 +173,7 @@ function renderQaFindings(findings: GuardianReport["qaFindings"]): string {
 | Field | Value |
 | --- | --- |
 | Risk | ${renderRiskLabel(finding.riskLevel)} |
-| Affected files | ${renderInlineList(finding.affectedFiles)} |
+${renderConfidenceRow(finding.confidence)}| Affected files | ${renderInlineList(finding.affectedFiles)} |
 
 ${finding.description}${renderQaEvidence(finding)}
 
@@ -193,8 +201,9 @@ ${renderPathList(evidence.changedFiles)}
 Expected test signals:
 ${renderPathList(evidence.expectedTestSignals)}
 
-Detected related test changes:
-${evidence.detectedTestChanges.length === 0 ? "- None" : renderPathList(evidence.detectedTestChanges)}
+Detected related tests:
+${renderRelatedTests(evidence.detectedRelatedTests)}
+${renderCoverageSignals(evidence)}
 
 Suggested coverage to review:
 ${renderList(evidence.suggestedCoverage)}
@@ -203,24 +212,98 @@ ${evidence.reason}
 `;
 }
 
-function renderBlockingFindings(report: GuardianReport): string {
-  const sections = [
-    `### QA Findings\n\n${renderQaFindings(report.qaFindings)}`,
-    `### Security Findings\n\n${renderSecurityFindings(report.securityFindings)}`,
-    `### Workflow Findings\n\n${renderWorkflowFindings(report.workflowFindings)}`
-  ];
-
-  if (
-    report.qaFindings.length === 0 &&
-    report.securityFindings.length === 0 &&
-    report.workflowFindings.length === 0 &&
-    report.enterpriseRiskCorrelation.externalFindings.length === 0 &&
-    report.enterpriseRiskCorrelation.correlatedFindings.length === 0
-  ) {
-    return "No blocking code/test/security findings.";
+function renderCoverageSignals(evidence: NonNullable<GuardianReport["qaFindings"][number]["testSignalEvidence"]>): string {
+  if (evidence.detectedCoverageSignals.length === 0 && evidence.unconfirmedCoverageSignals.length === 0) {
+    return "";
   }
 
-  return sections.join("\n\n");
+  return `
+
+Heuristic coverage signals:
+${renderCoverageSignalList(evidence.detectedCoverageSignals)}
+
+Coverage signals still needing review:
+${renderCoverageSignalList(evidence.unconfirmedCoverageSignals)}`;
+}
+
+function renderCoverageSignalList(signals: NonNullable<GuardianReport["qaFindings"][number]["testSignalEvidence"]>["detectedCoverageSignals"]): string {
+  if (signals.length === 0) {
+    return "- None";
+  }
+
+  return signals.map((signal) => `- ${coverageSignalLabel(signal)}`).join("\n");
+}
+
+function coverageSignalLabel(signal: NonNullable<GuardianReport["qaFindings"][number]["testSignalEvidence"]>["detectedCoverageSignals"][number]): string {
+  return signal.replaceAll("_", " ");
+}
+
+function renderRelatedTests(tests: RelatedTestSignal[]): string {
+  if (tests.length === 0) {
+    return "- None";
+  }
+
+  return tests.map((test) => `- ${test.path} (${test.score})`).join("\n");
+}
+
+function renderBlockingFindings(report: GuardianReport): string {
+  const blockingQaFindings = report.qaFindings.filter(isBlockingQaFinding);
+  const blockingSecurityFindings = report.securityFindings.filter(isBlockingSecurityFinding);
+  const sections = renderFindingSections([
+    ["QA Findings", renderQaFindings(blockingQaFindings), blockingQaFindings.length],
+    ["Security Findings", renderSecurityFindings(blockingSecurityFindings), blockingSecurityFindings.length]
+  ]);
+
+  return sections === "" ? "No blocking findings." : sections;
+}
+
+function renderReviewFindings(report: GuardianReport): string {
+  const reviewQaFindings = report.qaFindings.filter((finding) => !isBlockingQaFinding(finding));
+  const reviewSecurityFindings = report.securityFindings.filter(isReviewSecurityFinding);
+  const reviewWorkflowFindings = report.workflowFindings;
+  const sections = renderFindingSections([
+    ["QA Findings", renderQaFindings(reviewQaFindings), reviewQaFindings.length],
+    ["Security Findings", renderSecurityFindings(reviewSecurityFindings), reviewSecurityFindings.length],
+    ["Workflow Findings", renderWorkflowFindings(reviewWorkflowFindings), reviewWorkflowFindings.length]
+  ]);
+
+  return sections === "" ? "No review findings." : sections;
+}
+
+function renderAdvisoryFindings(report: GuardianReport): string {
+  const advisorySecurityFindings = report.securityFindings.filter(isAdvisorySecurityFinding);
+  const sections = renderFindingSections([
+    ["Security Findings", renderSecurityFindings(advisorySecurityFindings), advisorySecurityFindings.length]
+  ]);
+
+  return sections === "" ? "No advisory findings." : sections;
+}
+
+function renderFindingSections(sections: Array<[title: string, body: string, count: number]>): string {
+  return sections
+    .filter(([, , count]) => count > 0)
+    .map(([title, body]) => `### ${title}\n\n${body}`)
+    .join("\n\n");
+}
+
+function isBlockingQaFinding(finding: GuardianReport["qaFindings"][number]): boolean {
+  return (
+    finding.id === "qa-auth-security-without-negative-test" &&
+    (finding.confidence ?? 0) >= 50 &&
+    (finding.testSignalEvidence?.detectedRelatedTests.length ?? 0) === 0
+  );
+}
+
+function isBlockingSecurityFinding(finding: GuardianReport["securityFindings"][number]): boolean {
+  return finding.blocking !== false && (finding.riskLevel === "high" || finding.riskLevel === "critical");
+}
+
+function isReviewSecurityFinding(finding: GuardianReport["securityFindings"][number]): boolean {
+  return finding.blocking === false && (finding.riskLevel === "high" || finding.riskLevel === "critical");
+}
+
+function isAdvisorySecurityFinding(finding: GuardianReport["securityFindings"][number]): boolean {
+  return !isBlockingSecurityFinding(finding) && !isReviewSecurityFinding(finding);
 }
 
 function renderReleaseFindings(findings: GuardianReport["releaseFindings"]): string {
@@ -267,7 +350,7 @@ function renderSecurityFindings(findings: GuardianReport["securityFindings"]): s
 | Field | Value |
 | --- | --- |
 | Risk | ${renderRiskLabel(finding.riskLevel)} |
-| Location | ${escapeTableCell(location)} |
+${renderConfidenceRow(finding.confidence)}| Location | ${escapeTableCell(location)} |
 
 ${finding.description}
 
@@ -296,6 +379,26 @@ ${finding.description}
 **Recommendation:** ${finding.recommendation ?? "Add the missing check to a required GitHub Actions workflow."}`;
     })
     .join("\n\n");
+}
+
+function renderConfidenceRow(confidence: number | undefined): string {
+  if (confidence === undefined) {
+    return "";
+  }
+
+  return `| Confidence | ${confidence}% (${confidenceBand(confidence)}) |\n`;
+}
+
+function confidenceBand(confidence: number): string {
+  if (confidence >= 80) {
+    return "high confidence";
+  }
+
+  if (confidence >= 50) {
+    return "moderate confidence";
+  }
+
+  return "low confidence";
 }
 
 function renderEnterpriseRiskCorrelation(report: GuardianReport): string {

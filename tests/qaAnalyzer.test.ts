@@ -262,7 +262,7 @@ describe("analyzeQa", () => {
 
     const uiFinding = findings.find((finding) => finding.id === "qa-ui-without-cypress-test");
 
-    assert.equal(uiFinding?.title, "UI changed without component or e2e coverage");
+    assert.equal(uiFinding?.title, "UI changed without clear component or e2e test signal");
     assert.deepEqual(uiFinding?.affectedFiles, ["src/components/WalletSummary.tsx"]);
     assert.match(uiFinding?.suggestedTests[0] ?? "", /component tests/);
     assert.match(uiFinding?.suggestedTests[0] ?? "", /Cypress\/e2e/);
@@ -385,7 +385,127 @@ describe("analyzeQa", () => {
     assert.ok(authFinding?.testSignalEvidence?.suggestedCoverage.includes("negative unauthorized path"));
     assert.ok(authFinding?.testSignalEvidence?.suggestedCoverage.includes("role/permission denial"));
     assert.ok(authFinding?.testSignalEvidence?.suggestedCoverage.includes("invalid token/session case"));
-    assert.doesNotMatch(authFinding?.testSignalEvidence?.reason ?? "", /forgot|missing/i);
+    assert.doesNotMatch(authFinding?.testSignalEvidence?.reason ?? "", /overclaiming coverage failure/i);
+  });
+
+  it("scores no related test signal for auth-sensitive changes", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/auth/session.ts",
+          status: "modified",
+          category: "security",
+          riskLevel: "high"
+        }
+      ],
+      repoFiles: ["src/auth/session.ts"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const authFinding = findings.find((finding) => finding.id === "qa-auth-security-without-negative-test");
+
+    assert.deepEqual(authFinding?.testSignalEvidence?.detectedRelatedTests, []);
+    assert.equal(
+      authFinding?.description,
+      "Auth/security-sensitive files changed. No related test signal was detected, so negative-path coverage could not be confirmed."
+    );
+  });
+
+  it("scores strong related test signals from source/test filename pairing", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/auth/session.ts",
+          status: "modified",
+          category: "security",
+          riskLevel: "high"
+        },
+        {
+          path: "tests/auth/session.test.ts",
+          status: "modified",
+          category: "test",
+          riskLevel: "low"
+        }
+      ],
+      repoFiles: ["src/auth/session.ts", "tests/auth/session.test.ts"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const authFinding = findings.find((finding) => finding.id === "qa-auth-security-without-negative-test");
+
+    assert.deepEqual(authFinding?.testSignalEvidence?.detectedRelatedTests, [
+      { path: "tests/auth/session.test.ts", score: "strong" }
+    ]);
+    assert.equal(
+      authFinding?.description,
+      "Auth/security-sensitive files changed. Related tests were detected, but negative-path coverage was not confirmed."
+    );
+  });
+
+  it("scores medium related test signals from shared path segments", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/auth/session.ts",
+          status: "modified",
+          category: "security",
+          riskLevel: "high"
+        },
+        {
+          path: "tests/auth/access.test.ts",
+          status: "modified",
+          category: "test",
+          riskLevel: "low"
+        }
+      ],
+      repoFiles: ["src/auth/session.ts", "tests/auth/access.test.ts"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const authFinding = findings.find((finding) => finding.id === "qa-auth-security-without-negative-test");
+
+    assert.deepEqual(authFinding?.testSignalEvidence?.detectedRelatedTests, [
+      { path: "tests/auth/access.test.ts", score: "medium" }
+    ]);
+  });
+
+  it("scores weak related test signals from shared feature keywords", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/auth/credentialPolicy.ts",
+          status: "modified",
+          category: "security",
+          riskLevel: "high"
+        },
+        {
+          path: "tests/security/credentialValidation.test.ts",
+          status: "modified",
+          category: "test",
+          riskLevel: "low"
+        }
+      ],
+      repoFiles: ["src/auth/credentialPolicy.ts", "tests/security/credentialValidation.test.ts"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const authFinding = findings.find((finding) => finding.id === "qa-auth-security-without-negative-test");
+
+    assert.deepEqual(authFinding?.testSignalEvidence?.detectedRelatedTests, [
+      { path: "tests/security/credentialValidation.test.ts", score: "weak" }
+    ]);
+    assert.equal(
+      authFinding?.testSignalEvidence?.reason,
+      "Related test signal is weak; review whether it covers the changed behavior."
+    );
+    assert.equal(
+      authFinding?.description,
+      "Auth/security-sensitive files changed. Related test signal is weak; review whether it covers the changed behavior."
+    );
   });
 
   it("suggests business-risk coverage and shows related changed test signals when detected", () => {
@@ -412,9 +532,153 @@ describe("analyzeQa", () => {
     const sourceFinding = findings.find((finding) => finding.id === "qa-source-without-nearby-test");
 
     assert.deepEqual(sourceFinding?.testSignalEvidence?.detectedTestChanges, ["tests/referral/rewardRules.test.ts"]);
+    assert.deepEqual(sourceFinding?.testSignalEvidence?.detectedRelatedTests, [
+      { path: "tests/referral/rewardRules.test.ts", score: "medium" }
+    ]);
     assert.ok(sourceFinding?.testSignalEvidence?.suggestedCoverage.includes("duplicate/abuse prevention"));
     assert.ok(sourceFinding?.testSignalEvidence?.suggestedCoverage.includes("limit/quota boundary"));
     assert.ok(sourceFinding?.testSignalEvidence?.suggestedCoverage.includes("invalid input/error path"));
+  });
+
+  it("detects happy path coverage signals from changed test content", () => {
+    const sourceFinding = findingWithChangedTestContent(`
+      it("handles the valid reward request successfully", () => {
+        expect(applyReward()).toEqual({ ok: true });
+      });
+    `);
+
+    assert.deepEqual(sourceFinding?.testSignalEvidence?.detectedCoverageSignals, ["happy_path"]);
+    assert.ok(sourceFinding?.testSignalEvidence?.unconfirmedCoverageSignals.includes("regression"));
+  });
+
+  it("detects error path coverage signals from changed test content", () => {
+    const sourceFinding = findingWithChangedTestContent(`
+      it("rejects invalid reward requests", async () => {
+        await expect(applyReward()).rejects.toThrow("invalid reward");
+      });
+    `);
+
+    assert.deepEqual(sourceFinding?.testSignalEvidence?.detectedCoverageSignals, ["error_path", "validation"]);
+  });
+
+  it("detects regression coverage signals from changed test content", () => {
+    const sourceFinding = findingWithChangedTestContent(`
+      it("covers the regression for the previously duplicated reward bug", () => {
+        expect(applyReward()).toBe("fixed");
+      });
+    `);
+
+    assert.deepEqual(sourceFinding?.testSignalEvidence?.detectedCoverageSignals, ["happy_path", "regression"]);
+  });
+
+  it("detects output contract coverage signals from changed test content", () => {
+    const sourceFinding = findingWithChangedTestContent(`
+      it("matches the output contract snapshot", () => {
+        expect(renderReward()).toMatchSnapshot();
+      });
+    `);
+
+    assert.deepEqual(sourceFinding?.testSignalEvidence?.detectedCoverageSignals, ["output_contract"]);
+  });
+
+  it("detects mixed coverage signals without claiming guaranteed coverage", () => {
+    const sourceFinding = findingWithChangedTestContent(`
+      it("keeps the regression contract for invalid boundary input", () => {
+        expect(() => applyReward({ quota: -1 })).toThrow("invalid quota");
+      });
+      it("denies unauthorized reward access", () => {
+        expect(canApplyReward()).toBe(false);
+      });
+    `);
+
+    assert.deepEqual(sourceFinding?.testSignalEvidence?.detectedCoverageSignals, [
+      "happy_path",
+      "error_path",
+      "regression",
+      "output_contract",
+      "authorization",
+      "validation",
+      "boundary"
+    ]);
+    assert.match(sourceFinding?.testSignalEvidence?.reason ?? "", /review whether they cover/);
+    assert.doesNotMatch(sourceFinding?.testSignalEvidence?.reason ?? "", /guaranteed|confirmed/i);
+  });
+
+  it("assigns high confidence when QA file, test, and content signals align", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/auth/session.ts",
+          status: "modified",
+          category: "security",
+          riskLevel: "high"
+        },
+        {
+          path: "tests/auth/session.test.ts",
+          status: "modified",
+          category: "test",
+          riskLevel: "low"
+        }
+      ],
+      repoFiles: ["src/auth/session.ts", "tests/auth/session.test.ts"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture,
+      testFileContents: {
+        "tests/auth/session.test.ts": "it('denies unauthorized sessions', () => expect(canAccess()).toBe(false));"
+      }
+    });
+
+    const authFinding = findings.find((finding) => finding.id === "qa-auth-security-without-negative-test");
+
+    assert.ok((authFinding?.confidence ?? 0) >= 80);
+  });
+
+  it("assigns moderate confidence when QA relatedness is partial", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/auth/session.ts",
+          status: "modified",
+          category: "security",
+          riskLevel: "high"
+        },
+        {
+          path: "tests/auth/access.test.ts",
+          status: "modified",
+          category: "test",
+          riskLevel: "low"
+        }
+      ],
+      repoFiles: ["src/auth/session.ts", "tests/auth/access.test.ts"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const authFinding = findings.find((finding) => finding.id === "qa-auth-security-without-negative-test");
+
+    assert.ok((authFinding?.confidence ?? 0) >= 50);
+    assert.ok((authFinding?.confidence ?? 100) < 80);
+  });
+
+  it("assigns low confidence and softer wording for broad QA heuristics", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/utils/misc.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        }
+      ],
+      repoFiles: ["src/utils/misc.ts"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const sourceFinding = findings.find((finding) => finding.id === "qa-source-without-nearby-test");
+
+    assert.ok((sourceFinding?.confidence ?? 100) < 50);
+    assert.match(sourceFinding?.description ?? "", /Guardian did not find a clear nearby unit test signal/);
   });
 
   it("groups repeated nearby files into compact expected test signal patterns", () => {
@@ -450,7 +714,7 @@ describe("analyzeQa", () => {
     ]);
   });
 
-  it("still reports missing negative tests for real auth and security code", () => {
+  it("still reports unconfirmed negative-path coverage for real auth and security code", () => {
     const findings = analyzeQa({
       changedFiles: [
         {
@@ -466,6 +730,10 @@ describe("analyzeQa", () => {
     });
 
     assert.ok(findings.some((finding) => finding.id === "qa-auth-security-without-negative-test"));
+    assert.equal(
+      findings.find((finding) => finding.id === "qa-auth-security-without-negative-test")?.title,
+      "Auth/security-sensitive files changed; negative-path coverage not confirmed"
+    );
   });
 
   it("does not treat changed test files as uncovered production QA surfaces", () => {
@@ -562,3 +830,30 @@ describe("analyzeQa", () => {
     assert.ok(!findings.some((finding) => finding.id === "email-change-requires-test"));
   });
 });
+
+function findingWithChangedTestContent(content: string) {
+  const findings = analyzeQa({
+    changedFiles: [
+      {
+        path: "src/referral/rewardService.ts",
+        status: "modified",
+        category: "source",
+        riskLevel: "medium"
+      },
+      {
+        path: "tests/referral/rewardRules.test.ts",
+        status: "modified",
+        category: "test",
+        riskLevel: "low"
+      }
+    ],
+    repoFiles: ["src/referral/rewardService.ts", "tests/referral/rewardRules.test.ts"],
+    config: guardianConfigFixture,
+    projectBrain: projectBrainFixture,
+    testFileContents: {
+      "tests/referral/rewardRules.test.ts": content
+    }
+  });
+
+  return findings.find((finding) => finding.id === "qa-source-without-nearby-test");
+}

@@ -1,0 +1,32 @@
+[
+  {
+    "name": "ai-project-guardian",
+    "path": ".",
+    "expectedRisk": "low"
+  },
+  {
+    "name": "repo-context-center",
+    "path": "/Users/gokhanyigit/Desktop/repo-context-center",
+    "expectedRisk": "low-medium"
+  },
+  {
+    "name": "wallet-health-ui",
+    "path": "/Users/gokhanyigit/Desktop/study/wallet-health-ui",
+    "expectedRisk": "medium"
+  },
+  {
+    "name": "AI-Restaurants",
+    "path": "/Users/gokhanyigit/Desktop/AI-Restaurant/AI-Restaurants",
+    "expectedRisk": "medium"
+  },
+  {
+    "name": "fastapi",
+    "path": "/Users/gokhanyigit/Desktop/study/fastapi",
+    "expectedRisk": "low-medium"
+  },
+  {
+    "name": "langchain",
+    "path": "/Users/gokhanyigit/Desktop/study/langchain",
+    "expectedRisk": "low-medium"
+  }
+]

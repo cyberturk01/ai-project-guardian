@@ -61,15 +61,35 @@ export type FindingBase = {
   title: string;
   description: string;
   riskLevel: RiskLevel;
+  confidence?: number;
   filePath?: string;
   recommendation?: string;
   accepted?: boolean;
+};
+
+export type TestRelatednessScore = "strong" | "medium" | "weak";
+export type CoverageSignal =
+  | "happy_path"
+  | "error_path"
+  | "regression"
+  | "output_contract"
+  | "authorization"
+  | "validation"
+  | "boundary"
+  | "negative_path";
+
+export type RelatedTestSignal = {
+  path: string;
+  score: TestRelatednessScore;
 };
 
 export type TestSignalEvidence = {
   changedFiles: string[];
   expectedTestSignals: string[];
   detectedTestChanges: string[];
+  detectedRelatedTests: RelatedTestSignal[];
+  detectedCoverageSignals: CoverageSignal[];
+  unconfirmedCoverageSignals: CoverageSignal[];
   suggestedCoverage: string[];
   reason: string;
 };
@@ -91,6 +111,8 @@ export type ReleaseFinding = FindingBase & {
 export type SecurityFinding = FindingBase & {
   area: "security";
   lineNumber?: number;
+  blocking?: boolean;
+  fixture_like?: boolean;
 };
 
 export type WorkflowFinding = FindingBase & {

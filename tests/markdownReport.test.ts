@@ -37,9 +37,34 @@ describe("renderMarkdownReport", () => {
     assert.match(actual, /\| Blocking findings \| 2 \|/);
     assert.match(actual, /\| Checklist findings \| 1 \|/);
     assert.doesNotMatch(actual, /Active findings/);
+    assert.doesNotMatch(actual, /## Blocking Findings/);
     assert.match(actual, /Run with `--full-report`/);
     assert.doesNotMatch(actual, /## Changed Files/);
     assert.doesNotMatch(actual, /src\/api\/reservations\.ts:18/);
+  });
+
+  it("renders fixture secret findings without overclaiming a production leak", () => {
+    const report = makeReport();
+    report.securityFindings = [
+      {
+        id: "security-hardcoded-secret",
+        area: "security",
+        title: "Possible hardcoded secret",
+        description: "Possible test fixture secret detected. Review if this is real; not treated as a confirmed production leak.",
+        riskLevel: "low",
+        confidence: 42,
+        filePath: "tests/auth/sessionFixture.test.ts",
+        lineNumber: 7,
+        blocking: false,
+        fixture_like: true,
+        recommendation: "Move secrets to a managed secret store or environment variable, then rotate the exposed value if it is real."
+      }
+    ];
+
+    const fullReport = renderMarkdownReport(report);
+
+    assert.match(fullReport, /Possible test fixture secret detected\. Review if this is real; not treated as a confirmed production leak\./);
+    assert.doesNotMatch(fullReport, /secret leaked|production secret exposed|critical leak/i);
   });
 
   it("renders QA test signal evidence in full and summary Markdown reports", () => {
@@ -50,12 +75,19 @@ describe("renderMarkdownReport", () => {
         title: "Source change without related test signal",
         affectedFiles: ["src/referral/rewardService.ts", "src/referral/rewardRules.ts"],
         suggestedTests: ["Review related referral test coverage."],
+        confidence: 84,
         testSignalEvidence: {
           changedFiles: ["src/referral/rewardRules.ts", "src/referral/rewardService.ts"],
           expectedTestSignals: ["src/referral/*.test.ts", "src/referral/*.spec.ts", "tests/referral/*"],
-          detectedTestChanges: [],
+          detectedTestChanges: ["tests/referral/rewardRules.test.ts", "tests/outputContract.test.ts"],
+          detectedRelatedTests: [
+            { path: "tests/referral/rewardRules.test.ts", score: "strong" },
+            { path: "tests/outputContract.test.ts", score: "medium" }
+          ],
+          detectedCoverageSignals: ["regression", "output_contract"],
+          unconfirmedCoverageSignals: ["negative_path"],
           suggestedCoverage: ["happy path", "duplicate/abuse prevention", "limit/quota boundary"],
-          reason: "No related test change detected."
+          reason: "Related test changes were detected; review whether they cover the changed behavior."
         }
       }
     ];
@@ -70,18 +102,68 @@ describe("renderMarkdownReport", () => {
     const summary = renderMarkdownSummary(report);
 
     assert.match(fullReport, /\*\*Test signal evidence\*\*/);
+    assert.match(fullReport, /\| Confidence \| 84% \(high confidence\) \|/);
     assert.match(fullReport, /Changed files:\n- `src\/referral\/rewardRules\.ts`\n- `src\/referral\/rewardService\.ts`/);
     assert.match(fullReport, /Expected test signals:\n- `src\/referral\/\*\.test\.ts`\n- `src\/referral\/\*\.spec\.ts`\n- `tests\/referral\/\*`/);
-    assert.match(fullReport, /Detected related test changes:\n- None/);
-    assert.match(fullReport, /No related test change detected\./);
+    assert.match(
+      fullReport,
+      /Detected related tests:\n- tests\/referral\/rewardRules\.test\.ts \(strong\)\n- tests\/outputContract\.test\.ts \(medium\)/
+    );
+    assert.match(fullReport, /Related test changes were detected; review whether they cover the changed behavior\./);
+    assert.match(fullReport, /Heuristic coverage signals:\n- regression\n- output contract/);
+    assert.match(fullReport, /Coverage signals still needing review:\n- negative path/);
+    assert.doesNotMatch(fullReport, /coverage is guaranteed|coverage confirmed/i);
     assert.match(summary, /## QA Test Signal Evidence/);
-    assert.match(summary, /Source change without related test signal: No related test change detected\./);
+    assert.match(summary, /Source change without related test signal: Related test changes were detected; review whether they cover the changed behavior\./);
     assert.match(
       summary,
-      /Review test coverage for `src\/referral\/\*`; no related test change was detected\. Suggested coverage: happy path, duplicate\/abuse prevention, limit\/quota boundary\./
+      /Review test coverage for `src\/referral\/\*`; related test changes detected: tests\/referral\/rewardRules\.test\.ts, tests\/outputContract\.test\.ts\. Suggested coverage: happy path, duplicate\/abuse prevention, limit\/quota boundary\./
     );
-    assert.doesNotMatch(fullReport, /You forgot|did not write tests|Negative test is missing/i);
-    assert.doesNotMatch(summary, /You forgot|did not write tests|Negative test is missing/i);
+    assert.doesNotMatch(fullReport, /overclaiming coverage failure/i);
+    assert.doesNotMatch(summary, /overclaiming coverage failure/i);
+  });
+
+  it("keeps JSON report QA evidence fields stable", () => {
+    const report = makeReportWithQaEvidence();
+    const parsed = JSON.parse(renderReport(report, "json")) as GuardianReport;
+    const evidence = parsed.qaFindings[0]?.testSignalEvidence;
+
+    assert.deepEqual(evidence?.detectedTestChanges, [
+      "tests/referral/rewardRules.test.ts",
+      "tests/outputContract.test.ts",
+      "tests/referral/auditTrail.test.ts"
+    ]);
+    assert.deepEqual(evidence?.detectedRelatedTests, [
+      { path: "tests/referral/rewardRules.test.ts", score: "strong" },
+      { path: "tests/outputContract.test.ts", score: "medium" },
+      { path: "tests/referral/auditTrail.test.ts", score: "weak" }
+    ]);
+    assert.deepEqual(evidence?.detectedCoverageSignals, ["regression", "output_contract"]);
+    assert.deepEqual(evidence?.unconfirmedCoverageSignals, ["negative_path"]);
+    assert.equal(parsed.qaFindings[0]?.confidence, 84);
+  });
+
+  it("keeps report output compact while showing scored QA evidence", () => {
+    const report = makeReportWithQaEvidence();
+    const fullReport = renderMarkdownReport(report);
+    const summary = renderMarkdownSummary(report);
+
+    assert.equal(countOccurrences(fullReport, "**Test signal evidence**"), 1);
+    assert.equal(countOccurrences(fullReport, "Heuristic coverage signals:"), 1);
+    assert.match(fullReport, /Detected related tests:\n- tests\/referral\/rewardRules\.test\.ts \(strong\)\n- tests\/outputContract\.test\.ts \(medium\)\n- tests\/referral\/auditTrail\.test\.ts \(weak\)/);
+    assert.doesNotMatch(summary, /Heuristic coverage signals:|Coverage signals still needing review:/);
+    assert.ok(summary.split("\n").length < fullReport.split("\n").length);
+  });
+
+  it("does not return old negative-coverage overclaiming wording when related tests exist", () => {
+    const report = makeReportWithQaEvidence({
+      title: "Auth/security-sensitive files changed; negative-path coverage not confirmed",
+      description: "Auth/security-sensitive files changed. Related tests were detected, but negative-path coverage was not confirmed."
+    });
+    const combined = [renderMarkdownReport(report), renderMarkdownSummary(report), renderReport(report, "json")].join("\n");
+
+    assertNoOldNegativeCoverageWording(combined);
+    assert.match(combined, /Related tests were detected, but negative-path coverage was not confirmed/);
   });
 
   it("uses summary style when requested by the generic renderer", () => {
@@ -113,7 +195,7 @@ describe("renderMarkdownReport", () => {
         recommendation: "review_required",
         blockingFindingsCount: 1,
         checklistFindingsCount: 0,
-        expected: "Merge requires review because 1 code/test/security finding(s) need attention before merge."
+        expected: "Merge requires review because 1 review-required code/test/security finding(s) need attention before merge."
       },
       {
         recommendation: "safe_after_checklist",
@@ -145,7 +227,7 @@ describe("renderMarkdownReport", () => {
       checklistFindingsCount: 0
     });
 
-    assert.match(renderMarkdownSummary(report), /Merge requires review because 1 code\/test\/security finding\(s\) need attention before merge\./);
+    assert.match(renderMarkdownSummary(report), /Merge requires review because 1 review-required code\/test\/security finding\(s\) need attention before merge\./);
   });
 
   it("adds missing config onboarding guidance to Markdown reports", () => {
@@ -301,9 +383,10 @@ function makeReport(): GuardianReport {
       {
         id: "qa-api-without-integration-test",
         area: "qa",
-        title: "Route or API changed without API/integration test coverage",
-        description: "A route, controller, handler, or API file changed without a matching API or integration test.",
+        title: "Route or API changed without clear API/integration test signal",
+        description: "A route, controller, handler, or API file appears to have changed without a clear API or integration test signal.",
         riskLevel: "high",
+        confidence: 84,
         affectedFiles: ["src/api/reservations.ts"],
         suggestedTests: ["Add an API or integration test that exercises src/api/reservations.ts."]
       }
@@ -330,6 +413,7 @@ function makeReport(): GuardianReport {
         title: "Possible hardcoded secret",
         description: "Possible hardcoded secret detected in a changed file. This is a possible risk based on heuristic matching, not a confirmed vulnerability.",
         riskLevel: "high",
+        confidence: 61,
         filePath: "src/api/reservations.ts",
         lineNumber: 18,
         recommendation: "Move secrets to a managed secret store or environment variable, then rotate the exposed value if it is real."
@@ -379,6 +463,47 @@ function makeReport(): GuardianReport {
   return report;
 }
 
+function makeReportWithQaEvidence(overrides: Partial<GuardianReport["qaFindings"][number]> = {}): GuardianReport {
+  const report = makeReport();
+
+  report.qaFindings = [
+    {
+      ...report.qaFindings[0],
+      title: "Source change without related test signal",
+      affectedFiles: ["src/referral/rewardService.ts", "src/referral/rewardRules.ts"],
+      suggestedTests: ["Review related referral test coverage."],
+      confidence: 84,
+      testSignalEvidence: {
+        changedFiles: ["src/referral/rewardRules.ts", "src/referral/rewardService.ts"],
+        expectedTestSignals: ["src/referral/*.test.ts", "src/referral/*.spec.ts", "tests/referral/*"],
+        detectedTestChanges: [
+          "tests/referral/rewardRules.test.ts",
+          "tests/outputContract.test.ts",
+          "tests/referral/auditTrail.test.ts"
+        ],
+        detectedRelatedTests: [
+          { path: "tests/referral/rewardRules.test.ts", score: "strong" },
+          { path: "tests/outputContract.test.ts", score: "medium" },
+          { path: "tests/referral/auditTrail.test.ts", score: "weak" }
+        ],
+        detectedCoverageSignals: ["regression", "output_contract"],
+        unconfirmedCoverageSignals: ["negative_path"],
+        suggestedCoverage: ["happy path", "duplicate/abuse prevention", "limit/quota boundary"],
+        reason: "Related test changes were detected; review whether they cover the changed behavior."
+      },
+      ...overrides
+    }
+  ];
+  report.actionableGuidance = buildActionableGuidance([
+    ...report.releaseFindings,
+    ...report.qaFindings,
+    ...report.securityFindings,
+    ...report.workflowFindings
+  ]);
+
+  return report;
+}
+
 function readSnapshot(fileName: string): string {
   const compiledTestDir = dirname(fileURLToPath(import.meta.url));
   return readFileSync(join(compiledTestDir, "../../tests/__snapshots__", fileName), "utf8");
@@ -403,4 +528,14 @@ function escapeRegExp(value: string): string {
 
 function countOccurrences(value: string, search: string): number {
   return value.split(search).length - 1;
+}
+
+function assertNoOldNegativeCoverageWording(value: string): void {
+  for (const phrase of [
+    ["without negative", "test coverage"],
+    ["missing negative", "test coverage"],
+    ["no negative", "test coverage"]
+  ]) {
+    assert.doesNotMatch(value, new RegExp(phrase.join(" "), "i"));
+  }
 }

@@ -1,5 +1,14 @@
 import { basename, dirname, extname } from "node:path";
-import type { ChangedFile, GuardianConfig, QaFinding, RiskLevel, TestSignalEvidence } from "../core/types.js";
+import type {
+  ChangedFile,
+  CoverageSignal,
+  GuardianConfig,
+  QaFinding,
+  RelatedTestSignal,
+  RiskLevel,
+  TestRelatednessScore,
+  TestSignalEvidence
+} from "../core/types.js";
 import type { ProjectBrain } from "../project-brain/types.js";
 import { evaluateCustomQaRules } from "./customRuleEvaluator.js";
 
@@ -8,6 +17,7 @@ export type AnalyzeQaInput = {
   repoFiles: string[];
   config: GuardianConfig;
   projectBrain: ProjectBrain;
+  testFileContents?: Record<string, string>;
 };
 
 type QaRule = {
@@ -26,6 +36,7 @@ type QaContext = {
   cypressFiles: string[];
   config: GuardianConfig;
   projectBrain: ProjectBrain;
+  testFileContents: Record<string, string>;
 };
 
 const sourceExtensions = new Set([
@@ -61,8 +72,8 @@ const negativeSecurityTestPattern = /(^|\/)(auth|security|permissions?|authoriza
 const qaRules: QaRule[] = [
   {
     id: "qa-source-without-nearby-test",
-    title: "Source changed without nearby test coverage",
-    description: "One or more source files changed, but no nearby unit test was found in the repository.",
+    title: "Source changed without nearby test signal",
+    description: "One or more source files changed, and Guardian did not find a clear nearby unit test signal.",
     riskLevel: "medium",
     matches: (file) => isGenericSourceFile(file),
     hasCoverage: (file, context) => hasNearbyTest(file.path, context.testFiles, context.config),
@@ -70,8 +81,8 @@ const qaRules: QaRule[] = [
   },
   {
     id: "qa-api-without-integration-test",
-    title: "Route or API changed without API/integration test coverage",
-    description: "A route, controller, handler, or API file changed without a matching API or integration test.",
+    title: "Route or API changed without clear API/integration test signal",
+    description: "A route, controller, handler, or API file appears to have changed without a clear API or integration test signal.",
     riskLevel: "high",
     matches: (file) => isProductionChangedCodeFile(file) && !isDocumentationContextFile(file) && apiPathPattern.test(normalizePath(file.path)),
     hasCoverage: (file, context) => hasTopicalTest(file.path, context.testFiles, apiTestPattern),
@@ -79,8 +90,8 @@ const qaRules: QaRule[] = [
   },
   {
     id: "qa-ui-without-cypress-test",
-    title: "UI changed without component or e2e coverage",
-    description: "A UI-facing file changed, but no relevant component, Cypress, or e2e test was found in the repository.",
+    title: "UI changed without clear component or e2e test signal",
+    description: "A UI-facing file appears to have changed, but Guardian did not find a clear component, Cypress, or e2e test signal.",
     riskLevel: "medium",
     matches: (file) => isProductionChangedCodeFile(file) && !isDocumentationContextFile(file) && uiPathPattern.test(normalizePath(file.path)),
     hasCoverage: (file, context) =>
@@ -91,8 +102,8 @@ const qaRules: QaRule[] = [
   },
   {
     id: "qa-migration-without-db-test",
-    title: "Migration changed without DB/integration test coverage",
-    description: "A database migration or schema file changed without a matching database or integration test.",
+    title: "Migration changed without clear DB/integration test signal",
+    description: "A database migration or schema file appears to have changed without a clear database or integration test signal.",
     riskLevel: "high",
     matches: (file) =>
       isProductionChangedFile(file) &&
@@ -103,8 +114,8 @@ const qaRules: QaRule[] = [
   },
   {
     id: "qa-i18n-without-localization-test",
-    title: "i18n changed without localization test coverage",
-    description: "Localization files changed without a matching localization test.",
+    title: "i18n changed without clear localization test signal",
+    description: "Localization files appear to have changed without a clear localization test signal.",
     riskLevel: "low",
     matches: (file) => isProductionChangedFile(file) && (file.category === "i18n" || i18nPathPattern.test(normalizePath(file.path))),
     hasCoverage: (file, context) => hasTopicalTest(file.path, context.testFiles, localizationTestPattern),
@@ -112,8 +123,8 @@ const qaRules: QaRule[] = [
   },
   {
     id: "qa-auth-security-without-negative-test",
-    title: "Auth or security changed without negative test coverage",
-    description: "Auth or security-sensitive code changed without a negative-path test for denied or invalid access.",
+    title: "Auth/security-sensitive files changed; negative-path coverage not confirmed",
+    description: "Auth/security-sensitive files changed. Negative-path coverage was not confirmed.",
     riskLevel: "high",
     matches: (file) =>
       isProductionChangedFile(file) &&
@@ -130,7 +141,8 @@ export function analyzeQa(input: AnalyzeQaInput): QaFinding[] {
     testFiles: normalizeAndSort(input.repoFiles).filter(isTestFile),
     cypressFiles: normalizeAndSort(input.repoFiles).filter(isCypressTestFile),
     config: input.config,
-    projectBrain: input.projectBrain
+    projectBrain: input.projectBrain,
+    testFileContents: normalizeTestFileContents(input.testFileContents ?? {})
   };
 
   const builtInFindings = qaRules
@@ -160,14 +172,17 @@ function buildFinding(rule: QaRule, changedFiles: ChangedFile[], context: QaCont
   }
 
   const suggestedTests = suggestedTestsForAffectedFiles(rule, affectedFiles, context);
-  const testSignalEvidence = testSignalEvidenceForFinding(rule, affectedFiles, changedFiles);
+  const testSignalEvidence = testSignalEvidenceForFinding(rule, affectedFiles, changedFiles, context);
+  const confidence = confidenceForQaFinding(rule, affectedFiles, testSignalEvidence);
+  const description = descriptionForFinding(rule, testSignalEvidence, confidence);
 
   return {
     id: rule.id,
     area: "qa",
     title: rule.title,
-    description: rule.description,
+    description,
     riskLevel: rule.riskLevel,
+    confidence,
     affectedFiles,
     suggestedTests,
     testSignalEvidence
@@ -177,22 +192,223 @@ function buildFinding(rule: QaRule, changedFiles: ChangedFile[], context: QaCont
 function testSignalEvidenceForFinding(
   rule: QaRule,
   affectedFiles: string[],
-  changedFiles: ChangedFile[]
+  changedFiles: ChangedFile[],
+  context: QaContext
 ): TestSignalEvidence {
   const expectedTestSignals = expectedTestSignalsForAffectedFiles(rule, affectedFiles);
   const changedTestFiles = normalizeAndSort(changedFiles.filter((file) => file.status !== "deleted").map((file) => file.path).filter(isTestFile));
-  const detectedTestChanges = relatedTestChanges(affectedFiles, changedTestFiles);
+  const detectedRelatedTests = relatedTestChanges(affectedFiles, changedTestFiles);
+  const detectedTestChanges = detectedRelatedTests.map((test) => test.path);
+  const detectedCoverageSignals = detectedCoverageSignalsForTests(detectedTestChanges, context.testFileContents);
+  const unconfirmedCoverageSignals = unconfirmedCoverageSignalsForFinding(rule, detectedCoverageSignals);
 
   return {
     changedFiles: affectedFiles,
     expectedTestSignals,
     detectedTestChanges,
+    detectedRelatedTests,
+    detectedCoverageSignals,
+    unconfirmedCoverageSignals,
     suggestedCoverage: suggestedCoverageForAffectedFiles(rule, affectedFiles),
-    reason:
-      detectedTestChanges.length === 0
-        ? "No related test change detected."
-        : "Related test changes were detected; review whether they cover the changed behavior."
+    reason: testSignalReason(detectedRelatedTests)
   };
+}
+
+function descriptionForFinding(rule: QaRule, evidence: TestSignalEvidence, confidence: number): string {
+  if (rule.id !== "qa-auth-security-without-negative-test") {
+    if (confidence < 50) {
+      return softenQaDescription(rule.description);
+    }
+
+    return rule.description;
+  }
+
+  if (confidence < 50) {
+    return "Auth/security-sensitive files may have changed. Related evidence is weak, so negative-path coverage should be reviewed.";
+  }
+
+  if (hasOnlyWeakRelatedTests(evidence.detectedRelatedTests)) {
+    return "Auth/security-sensitive files changed. Related test signal is weak; review whether it covers the changed behavior.";
+  }
+
+  if (evidence.detectedRelatedTests.length > 0) {
+    return "Auth/security-sensitive files changed. Related tests were detected, but negative-path coverage was not confirmed.";
+  }
+
+  return "Auth/security-sensitive files changed. No related test signal was detected, so negative-path coverage could not be confirmed.";
+}
+
+function testSignalReason(relatedTests: RelatedTestSignal[]): string {
+  if (relatedTests.length === 0) {
+    return "No related test change detected.";
+  }
+
+  if (hasOnlyWeakRelatedTests(relatedTests)) {
+    return "Related test signal is weak; review whether it covers the changed behavior.";
+  }
+
+  return "Related test changes were detected; review whether they cover the changed behavior.";
+}
+
+function hasOnlyWeakRelatedTests(relatedTests: RelatedTestSignal[]): boolean {
+  return relatedTests.length > 0 && relatedTests.every((test) => test.score === "weak");
+}
+
+function confidenceForQaFinding(rule: QaRule, affectedFiles: string[], evidence: TestSignalEvidence): number {
+  let score = 44;
+
+  score += fileMatchConfidence(rule, affectedFiles);
+  score += relatedTestConfidence(evidence.detectedRelatedTests);
+  score += Math.min(12, evidence.detectedCoverageSignals.length * 4);
+  score += Math.min(8, affectedFiles.length * 2);
+
+  if (evidence.detectedRelatedTests.length === 0) {
+    score -= 8;
+  }
+
+  if (evidence.unconfirmedCoverageSignals.length > 0) {
+    score -= Math.min(10, evidence.unconfirmedCoverageSignals.length * 3);
+  }
+
+  return clampConfidence(score);
+}
+
+function fileMatchConfidence(rule: QaRule, affectedFiles: string[]): number {
+  if (rule.id === "qa-source-without-nearby-test") {
+    return affectedFiles.every(isServiceOrBusinessLogicPath) ? 18 : 8;
+  }
+
+  if (rule.id === "qa-api-without-integration-test") {
+    return 22;
+  }
+
+  if (rule.id === "qa-ui-without-cypress-test") {
+    return 18;
+  }
+
+  if (rule.id === "qa-migration-without-db-test") {
+    return 24;
+  }
+
+  if (rule.id === "qa-i18n-without-localization-test") {
+    return 18;
+  }
+
+  if (rule.id === "qa-auth-security-without-negative-test") {
+    return affectedFiles.some((path) => /(^|\/)(auth|security|permissions?|roles?|sessions?|tokens?)(\/|\.|-|_|$)/i.test(normalizePath(path)))
+      ? 24
+      : 12;
+  }
+
+  return 8;
+}
+
+function relatedTestConfidence(tests: RelatedTestSignal[]): number {
+  if (tests.some((test) => test.score === "strong")) {
+    return 18;
+  }
+
+  if (tests.some((test) => test.score === "medium")) {
+    return 10;
+  }
+
+  if (tests.some((test) => test.score === "weak")) {
+    return 4;
+  }
+
+  return 0;
+}
+
+function softenQaDescription(description: string): string {
+  return description;
+}
+
+function clampConfidence(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function detectedCoverageSignalsForTests(testFiles: string[], testFileContents: Record<string, string>): CoverageSignal[] {
+  const signals = new Set<CoverageSignal>();
+
+  for (const testFile of testFiles) {
+    const content = testFileContents[normalizePath(testFile)];
+
+    if (content === undefined) {
+      continue;
+    }
+
+    for (const signal of coverageSignalsForContent(content)) {
+      signals.add(signal);
+    }
+  }
+
+  return sortCoverageSignals([...signals]);
+}
+
+function coverageSignalsForContent(content: string): CoverageSignal[] {
+  const normalizedContent = content.toLowerCase();
+  const signals = new Set<CoverageSignal>();
+
+  if (/\b(happy path|valid|success|succeed|resolves|returns?|ok|200)\b|\.to(equal|be|strictlyequal|deep\.equal)\b/.test(normalizedContent)) {
+    signals.add("happy_path");
+  }
+
+  if (/\b(tothrow|rejects|throws?|invalid|errors?|failure|fails?|exception|denied|forbidden|unauthorized)\b/.test(normalizedContent)) {
+    signals.add("error_path");
+  }
+
+  if (/\b(regression|bug|fix(?:ed|es)?|previously|repro(?:duce|duces|duction)?)\b/.test(normalizedContent)) {
+    signals.add("regression");
+  }
+
+  if (/\b(snapshot|golden|contract|schema|output contract)\b|tomatchsnapshot/.test(normalizedContent)) {
+    signals.add("output_contract");
+  }
+
+  if (/\b(auth(?:orization|entication)?|permission|role|forbidden|unauthorized|denied|access control)\b/.test(normalizedContent)) {
+    signals.add("authorization");
+  }
+
+  if (/\b(validation|validate|invalid|required|malformed|schema)\b/.test(normalizedContent)) {
+    signals.add("validation");
+  }
+
+  if (/\b(boundary|edge case|limit|quota|minimum|maximum|min|max|overflow|underflow|empty|zero)\b/.test(normalizedContent)) {
+    signals.add("boundary");
+  }
+
+  return sortCoverageSignals([...signals]);
+}
+
+function unconfirmedCoverageSignalsForFinding(rule: QaRule, detectedSignals: CoverageSignal[]): CoverageSignal[] {
+  const expectedSignals = expectedCoverageSignalsForRule(rule);
+  const detected = new Set(detectedSignals);
+
+  return sortCoverageSignals(expectedSignals.filter((signal) => !detected.has(signal)));
+}
+
+function expectedCoverageSignalsForRule(rule: QaRule): CoverageSignal[] {
+  if (rule.id === "qa-auth-security-without-negative-test") {
+    return ["negative_path", "authorization"];
+  }
+
+  if (rule.id === "qa-api-without-integration-test") {
+    return ["happy_path", "error_path", "validation"];
+  }
+
+  if (rule.id === "qa-ui-without-cypress-test") {
+    return ["happy_path", "validation"];
+  }
+
+  if (rule.id === "qa-migration-without-db-test") {
+    return ["happy_path", "boundary"];
+  }
+
+  if (rule.id === "qa-i18n-without-localization-test") {
+    return ["happy_path", "error_path"];
+  }
+
+  return ["happy_path", "regression"];
 }
 
 function expectedTestSignalsForAffectedFiles(rule: QaRule, affectedFiles: string[]): string[] {
@@ -252,24 +468,79 @@ function expectedTestSignalsForFile(rule: QaRule, path: string): string[] {
   return uniqueSorted(signals);
 }
 
-function relatedTestChanges(affectedFiles: string[], changedTestFiles: string[]): string[] {
-  return changedTestFiles.filter((testFile) => affectedFiles.some((sourceFile) => isRelatedTestChange(sourceFile, testFile)));
+function relatedTestChanges(affectedFiles: string[], changedTestFiles: string[]): RelatedTestSignal[] {
+  return changedTestFiles
+    .map((testFile) => {
+      const score = bestRelatednessScore(affectedFiles, testFile);
+      return score === undefined ? undefined : { path: testFile, score };
+    })
+    .filter((test): test is RelatedTestSignal => test !== undefined)
+    .sort((left, right) => left.path.localeCompare(right.path));
 }
 
-function isRelatedTestChange(sourceFile: string, testFile: string): boolean {
+function bestRelatednessScore(affectedFiles: string[], testFile: string): TestRelatednessScore | undefined {
+  const scores = affectedFiles
+    .map((sourceFile) => relatednessScore(sourceFile, testFile))
+    .filter((score): score is TestRelatednessScore => score !== undefined);
+
+  if (scores.includes("strong")) {
+    return "strong";
+  }
+
+  if (scores.includes("medium")) {
+    return "medium";
+  }
+
+  if (scores.includes("weak")) {
+    return "weak";
+  }
+
+  return undefined;
+}
+
+function relatednessScore(sourceFile: string, testFile: string): TestRelatednessScore | undefined {
   const normalizedTestFile = normalizePath(testFile).toLowerCase();
+  const normalizedSourceFile = normalizePath(sourceFile).toLowerCase();
+  const testBaseToken = stripKnownExtensions(basename(normalizedTestFile)).toLowerCase();
   const sourceToken = mainPathToken(sourceFile).toLowerCase();
   const feature = featureToken(sourceFile).toLowerCase();
   const folderToken = basename(dirname(normalizePath(sourceFile))).toLowerCase();
 
-  if (sourceToken !== "" && normalizedTestFile.includes(sourceToken)) {
-    return true;
+  if (
+    sourceToken !== "" &&
+    (testBaseToken === sourceToken || testBaseToken.includes(sourceToken) || normalizedTestFile.includes(`/${sourceToken}.`))
+  ) {
+    return "strong";
   }
 
-  return (
+  if (
+    isMirroredTestPath(normalizedSourceFile, normalizedTestFile) ||
     feature !== "" && normalizedTestFile.includes(`/${feature}/`) ||
     folderToken !== "" && folderToken !== "." && normalizedTestFile.includes(`/${folderToken}/`)
-  );
+  ) {
+    return "medium";
+  }
+
+  const sourceKeywords = featureKeywords(sourceFile);
+  const testKeywords = featureKeywords(testFile);
+
+  return sourceKeywords.some((keyword) => testKeywords.includes(keyword)) ? "weak" : undefined;
+}
+
+function isMirroredTestPath(sourceFile: string, testFile: string): boolean {
+  const sourceWithoutExtension = stripKnownExtensions(sourceFile);
+  const withoutSrc = sourceWithoutExtension.startsWith("src/") ? sourceWithoutExtension.slice("src/".length) : sourceWithoutExtension;
+  const testWithoutExtension = stripKnownExtensions(testFile);
+
+  return testWithoutExtension.includes(sourceWithoutExtension) || testWithoutExtension.includes(withoutSrc);
+}
+
+function featureKeywords(path: string): string[] {
+  return normalizePath(path)
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 4 && !["spec", "test", "tests", "src", "source"].includes(token));
 }
 
 function suggestedCoverageForAffectedFiles(rule: QaRule, affectedFiles: string[]): string[] {
@@ -477,6 +748,26 @@ function stripKnownExtensions(path: string): string {
 
 function normalizeAndSort(paths: string[]): string[] {
   return uniqueSorted(paths.map(normalizePath));
+}
+
+function normalizeTestFileContents(contents: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(contents).map(([path, content]) => [normalizePath(path), content]));
+}
+
+function sortCoverageSignals(signals: CoverageSignal[]): CoverageSignal[] {
+  const order: CoverageSignal[] = [
+    "happy_path",
+    "error_path",
+    "regression",
+    "output_contract",
+    "authorization",
+    "validation",
+    "boundary",
+    "negative_path"
+  ];
+  const rank = new Map(order.map((signal, index) => [signal, index]));
+
+  return [...new Set(signals)].sort((left, right) => (rank.get(left) ?? 999) - (rank.get(right) ?? 999));
 }
 
 function summarizePaths(paths: string[]): string {

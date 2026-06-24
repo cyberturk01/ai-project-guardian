@@ -68,6 +68,33 @@ describe("renderSarifReport", () => {
     assert.deepEqual(JSON.parse(renderReport(report, "sarif")), renderSarifReport(report));
   });
 
+  it("keeps QA evidence details out of compact SARIF messages", () => {
+    const report = makeReport();
+    report.qaFindings = [
+      {
+        ...report.qaFindings[0],
+        title: "Auth/security-sensitive files changed; negative-path coverage not confirmed",
+        description: "Auth/security-sensitive files changed. Related tests were detected, but negative-path coverage was not confirmed.",
+        testSignalEvidence: {
+          changedFiles: ["src/auth/session.ts"],
+          expectedTestSignals: ["tests/auth/session.unauthorized.test.ts"],
+          detectedTestChanges: ["tests/auth/session.test.ts"],
+          detectedRelatedTests: [{ path: "tests/auth/session.test.ts", score: "strong" }],
+          detectedCoverageSignals: ["authorization"],
+          unconfirmedCoverageSignals: ["negative_path"],
+          suggestedCoverage: ["negative unauthorized path"],
+          reason: "Related test changes were detected; review whether they cover the changed behavior."
+        }
+      }
+    ];
+
+    const serialized = JSON.stringify(renderSarifReport(report));
+
+    assert.match(serialized, /Auth\/security-sensitive files changed; negative-path coverage not confirmed/);
+    assert.doesNotMatch(serialized, /detectedRelatedTests|detectedCoverageSignals|unconfirmedCoverageSignals/);
+    assertNoOldNegativeCoverageWording(serialized);
+  });
+
   it("validates against the GitHub Code Scanning SARIF schema", () => {
     const schema = readSchema("github-code-scanning-sarif.schema.json");
     const sarif = renderSarifReport(makeReport());
@@ -109,8 +136,8 @@ function makeReport(): GuardianReport {
       {
         id: "qa-api-without-integration-test",
         area: "qa",
-        title: "Route or API changed without API/integration test coverage",
-        description: "A route, controller, handler, or API file changed without a matching API or integration test.",
+        title: "Route or API changed without clear API/integration test signal",
+        description: "A route, controller, handler, or API file appears to have changed without a clear API or integration test signal.",
         riskLevel: "high",
         affectedFiles: ["src/api/reservations.ts"],
         suggestedTests: ["Add an API or integration test that exercises src/api/reservations.ts."]
@@ -275,5 +302,15 @@ function assertRuleReferencesExist(sarif: ReturnType<typeof renderSarifReport>):
 
   for (const result of run.results) {
     assert.ok(ruleIds.has(result.ruleId), `SARIF result references missing rule ${result.ruleId}`);
+  }
+}
+
+function assertNoOldNegativeCoverageWording(value: string): void {
+  for (const phrase of [
+    ["without negative", "test coverage"],
+    ["missing negative", "test coverage"],
+    ["no negative", "test coverage"]
+  ]) {
+    assert.doesNotMatch(value, new RegExp(phrase.join(" "), "i"));
   }
 }

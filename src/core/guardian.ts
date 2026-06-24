@@ -1,4 +1,6 @@
 import type { CliConfig } from "../config/loadConfig.js";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { analyzeQa } from "../analyzers/qaAnalyzer.js";
 import { analyzeCoverage } from "../analyzers/coverageAnalyzer.js";
 import { analyzeRelease } from "../analyzers/releaseAnalyzer.js";
@@ -34,11 +36,13 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
 
   const repoFiles = await listRepoFiles({ repoPath: config.repoPath });
   const projectBrainResult = loadProjectBrain(config.repoPath);
+  const testFileContents = await readChangedTestFileContents(config.repoPath, changedFiles);
   const qaFindings = analyzeQa({
     changedFiles,
     repoFiles,
     config: config.guardian,
-    projectBrain: projectBrainResult.projectBrain
+    projectBrain: projectBrainResult.projectBrain,
+    testFileContents
   });
   const coverageFindings = await analyzeCoverage({
     repoPath: config.repoPath,
@@ -136,4 +140,21 @@ export async function runGuardian(config: CliConfig): Promise<GuardianReport> {
       ...enterpriseRiskCorrelation.warnings
     ]
   };
+}
+
+async function readChangedTestFileContents(repoPath: string, changedFiles: GuardianReport["changedFiles"]): Promise<Record<string, string>> {
+  const testPathPattern = /(^|\/)(__tests__|tests?|spec|cypress|playwright)(\/|$)|(\.|-)(cy|spec|test)\.[^.]+$/i;
+  const entries = await Promise.all(
+    changedFiles
+      .filter((file) => file.status !== "deleted" && testPathPattern.test(file.path))
+      .map(async (file): Promise<[string, string] | undefined> => {
+        try {
+          return [file.path, await readFile(join(repoPath, file.path), "utf8")];
+        } catch {
+          return undefined;
+        }
+      })
+  );
+
+  return Object.fromEntries(entries.filter((entry): entry is [string, string] => entry !== undefined));
 }

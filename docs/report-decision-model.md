@@ -31,7 +31,7 @@ Checklist findings currently include:
 
 - Release findings
 
-Release findings stay in the report because they still matter for deployment readiness. They are separated so a dependency, workflow, migration, or deploy checklist item does not look the same as a missing test or security finding.
+Release findings stay in the report because they still matter for deployment readiness. They are separated so a dependency, workflow, migration, or deploy checklist item does not look the same as a test-signal review finding or security finding.
 
 ## Recommendations
 
@@ -46,7 +46,7 @@ Release findings stay in the report because they still matter for deployment rea
 
 ### Auth Changed Without Negative Tests
 
-When auth or security-sensitive code changes without negative-path test coverage, Guardian creates a blocking QA finding and applies the existing critical-floor scoring rule.
+When auth or security-sensitive code changes and Guardian finds no related test signal for negative-path behavior, Guardian creates a blocking QA finding and applies the existing critical-floor scoring rule.
 
 Expected decision fields:
 
@@ -55,7 +55,7 @@ Expected decision fields:
   "mergeRecommendation": "blocked",
   "blockingFindingsCount": 1,
   "checklistFindingsCount": 0,
-  "riskReason": "Auth/security changed without negative test coverage."
+  "riskReason": "Auth/security-sensitive files changed with no related test signal; negative-path coverage was not confirmed."
 }
 ```
 

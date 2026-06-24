@@ -25,7 +25,7 @@ Escalate only for concrete unknowns.
 <!-- repo-context-center:generated:start -->
 ## Generated Repo Map
 
-Repo size estimate: 172 scanned files.
+Repo size estimate: 176 scanned files.
 
 | Mode | Use when | Read first | Max files |
 | --- | --- | --- | --- |

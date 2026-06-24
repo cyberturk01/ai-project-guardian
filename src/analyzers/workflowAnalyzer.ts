@@ -22,9 +22,10 @@ export async function analyzeWorkflows(input: AnalyzeWorkflowsInput): Promise<Wo
 
   const workflows = await readWorkflowCommands(input.repoPath, input.repoFiles);
   const executedCommands = workflows.flatMap((workflow) => workflow.commands);
+  const delegatedEvidence = await readDelegatedCommandEvidence(input.repoPath, input.repoFiles, executedCommands);
 
   return requiredChecks
-    .filter((requiredCheck) => !commandRunsRequiredCheck(executedCommands, requiredCheck))
+    .filter((requiredCheck) => !commandRunsRequiredCheck(executedCommands, delegatedEvidence, requiredCheck))
     .map((missingCheck) => {
       return {
         id: `workflow-missing-required-check-${slugify(missingCheck)}`,
@@ -101,14 +102,99 @@ function extractShellCommands(commandText: string): string[] {
     .filter((command) => command !== "" && !command.startsWith("#"));
 }
 
-function commandRunsRequiredCheck(commands: string[], requiredCheck: string): boolean {
+async function readDelegatedCommandEvidence(repoPath: string, repoFiles: string[], commands: string[]): Promise<string[]> {
+  const packageScripts = await readPackageScripts(repoPath, repoFiles);
+  const evidence: string[] = [];
+  const visitedScripts = new Set<string>();
+
+  for (const command of commands) {
+    evidence.push(...(await expandPackageScriptEvidence(repoPath, repoFiles, packageScripts, command, visitedScripts)));
+  }
+
+  return evidence;
+}
+
+async function expandPackageScriptEvidence(
+  repoPath: string,
+  repoFiles: string[],
+  packageScripts: Record<string, string>,
+  command: string,
+  visitedScripts: Set<string>
+): Promise<string[]> {
+  const scriptName = npmRunScriptName(command);
+
+  if (scriptName === undefined || visitedScripts.has(scriptName)) {
+    return [];
+  }
+
+  visitedScripts.add(scriptName);
+
+  const scriptCommand = packageScripts[scriptName];
+
+  if (scriptCommand === undefined) {
+    return [];
+  }
+
+  const evidence = [scriptCommand];
+  const nestedCommands = extractShellCommands(scriptCommand);
+
+  for (const nestedCommand of nestedCommands) {
+    evidence.push(...(await expandPackageScriptEvidence(repoPath, repoFiles, packageScripts, nestedCommand, visitedScripts)));
+    const scriptPath = localNodeScriptPath(nestedCommand);
+
+    if (scriptPath !== undefined && repoFiles.includes(scriptPath)) {
+      evidence.push(await readFile(join(repoPath, scriptPath), "utf8"));
+    }
+  }
+
+  return evidence;
+}
+
+async function readPackageScripts(repoPath: string, repoFiles: string[]): Promise<Record<string, string>> {
+  if (!repoFiles.includes("package.json")) {
+    return {};
+  }
+
+  try {
+    const packageJson = JSON.parse(await readFile(join(repoPath, "package.json"), "utf8")) as { scripts?: unknown };
+
+    if (packageJson.scripts === undefined || packageJson.scripts === null || typeof packageJson.scripts !== "object") {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(packageJson.scripts).filter((entry): entry is [string, string] => typeof entry[1] === "string")
+    );
+  } catch {
+    return {};
+  }
+}
+
+function npmRunScriptName(command: string): string | undefined {
+  const match = normalizeCommand(command).match(/^npm (?:run |run-script )([^-\s][^\s]*)/);
+
+  return match?.[1];
+}
+
+function localNodeScriptPath(command: string): string | undefined {
+  const match = normalizeCommand(command).match(/^node (?:--[^\s]+ )*([^\s]+\.([cm]?js|ts))(\s|$)/);
+  const scriptPath = match?.[1];
+
+  if (scriptPath === undefined || scriptPath.startsWith("/") || scriptPath.startsWith("..")) {
+    return undefined;
+  }
+
+  return scriptPath.replace(/^\.\//, "");
+}
+
+function commandRunsRequiredCheck(commands: string[], delegatedEvidence: string[], requiredCheck: string): boolean {
   const normalizedRequiredCheck = normalizeCommand(requiredCheck);
 
   return commands.some((command) => {
     const normalizedCommand = normalizeCommand(command);
 
     return normalizedCommand === normalizedRequiredCheck || normalizedCommand.startsWith(`${normalizedRequiredCheck} `);
-  });
+  }) || delegatedEvidence.some((evidence) => normalizeCommand(evidence).includes(normalizedRequiredCheck));
 }
 
 function normalizeCommand(command: string): string {

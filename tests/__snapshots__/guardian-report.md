@@ -70,21 +70,6 @@ Review required actions before release and confirm owners for unresolved risk.
 
 ## Blocking Findings
 
-### QA Findings
-
-### Route or API changed without API/integration test coverage
-
-| Field | Value |
-| --- | --- |
-| Risk | **high** |
-| Affected files | src/api/reservations.ts |
-
-A route, controller, handler, or API file changed without a matching API or integration test.
-
-**Suggested tests**
-
-- Add an API or integration test that exercises src/api/reservations.ts.
-
 ### Security Findings
 
 ### Possible hardcoded secret
@@ -92,15 +77,34 @@ A route, controller, handler, or API file changed without a matching API or inte
 | Field | Value |
 | --- | --- |
 | Risk | **high** |
+| Confidence | 61% (moderate confidence) |
 | Location | src/api/reservations.ts:18 |
 
 Possible hardcoded secret detected in a changed file. This is a possible risk based on heuristic matching, not a confirmed vulnerability.
 
 **Recommendation:** Move secrets to a managed secret store or environment variable, then rotate the exposed value if it is real.
 
-### Workflow Findings
+## Review Findings
 
-No workflow findings.
+### QA Findings
+
+### Route or API changed without clear API/integration test signal
+
+| Field | Value |
+| --- | --- |
+| Risk | **high** |
+| Confidence | 84% (high confidence) |
+| Affected files | src/api/reservations.ts |
+
+A route, controller, handler, or API file appears to have changed without a clear API or integration test signal.
+
+**Suggested tests**
+
+- Add an API or integration test that exercises src/api/reservations.ts.
+
+## Advisory Findings
+
+No advisory findings.
 
 ## Release Checklist
 

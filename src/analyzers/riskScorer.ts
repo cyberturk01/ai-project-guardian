@@ -277,21 +277,21 @@ function scoreFloor(input: RiskScoreInput): { floor: number; reason: string } | 
   if (hasMigrationWithoutDbTest(input)) {
     return {
       floor: criticalCombinationMinimumScore,
-      reason: "Migration changed without DB/integration test coverage"
+      reason: "Migration changed without clear DB/integration test signal"
     };
   }
 
   if (hasAuthChangeWithoutNegativeTest(input)) {
     return {
       floor: criticalCombinationMinimumScore,
-      reason: "Auth or security changed without negative test coverage"
+      reason: "Auth/security-sensitive change with no related test signal"
     };
   }
 
   if (hasPaymentChangeWithoutIntegrationTest(input)) {
     return {
       floor: criticalCombinationMinimumScore,
-      reason: "Payment code changed without API/integration test coverage"
+      reason: "Payment code changed without clear API/integration test signal"
     };
   }
 
@@ -407,7 +407,11 @@ function hasMigrationWithoutDbTest(input: RiskScoreInput): boolean {
 function hasAuthChangeWithoutNegativeTest(input: RiskScoreInput): boolean {
   return (
     hasAuthChange(input) &&
-    input.qaFindings.some((finding) => finding.id === "qa-auth-security-without-negative-test")
+    input.qaFindings.some(
+      (finding) =>
+        finding.id === "qa-auth-security-without-negative-test" &&
+        (finding.testSignalEvidence?.detectedRelatedTests.length ?? 0) === 0
+    )
   );
 }
 
