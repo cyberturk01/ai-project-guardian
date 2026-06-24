@@ -204,7 +204,7 @@ describe("runGuardianCli integration", () => {
     });
   });
 
-  it("blocks auth changes when negative test coverage is missing", async () => {
+  it("blocks auth changes when no related negative-path test signal is detected", async () => {
     await withAuthFixtureRepo({ hasNegativeTest: false, changeReleaseFile: false }, async (repoPath) => {
       const stdout = new MemoryWritable();
 
@@ -218,7 +218,10 @@ describe("runGuardianCli integration", () => {
       assert.equal(report.overallRisk, "critical");
       assert.equal(report.mergeRecommendation, "blocked");
       assert.equal(report.codeRisk, "high");
-      assert.equal(report.riskReason, "Auth/security changed without negative test coverage.");
+      assert.equal(
+        report.riskReason,
+        "Auth/security-sensitive files changed with no related test signal; negative-path coverage was not confirmed."
+      );
       assert.ok(report.qaFindings.some((finding) => finding.id === "qa-auth-security-without-negative-test"));
       assert.equal(report.securityFindings.length, 0);
     });
@@ -427,7 +430,7 @@ describe("runGuardianCli integration", () => {
             acceptedFindings: [
               {
                 type: "qa",
-                title: "Auth or security changed without negative test coverage"
+                title: "Auth/security-sensitive files changed; negative-path coverage not confirmed"
               },
               {
                 type: "qa",

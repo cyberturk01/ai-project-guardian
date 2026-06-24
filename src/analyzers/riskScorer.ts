@@ -284,7 +284,7 @@ function scoreFloor(input: RiskScoreInput): { floor: number; reason: string } | 
   if (hasAuthChangeWithoutNegativeTest(input)) {
     return {
       floor: criticalCombinationMinimumScore,
-      reason: "Auth or security changed without negative test coverage"
+      reason: "Auth/security-sensitive change with no related test signal"
     };
   }
 
@@ -407,7 +407,11 @@ function hasMigrationWithoutDbTest(input: RiskScoreInput): boolean {
 function hasAuthChangeWithoutNegativeTest(input: RiskScoreInput): boolean {
   return (
     hasAuthChange(input) &&
-    input.qaFindings.some((finding) => finding.id === "qa-auth-security-without-negative-test")
+    input.qaFindings.some(
+      (finding) =>
+        finding.id === "qa-auth-security-without-negative-test" &&
+        (finding.testSignalEvidence?.detectedRelatedTests.length ?? 0) === 0
+    )
   );
 }
 

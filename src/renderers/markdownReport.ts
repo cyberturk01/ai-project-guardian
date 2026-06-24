@@ -1,4 +1,4 @@
-import type { ChangedFile, GuardianReport, RiskLevel } from "../core/types.js";
+import type { ChangedFile, GuardianReport, RelatedTestSignal, RiskLevel } from "../core/types.js";
 import { renderDecisionSummary } from "./decisionSummary.js";
 import { buildMarkdownNotes } from "./markdownNotes.js";
 
@@ -193,14 +193,49 @@ ${renderPathList(evidence.changedFiles)}
 Expected test signals:
 ${renderPathList(evidence.expectedTestSignals)}
 
-Detected related test changes:
-${evidence.detectedTestChanges.length === 0 ? "- None" : renderPathList(evidence.detectedTestChanges)}
+Detected related tests:
+${renderRelatedTests(evidence.detectedRelatedTests)}
+${renderCoverageSignals(evidence)}
 
 Suggested coverage to review:
 ${renderList(evidence.suggestedCoverage)}
 
 ${evidence.reason}
 `;
+}
+
+function renderCoverageSignals(evidence: NonNullable<GuardianReport["qaFindings"][number]["testSignalEvidence"]>): string {
+  if (evidence.detectedCoverageSignals.length === 0 && evidence.unconfirmedCoverageSignals.length === 0) {
+    return "";
+  }
+
+  return `
+
+Detected coverage signals:
+${renderCoverageSignalList(evidence.detectedCoverageSignals)}
+
+Unconfirmed coverage signals:
+${renderCoverageSignalList(evidence.unconfirmedCoverageSignals)}`;
+}
+
+function renderCoverageSignalList(signals: NonNullable<GuardianReport["qaFindings"][number]["testSignalEvidence"]>["detectedCoverageSignals"]): string {
+  if (signals.length === 0) {
+    return "- None";
+  }
+
+  return signals.map((signal) => `- ${coverageSignalLabel(signal)}`).join("\n");
+}
+
+function coverageSignalLabel(signal: NonNullable<GuardianReport["qaFindings"][number]["testSignalEvidence"]>["detectedCoverageSignals"][number]): string {
+  return signal.replaceAll("_", " ");
+}
+
+function renderRelatedTests(tests: RelatedTestSignal[]): string {
+  if (tests.length === 0) {
+    return "- None";
+  }
+
+  return tests.map((test) => `- ${test.path} (${test.score})`).join("\n");
 }
 
 function renderBlockingFindings(report: GuardianReport): string {

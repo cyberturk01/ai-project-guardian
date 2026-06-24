@@ -101,6 +101,9 @@ describe("buildActionableGuidance", () => {
           changedFiles: ["src/referral/rewardRules.ts", "src/referral/rewardService.ts"],
           expectedTestSignals: ["src/referral/*.test.ts", "tests/referral/*"],
           detectedTestChanges: [],
+          detectedRelatedTests: [],
+          detectedCoverageSignals: [],
+          unconfirmedCoverageSignals: [],
           suggestedCoverage: ["happy path", "duplicate/abuse prevention", "limit/quota boundary"],
           reason: "No related test change detected."
         }

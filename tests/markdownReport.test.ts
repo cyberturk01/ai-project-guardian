@@ -53,9 +53,15 @@ describe("renderMarkdownReport", () => {
         testSignalEvidence: {
           changedFiles: ["src/referral/rewardRules.ts", "src/referral/rewardService.ts"],
           expectedTestSignals: ["src/referral/*.test.ts", "src/referral/*.spec.ts", "tests/referral/*"],
-          detectedTestChanges: [],
+          detectedTestChanges: ["tests/referral/rewardRules.test.ts", "tests/outputContract.test.ts"],
+          detectedRelatedTests: [
+            { path: "tests/referral/rewardRules.test.ts", score: "strong" },
+            { path: "tests/outputContract.test.ts", score: "medium" }
+          ],
+          detectedCoverageSignals: ["regression", "output_contract"],
+          unconfirmedCoverageSignals: ["negative_path"],
           suggestedCoverage: ["happy path", "duplicate/abuse prevention", "limit/quota boundary"],
-          reason: "No related test change detected."
+          reason: "Related test changes were detected; review whether they cover the changed behavior."
         }
       }
     ];
@@ -72,16 +78,22 @@ describe("renderMarkdownReport", () => {
     assert.match(fullReport, /\*\*Test signal evidence\*\*/);
     assert.match(fullReport, /Changed files:\n- `src\/referral\/rewardRules\.ts`\n- `src\/referral\/rewardService\.ts`/);
     assert.match(fullReport, /Expected test signals:\n- `src\/referral\/\*\.test\.ts`\n- `src\/referral\/\*\.spec\.ts`\n- `tests\/referral\/\*`/);
-    assert.match(fullReport, /Detected related test changes:\n- None/);
-    assert.match(fullReport, /No related test change detected\./);
+    assert.match(
+      fullReport,
+      /Detected related tests:\n- tests\/referral\/rewardRules\.test\.ts \(strong\)\n- tests\/outputContract\.test\.ts \(medium\)/
+    );
+    assert.match(fullReport, /Related test changes were detected; review whether they cover the changed behavior\./);
+    assert.match(fullReport, /Detected coverage signals:\n- regression\n- output contract/);
+    assert.match(fullReport, /Unconfirmed coverage signals:\n- negative path/);
+    assert.doesNotMatch(fullReport, /coverage is guaranteed|coverage confirmed/i);
     assert.match(summary, /## QA Test Signal Evidence/);
-    assert.match(summary, /Source change without related test signal: No related test change detected\./);
+    assert.match(summary, /Source change without related test signal: Related test changes were detected; review whether they cover the changed behavior\./);
     assert.match(
       summary,
-      /Review test coverage for `src\/referral\/\*`; no related test change was detected\. Suggested coverage: happy path, duplicate\/abuse prevention, limit\/quota boundary\./
+      /Review test coverage for `src\/referral\/\*`; related test changes detected: tests\/referral\/rewardRules\.test\.ts, tests\/outputContract\.test\.ts\. Suggested coverage: happy path, duplicate\/abuse prevention, limit\/quota boundary\./
     );
-    assert.doesNotMatch(fullReport, /You forgot|did not write tests|Negative test is missing/i);
-    assert.doesNotMatch(summary, /You forgot|did not write tests|Negative test is missing/i);
+    assert.doesNotMatch(fullReport, /overclaiming coverage failure/i);
+    assert.doesNotMatch(summary, /overclaiming coverage failure/i);
   });
 
   it("uses summary style when requested by the generic renderer", () => {

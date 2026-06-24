@@ -353,7 +353,7 @@ Examples:
 | Docs-only change | 0 | 0 | `safe` |
 | Workflow changed | 0 | 1+ | `safe_after_checklist` |
 | Source changed without nearby tests | 1+ | any | `review_required` |
-| Auth/security code changed without negative tests | 1+ | any | `blocked` |
+| Auth/security-sensitive code changed with no related test signal | 1+ | any | `blocked` |
 | High or critical scanner/security finding | 1+ | any | `blocked` |
 
 See `docs/report-decision-model.md` for a longer explanation.

@@ -146,8 +146,8 @@ function buildRiskReason(input: {
   hasSecurityFindings: boolean;
   criticalFloorReason?: string;
 }): string {
-  if (input.criticalFloorReason === "Auth or security changed without negative test coverage") {
-    return "Auth/security changed without negative test coverage.";
+  if (input.criticalFloorReason === "Auth/security-sensitive change with no related test signal") {
+    return "Auth/security-sensitive files changed with no related test signal; negative-path coverage was not confirmed.";
   }
 
   if (input.hasSecurityFindings) {
@@ -168,6 +168,6 @@ function buildRiskReason(input: {
 function hasAuthSecurityCriticalFloor(scoreBreakdown: ScoreBreakdown): boolean {
   return (
     scoreBreakdown.criticalFloorApplied?.applied === true &&
-    scoreBreakdown.criticalFloorApplied.reason === "Auth or security changed without negative test coverage"
+    scoreBreakdown.criticalFloorApplied.reason === "Auth/security-sensitive change with no related test signal"
   );
 }

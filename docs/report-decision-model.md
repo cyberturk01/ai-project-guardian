@@ -55,7 +55,7 @@ Expected decision fields:
   "mergeRecommendation": "blocked",
   "blockingFindingsCount": 1,
   "checklistFindingsCount": 0,
-  "riskReason": "Auth/security changed without negative test coverage."
+  "riskReason": "Auth/security-sensitive files changed with no related test signal; negative-path coverage was not confirmed."
 }
 ```
 

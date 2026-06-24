@@ -133,7 +133,7 @@ describe("buildReportDecisionSupport", () => {
         criticalFloorApplied: {
           applied: true,
           floor: 91,
-          reason: "Auth or security changed without negative test coverage"
+          reason: "Auth/security-sensitive change with no related test signal"
         }
       }),
       qaFindings: [qaFinding("high")],
@@ -145,7 +145,10 @@ describe("buildReportDecisionSupport", () => {
     });
 
     assert.equal(decisionSupport.mergeRecommendation, "blocked");
-    assert.equal(decisionSupport.riskReason, "Auth/security changed without negative test coverage.");
+    assert.equal(
+      decisionSupport.riskReason,
+      "Auth/security-sensitive files changed with no related test signal; negative-path coverage was not confirmed."
+    );
   });
 
   it("keeps covered auth/security changes elevated after blocking findings clear", () => {
