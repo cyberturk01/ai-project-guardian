@@ -98,6 +98,49 @@ describe("renderMarkdownReport", () => {
     assert.doesNotMatch(summary, /overclaiming coverage failure/i);
   });
 
+  it("keeps JSON report QA evidence fields stable", () => {
+    const report = makeReportWithQaEvidence();
+    const parsed = JSON.parse(renderReport(report, "json")) as GuardianReport;
+    const evidence = parsed.qaFindings[0]?.testSignalEvidence;
+
+    assert.deepEqual(evidence?.detectedTestChanges, [
+      "tests/referral/rewardRules.test.ts",
+      "tests/outputContract.test.ts",
+      "tests/referral/auditTrail.test.ts"
+    ]);
+    assert.deepEqual(evidence?.detectedRelatedTests, [
+      { path: "tests/referral/rewardRules.test.ts", score: "strong" },
+      { path: "tests/outputContract.test.ts", score: "medium" },
+      { path: "tests/referral/auditTrail.test.ts", score: "weak" }
+    ]);
+    assert.deepEqual(evidence?.detectedCoverageSignals, ["regression", "output_contract"]);
+    assert.deepEqual(evidence?.unconfirmedCoverageSignals, ["negative_path"]);
+    assert.equal(parsed.qaFindings[0]?.confidence, 84);
+  });
+
+  it("keeps report output compact while showing scored QA evidence", () => {
+    const report = makeReportWithQaEvidence();
+    const fullReport = renderMarkdownReport(report);
+    const summary = renderMarkdownSummary(report);
+
+    assert.equal(countOccurrences(fullReport, "**Test signal evidence**"), 1);
+    assert.equal(countOccurrences(fullReport, "Detected coverage signals:"), 1);
+    assert.match(fullReport, /Detected related tests:\n- tests\/referral\/rewardRules\.test\.ts \(strong\)\n- tests\/outputContract\.test\.ts \(medium\)\n- tests\/referral\/auditTrail\.test\.ts \(weak\)/);
+    assert.doesNotMatch(summary, /Detected coverage signals:|Unconfirmed coverage signals:/);
+    assert.ok(summary.split("\n").length < fullReport.split("\n").length);
+  });
+
+  it("does not return old negative-coverage overclaiming wording when related tests exist", () => {
+    const report = makeReportWithQaEvidence({
+      title: "Auth/security-sensitive files changed; negative-path coverage not confirmed",
+      description: "Auth/security-sensitive files changed. Related tests were detected, but negative-path coverage was not confirmed."
+    });
+    const combined = [renderMarkdownReport(report), renderMarkdownSummary(report), renderReport(report, "json")].join("\n");
+
+    assertNoOldNegativeCoverageWording(combined);
+    assert.match(combined, /Related tests were detected, but negative-path coverage was not confirmed/);
+  });
+
   it("uses summary style when requested by the generic renderer", () => {
     const report = makeReport();
 
@@ -395,6 +438,47 @@ function makeReport(): GuardianReport {
   return report;
 }
 
+function makeReportWithQaEvidence(overrides: Partial<GuardianReport["qaFindings"][number]> = {}): GuardianReport {
+  const report = makeReport();
+
+  report.qaFindings = [
+    {
+      ...report.qaFindings[0],
+      title: "Source change without related test signal",
+      affectedFiles: ["src/referral/rewardService.ts", "src/referral/rewardRules.ts"],
+      suggestedTests: ["Review related referral test coverage."],
+      confidence: 84,
+      testSignalEvidence: {
+        changedFiles: ["src/referral/rewardRules.ts", "src/referral/rewardService.ts"],
+        expectedTestSignals: ["src/referral/*.test.ts", "src/referral/*.spec.ts", "tests/referral/*"],
+        detectedTestChanges: [
+          "tests/referral/rewardRules.test.ts",
+          "tests/outputContract.test.ts",
+          "tests/referral/auditTrail.test.ts"
+        ],
+        detectedRelatedTests: [
+          { path: "tests/referral/rewardRules.test.ts", score: "strong" },
+          { path: "tests/outputContract.test.ts", score: "medium" },
+          { path: "tests/referral/auditTrail.test.ts", score: "weak" }
+        ],
+        detectedCoverageSignals: ["regression", "output_contract"],
+        unconfirmedCoverageSignals: ["negative_path"],
+        suggestedCoverage: ["happy path", "duplicate/abuse prevention", "limit/quota boundary"],
+        reason: "Related test changes were detected; review whether they cover the changed behavior."
+      },
+      ...overrides
+    }
+  ];
+  report.actionableGuidance = buildActionableGuidance([
+    ...report.releaseFindings,
+    ...report.qaFindings,
+    ...report.securityFindings,
+    ...report.workflowFindings
+  ]);
+
+  return report;
+}
+
 function readSnapshot(fileName: string): string {
   const compiledTestDir = dirname(fileURLToPath(import.meta.url));
   return readFileSync(join(compiledTestDir, "../../tests/__snapshots__", fileName), "utf8");
@@ -419,4 +503,14 @@ function escapeRegExp(value: string): string {
 
 function countOccurrences(value: string, search: string): number {
   return value.split(search).length - 1;
+}
+
+function assertNoOldNegativeCoverageWording(value: string): void {
+  for (const phrase of [
+    ["without negative", "test coverage"],
+    ["missing negative", "test coverage"],
+    ["no negative", "test coverage"]
+  ]) {
+    assert.doesNotMatch(value, new RegExp(phrase.join(" "), "i"));
+  }
 }

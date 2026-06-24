@@ -151,6 +151,41 @@ describe("buildReportDecisionSupport", () => {
     );
   });
 
+  it("requires review instead of blocking when auth related tests exist but adequacy is unconfirmed", () => {
+    const decisionSupport = buildReportDecisionSupport({
+      overallRisk: "high",
+      scoreBreakdown: scoreBreakdown({ selectedBand: "auth" }),
+      qaFindings: [
+        {
+          ...qaFinding("high"),
+          id: "qa-auth-security-without-negative-test",
+          title: "Auth/security-sensitive files changed; negative-path coverage not confirmed",
+          description: "Auth/security-sensitive files changed. Related tests were detected, but negative-path coverage was not confirmed.",
+          testSignalEvidence: {
+            changedFiles: ["src/auth/session.ts"],
+            expectedTestSignals: ["tests/auth/session.unauthorized.test.ts"],
+            detectedTestChanges: ["tests/auth/session.test.ts"],
+            detectedRelatedTests: [{ path: "tests/auth/session.test.ts", score: "strong" }],
+            detectedCoverageSignals: ["authorization"],
+            unconfirmedCoverageSignals: ["negative_path"],
+            suggestedCoverage: ["negative unauthorized path"],
+            reason: "Related test changes were detected; review whether they cover the changed behavior."
+          }
+        }
+      ],
+      releaseFindings: [],
+      securityFindings: [],
+      workflowFindings: [],
+      externalFindings: [],
+      correlatedFindings: []
+    });
+
+    assert.equal(decisionSupport.blockingFindingsCount, 1);
+    assert.equal(decisionSupport.mergeRecommendation, "review_required");
+    assert.equal(decisionSupport.codeRisk, "high");
+    assert.match(decisionSupport.riskReason, /1 blocking finding\(s\) require review/);
+  });
+
   it("keeps covered auth/security changes elevated after blocking findings clear", () => {
     const decisionSupport = buildReportDecisionSupport({
       overallRisk: "medium",
