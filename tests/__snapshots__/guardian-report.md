@@ -68,7 +68,7 @@ Review required actions before release and confirm owners for unresolved risk.
 | added | tests/reservations.test.ts | test | **low** |
 | renamed | .github/workflows/deploy.yml -> .github/workflows/release.yml | ci | **medium** |
 
-## Blocking Findings
+## Code/Test/Security Findings
 
 ### QA Findings
 

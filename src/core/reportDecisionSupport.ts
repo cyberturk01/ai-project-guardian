@@ -39,8 +39,9 @@ const riskRank: Record<RiskLevel, number> = {
 };
 
 export function buildReportDecisionSupport(input: ReportDecisionSupportInput): ReportDecisionSupport {
+  const blockingQaFindings = input.qaFindings.filter(isBlockingQaFinding);
   const blockingFindings = [
-    ...input.qaFindings,
+    ...blockingQaFindings,
     ...input.securityFindings.filter(isBlockingSecurityRisk),
     ...input.workflowFindings,
     ...input.externalFindings.filter(isBlockingSecurityRisk),
@@ -51,6 +52,7 @@ export function buildReportDecisionSupport(input: ReportDecisionSupportInput): R
     input.externalFindings.some(isBlockingSecurityRisk) ||
     input.correlatedFindings.some(isBlockingCorrelatedRisk);
   const checklistFindings = input.releaseFindings;
+  const reviewOnlyQaFindingsCount = input.qaFindings.length - blockingQaFindings.length;
   const blockingFindingsCount = blockingFindings.length;
   const checklistFindingsCount = checklistFindings.length;
   const codeRisk = codeRiskFrom({
@@ -67,8 +69,9 @@ export function buildReportDecisionSupport(input: ReportDecisionSupportInput): R
       checklistFindingsCount,
       codeRisk,
       overallRisk: input.overallRisk,
-      authSecurityCriticalFloorApplied: hasAuthSecurityCriticalFloor(input.scoreBreakdown),
-      hasBlockingSecurityFindings
+      authSecurityCriticalFloorApplied: hasAuthSecurityCriticalFloor(input.scoreBreakdown) && blockingQaFindings.length > 0,
+      hasBlockingSecurityFindings,
+      reviewOnlyQaFindingsCount
     }),
     codeRisk,
     releaseChecklistRisk,
@@ -79,9 +82,18 @@ export function buildReportDecisionSupport(input: ReportDecisionSupportInput): R
       codeRisk,
       releaseChecklistRisk,
       hasSecurityFindings: hasBlockingSecurityFindings,
+      reviewOnlyQaFindingsCount,
       criticalFloorReason: input.scoreBreakdown.criticalFloorApplied?.reason
     })
   };
+}
+
+function isBlockingQaFinding(finding: QaFinding): boolean {
+  return (
+    finding.id === "qa-auth-security-without-negative-test" &&
+    (finding.confidence ?? 0) >= 50 &&
+    (finding.testSignalEvidence?.detectedRelatedTests.length ?? 0) === 0
+  );
 }
 
 function isBlockingSecurityRisk(finding: { riskLevel: RiskLevel }): boolean {
@@ -99,6 +111,7 @@ function recommendMerge(input: {
   overallRisk: RiskLevel;
   authSecurityCriticalFloorApplied: boolean;
   hasBlockingSecurityFindings: boolean;
+  reviewOnlyQaFindingsCount: number;
 }): MergeRecommendation {
   if (input.authSecurityCriticalFloorApplied) {
     return "blocked";
@@ -109,6 +122,10 @@ function recommendMerge(input: {
       return "blocked";
     }
 
+    return "review_required";
+  }
+
+  if (input.reviewOnlyQaFindingsCount > 0) {
     return "review_required";
   }
 
@@ -148,9 +165,10 @@ function buildRiskReason(input: {
   codeRisk: RiskLevel;
   releaseChecklistRisk: RiskLevel;
   hasSecurityFindings: boolean;
+  reviewOnlyQaFindingsCount: number;
   criticalFloorReason?: string;
 }): string {
-  if (input.criticalFloorReason === "Auth/security-sensitive change with no related test signal") {
+  if (input.criticalFloorReason === "Auth/security-sensitive change with no related test signal" && input.blockingFindingsCount > 0) {
     return "Auth/security-sensitive files changed with no related test signal; negative-path coverage was not confirmed.";
   }
 
@@ -160,6 +178,10 @@ function buildRiskReason(input: {
 
   if (input.blockingFindingsCount > 0) {
     return `${input.blockingFindingsCount} blocking finding(s) require review before merge. Code risk: ${input.codeRisk}. Current overall risk remains ${input.overallRisk}.`;
+  }
+
+  if (input.reviewOnlyQaFindingsCount > 0) {
+    return `${input.reviewOnlyQaFindingsCount} QA finding(s) need review, but are not blocking.`;
   }
 
   if (input.checklistFindingsCount > 0) {

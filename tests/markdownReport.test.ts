@@ -37,6 +37,7 @@ describe("renderMarkdownReport", () => {
     assert.match(actual, /\| Blocking findings \| 2 \|/);
     assert.match(actual, /\| Checklist findings \| 1 \|/);
     assert.doesNotMatch(actual, /Active findings/);
+    assert.doesNotMatch(actual, /## Blocking Findings/);
     assert.match(actual, /Run with `--full-report`/);
     assert.doesNotMatch(actual, /## Changed Files/);
     assert.doesNotMatch(actual, /src\/api\/reservations\.ts:18/);
@@ -85,8 +86,8 @@ describe("renderMarkdownReport", () => {
       /Detected related tests:\n- tests\/referral\/rewardRules\.test\.ts \(strong\)\n- tests\/outputContract\.test\.ts \(medium\)/
     );
     assert.match(fullReport, /Related test changes were detected; review whether they cover the changed behavior\./);
-    assert.match(fullReport, /Detected coverage signals:\n- regression\n- output contract/);
-    assert.match(fullReport, /Unconfirmed coverage signals:\n- negative path/);
+    assert.match(fullReport, /Heuristic coverage signals:\n- regression\n- output contract/);
+    assert.match(fullReport, /Coverage signals still needing review:\n- negative path/);
     assert.doesNotMatch(fullReport, /coverage is guaranteed|coverage confirmed/i);
     assert.match(summary, /## QA Test Signal Evidence/);
     assert.match(summary, /Source change without related test signal: Related test changes were detected; review whether they cover the changed behavior\./);
@@ -124,9 +125,9 @@ describe("renderMarkdownReport", () => {
     const summary = renderMarkdownSummary(report);
 
     assert.equal(countOccurrences(fullReport, "**Test signal evidence**"), 1);
-    assert.equal(countOccurrences(fullReport, "Detected coverage signals:"), 1);
+    assert.equal(countOccurrences(fullReport, "Heuristic coverage signals:"), 1);
     assert.match(fullReport, /Detected related tests:\n- tests\/referral\/rewardRules\.test\.ts \(strong\)\n- tests\/outputContract\.test\.ts \(medium\)\n- tests\/referral\/auditTrail\.test\.ts \(weak\)/);
-    assert.doesNotMatch(summary, /Detected coverage signals:|Unconfirmed coverage signals:/);
+    assert.doesNotMatch(summary, /Heuristic coverage signals:|Coverage signals still needing review:/);
     assert.ok(summary.split("\n").length < fullReport.split("\n").length);
   });
 

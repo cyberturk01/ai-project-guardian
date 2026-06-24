@@ -498,6 +498,14 @@ describe("analyzeQa", () => {
     assert.deepEqual(authFinding?.testSignalEvidence?.detectedRelatedTests, [
       { path: "tests/security/credentialValidation.test.ts", score: "weak" }
     ]);
+    assert.equal(
+      authFinding?.testSignalEvidence?.reason,
+      "Related test signal is weak; review whether it covers the changed behavior."
+    );
+    assert.equal(
+      authFinding?.description,
+      "Auth/security-sensitive files changed. Related test signal is weak; review whether it covers the changed behavior."
+    );
   });
 
   it("suggests business-risk coverage and shows related changed test signals when detected", () => {

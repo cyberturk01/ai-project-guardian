@@ -210,10 +210,7 @@ function testSignalEvidenceForFinding(
     detectedCoverageSignals,
     unconfirmedCoverageSignals,
     suggestedCoverage: suggestedCoverageForAffectedFiles(rule, affectedFiles),
-    reason:
-      detectedRelatedTests.length === 0
-        ? "No related test change detected."
-        : "Related test changes were detected; review whether they cover the changed behavior."
+    reason: testSignalReason(detectedRelatedTests)
   };
 }
 
@@ -230,11 +227,31 @@ function descriptionForFinding(rule: QaRule, evidence: TestSignalEvidence, confi
     return "Auth/security-sensitive files may have changed. Related evidence is weak, so negative-path coverage should be reviewed.";
   }
 
+  if (hasOnlyWeakRelatedTests(evidence.detectedRelatedTests)) {
+    return "Auth/security-sensitive files changed. Related test signal is weak; review whether it covers the changed behavior.";
+  }
+
   if (evidence.detectedRelatedTests.length > 0) {
     return "Auth/security-sensitive files changed. Related tests were detected, but negative-path coverage was not confirmed.";
   }
 
   return "Auth/security-sensitive files changed. No related test signal was detected, so negative-path coverage could not be confirmed.";
+}
+
+function testSignalReason(relatedTests: RelatedTestSignal[]): string {
+  if (relatedTests.length === 0) {
+    return "No related test change detected.";
+  }
+
+  if (hasOnlyWeakRelatedTests(relatedTests)) {
+    return "Related test signal is weak; review whether it covers the changed behavior.";
+  }
+
+  return "Related test changes were detected; review whether they cover the changed behavior.";
+}
+
+function hasOnlyWeakRelatedTests(relatedTests: RelatedTestSignal[]): boolean {
+  return relatedTests.length > 0 && relatedTests.every((test) => test.score === "weak");
 }
 
 function confidenceForQaFinding(rule: QaRule, affectedFiles: string[], evidence: TestSignalEvidence): number {

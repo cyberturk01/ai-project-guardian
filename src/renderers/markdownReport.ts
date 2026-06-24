@@ -21,7 +21,7 @@ ${renderScoreBreakdown(report)}
 
 ${renderChangedFiles(report.changedFiles)}
 
-## Blocking Findings
+## Code/Test/Security Findings
 
 ${renderBlockingFindings(report)}
 
@@ -211,10 +211,10 @@ function renderCoverageSignals(evidence: NonNullable<GuardianReport["qaFindings"
 
   return `
 
-Detected coverage signals:
+Heuristic coverage signals:
 ${renderCoverageSignalList(evidence.detectedCoverageSignals)}
 
-Unconfirmed coverage signals:
+Coverage signals still needing review:
 ${renderCoverageSignalList(evidence.unconfirmedCoverageSignals)}`;
 }
 
