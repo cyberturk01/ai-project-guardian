@@ -277,10 +277,10 @@ describe("analyzeSecurity", () => {
 
     assert.deepEqual(
       findings.map((finding) => `${finding.id}:${finding.riskLevel}:${finding.filePath}:${finding.fixture_like ?? false}:${finding.blocking ?? true}`),
-      ["security-api-key:low:tests/providerKeys.test.ts:false:true"]
+      ["security-api-key:high:tests/providerKeys.test.ts:false:true"]
     );
-    assert.ok((findings[0]?.confidence ?? 0) < 50);
-    assert.match(findings[0]?.description ?? "", /low-confidence heuristic signal|possible security risk/);
+    assert.ok((findings[0]?.confidence ?? 0) >= 80);
+    assert.match(findings[0]?.description ?? "", /possible security risk/i);
   });
 
   it("keeps production severity when fixture and production secrets are mixed", async () => {

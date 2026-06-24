@@ -163,7 +163,7 @@ export async function analyzeSecurity(input: AnalyzeSecurityInput): Promise<Secu
         area: "security",
         title: rule.title,
         description: descriptionForSecurityFinding(rule, confidence, fixtureLike),
-        riskLevel: riskLevelForRule(rule, scannedFile.file, fixtureLike),
+        riskLevel: riskLevelForRule(rule, scannedFile.file, fixtureLike, matchingLine),
         confidence,
         filePath: normalizePath(scannedFile.file.path),
         lineNumber: matchingLineIndex + 1,
@@ -320,9 +320,13 @@ function hasDisabledRateLimiting(line: string): boolean {
   );
 }
 
-function riskLevelForRule(rule: SecurityRule, file: ChangedFile, fixtureLike: boolean): RiskLevel {
+function riskLevelForRule(rule: SecurityRule, file: ChangedFile, fixtureLike: boolean, matchingLine: string): RiskLevel {
   if (fixtureLike) {
     return "low";
+  }
+
+  if (containsRealProviderKey(matchingLine)) {
+    return rule.riskLevel;
   }
 
   if (isNonRuntimeContextPath(file.path) && !isProtectedProductionPath(file.path)) {
@@ -345,8 +349,12 @@ function confidenceForSecurityFinding(rule: SecurityRule, file: ChangedFile, con
 
   if (fixtureLike) {
     score -= 36;
-  } else if (isNonRuntimeContextPath(file.path) && !isProtectedProductionPath(file.path)) {
+  } else if (isNonRuntimeContextPath(file.path) && !isProtectedProductionPath(file.path) && !containsRealProviderKey(content)) {
     score -= 28;
+  }
+
+  if (containsRealProviderKey(content)) {
+    score += 12;
   }
 
   if (isHighPrecisionSecurityRule(rule.id)) {
