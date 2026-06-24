@@ -154,12 +154,15 @@ export async function analyzeSecurity(input: AnalyzeSecurityInput): Promise<Secu
         continue;
       }
 
+      const confidence = confidenceForSecurityFinding(rule, scannedFile.file, scannedFile.content);
+
       findings.push({
         id: rule.id,
         area: "security",
         title: rule.title,
-        description: `${rule.title} detected in a changed file. This is a possible security risk based on heuristic matching, not a confirmed vulnerability.`,
+        description: descriptionForSecurityFinding(rule, scannedFile.file, confidence),
         riskLevel: riskLevelForRule(rule, scannedFile.file),
+        confidence,
         filePath: normalizePath(scannedFile.file.path),
         lineNumber: matchingLineIndex + 1,
         recommendation: rule.recommendation
@@ -328,6 +331,78 @@ function riskLevelForRule(rule: SecurityRule, file: ChangedFile): RiskLevel {
   }
 
   return rule.riskLevel;
+}
+
+function confidenceForSecurityFinding(rule: SecurityRule, file: ChangedFile, content: string): number {
+  let score = 48;
+
+  if (file.category === "security" || isSecuritySensitivePath(file.path)) {
+    score += 12;
+  }
+
+  if (file.status === "added") {
+    score += 6;
+  }
+
+  if (isNonRuntimeContextPath(file.path)) {
+    score -= 28;
+  }
+
+  if (isHighPrecisionSecurityRule(rule.id)) {
+    score += 24;
+  } else if (isModeratePrecisionSecurityRule(rule.id)) {
+    score += 10;
+  } else {
+    score += 4;
+  }
+
+  if (rule.id === "security-new-route-missing-auth-middleware" && routeHandlerPattern.test(content) && !authMiddlewareHintPattern.test(content)) {
+    score += 12;
+  }
+
+  if (rule.id === "security-new-route-missing-rate-limit" && routeHandlerPattern.test(content) && !rateLimitHintPattern.test(content)) {
+    score += 8;
+  }
+
+  return clampConfidence(score);
+}
+
+function descriptionForSecurityFinding(rule: SecurityRule, file: ChangedFile, confidence: number): string {
+  if (confidence < 50) {
+    return `${rule.title} may apply in a changed file. This is a low-confidence heuristic signal and not a confirmed vulnerability.`;
+  }
+
+  return `${rule.title} detected in a changed file. This is a possible security risk based on heuristic matching, not a confirmed vulnerability.`;
+}
+
+function isHighPrecisionSecurityRule(ruleId: string): boolean {
+  return [
+    "security-hardcoded-secret",
+    "security-hardcoded-admin-password",
+    "security-api-key",
+    "security-jwt-secret-default",
+    "security-env-secret-default",
+    "security-sql-string-interpolation",
+    "security-disabled-auth-check"
+  ].includes(ruleId);
+}
+
+function isModeratePrecisionSecurityRule(ruleId: string): boolean {
+  return [
+    "security-console-sensitive-value",
+    "security-cors-wildcard",
+    "security-disabled-rate-limiting",
+    "security-new-route-missing-auth-middleware",
+    "security-new-route-missing-rate-limit"
+  ].includes(ruleId);
+}
+
+function isSecuritySensitivePath(path: string): boolean {
+  return /(^|\/)(admin|auth|authentication|authorization|crypto|jwt|password|permissions?|roles?|secrets?|security|sessions?|tokens?)(\/|\.|-|_|$)/i.test(normalizePath(path));
+}
+
+function clampConfidence(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value)));
 }
 
 function isNonRuntimeContextPath(path: string): boolean {

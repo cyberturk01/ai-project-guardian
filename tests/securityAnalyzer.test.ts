@@ -369,6 +369,51 @@ describe("analyzeSecurity", () => {
       ["security-disabled-auth-check:high:src/auth/devAuth.ts"]
     );
   });
+
+  it("assigns high confidence to strong security signals in sensitive files", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [changedFile("src/auth/secrets.ts")],
+      readFile: fakeReader({
+        "src/auth/secrets.ts": "const jwtSecret = 'RealJwtSecret12345';"
+      })
+    });
+
+    const finding = findings.find((candidate) => candidate.id === "security-jwt-secret-default");
+
+    assert.ok((finding?.confidence ?? 0) >= 80);
+    assert.match(finding?.description ?? "", /detected in a changed file/);
+  });
+
+  it("assigns moderate confidence to broad security heuristics", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [changedFile("src/logging/audit.ts")],
+      readFile: fakeReader({
+        "src/logging/audit.ts": "console.warn('authorization header', req.headers.authorization);"
+      })
+    });
+
+    const finding = findings.find((candidate) => candidate.id === "security-console-sensitive-value");
+
+    assert.ok((finding?.confidence ?? 0) >= 50);
+    assert.ok((finding?.confidence ?? 100) < 80);
+  });
+
+  it("assigns low confidence and softer wording in non-runtime contexts", async () => {
+    const findings = await analyzeSecurity({
+      repoPath,
+      changedFiles: [changedFile("tests/realisticSecret.test.ts")],
+      readFile: fakeReader({
+        "tests/realisticSecret.test.ts": "process.env.INTERNAL_API_KEY = 'A1b2C3d4E5f6G7h8I9j0K1l2';"
+      })
+    });
+
+    const finding = findings.find((candidate) => candidate.id === "security-api-key");
+
+    assert.ok((finding?.confidence ?? 100) < 50);
+    assert.match(finding?.description ?? "", /low-confidence heuristic signal/);
+  });
 });
 
 function changedFile(path: string, status: ChangedFile["status"] = "modified"): ChangedFile {

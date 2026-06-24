@@ -173,7 +173,8 @@ function buildFinding(rule: QaRule, changedFiles: ChangedFile[], context: QaCont
 
   const suggestedTests = suggestedTestsForAffectedFiles(rule, affectedFiles, context);
   const testSignalEvidence = testSignalEvidenceForFinding(rule, affectedFiles, changedFiles, context);
-  const description = descriptionForFinding(rule, testSignalEvidence);
+  const confidence = confidenceForQaFinding(rule, affectedFiles, testSignalEvidence);
+  const description = descriptionForFinding(rule, testSignalEvidence, confidence);
 
   return {
     id: rule.id,
@@ -181,6 +182,7 @@ function buildFinding(rule: QaRule, changedFiles: ChangedFile[], context: QaCont
     title: rule.title,
     description,
     riskLevel: rule.riskLevel,
+    confidence,
     affectedFiles,
     suggestedTests,
     testSignalEvidence
@@ -215,9 +217,17 @@ function testSignalEvidenceForFinding(
   };
 }
 
-function descriptionForFinding(rule: QaRule, evidence: TestSignalEvidence): string {
+function descriptionForFinding(rule: QaRule, evidence: TestSignalEvidence, confidence: number): string {
   if (rule.id !== "qa-auth-security-without-negative-test") {
+    if (confidence < 50) {
+      return softenQaDescription(rule.description);
+    }
+
     return rule.description;
+  }
+
+  if (confidence < 50) {
+    return "Auth/security-sensitive files may have changed. Related evidence is weak, so negative-path coverage should be reviewed.";
   }
 
   if (evidence.detectedRelatedTests.length > 0) {
@@ -225,6 +235,84 @@ function descriptionForFinding(rule: QaRule, evidence: TestSignalEvidence): stri
   }
 
   return "Auth/security-sensitive files changed. No related test signal was detected, so negative-path coverage could not be confirmed.";
+}
+
+function confidenceForQaFinding(rule: QaRule, affectedFiles: string[], evidence: TestSignalEvidence): number {
+  let score = 44;
+
+  score += fileMatchConfidence(rule, affectedFiles);
+  score += relatedTestConfidence(evidence.detectedRelatedTests);
+  score += Math.min(12, evidence.detectedCoverageSignals.length * 4);
+  score += Math.min(8, affectedFiles.length * 2);
+
+  if (evidence.detectedRelatedTests.length === 0) {
+    score -= 8;
+  }
+
+  if (evidence.unconfirmedCoverageSignals.length > 0) {
+    score -= Math.min(10, evidence.unconfirmedCoverageSignals.length * 3);
+  }
+
+  return clampConfidence(score);
+}
+
+function fileMatchConfidence(rule: QaRule, affectedFiles: string[]): number {
+  if (rule.id === "qa-source-without-nearby-test") {
+    return affectedFiles.every(isServiceOrBusinessLogicPath) ? 18 : 8;
+  }
+
+  if (rule.id === "qa-api-without-integration-test") {
+    return 22;
+  }
+
+  if (rule.id === "qa-ui-without-cypress-test") {
+    return 18;
+  }
+
+  if (rule.id === "qa-migration-without-db-test") {
+    return 24;
+  }
+
+  if (rule.id === "qa-i18n-without-localization-test") {
+    return 18;
+  }
+
+  if (rule.id === "qa-auth-security-without-negative-test") {
+    return affectedFiles.some((path) => /(^|\/)(auth|security|permissions?|roles?|sessions?|tokens?)(\/|\.|-|_|$)/i.test(normalizePath(path)))
+      ? 24
+      : 12;
+  }
+
+  return 8;
+}
+
+function relatedTestConfidence(tests: RelatedTestSignal[]): number {
+  if (tests.some((test) => test.score === "strong")) {
+    return 18;
+  }
+
+  if (tests.some((test) => test.score === "medium")) {
+    return 10;
+  }
+
+  if (tests.some((test) => test.score === "weak")) {
+    return 4;
+  }
+
+  return 0;
+}
+
+function softenQaDescription(description: string): string {
+  return description
+    .replace("One or more source files changed, but no nearby unit test was found", "One or more source files changed, and Guardian did not find a clear nearby unit test signal")
+    .replace("A route, controller, handler, or API file changed without", "A route, controller, handler, or API file appears to have changed without")
+    .replace("A UI-facing file changed, but no relevant", "A UI-facing file appears to have changed, but Guardian did not find a clear")
+    .replace("A database migration or schema file changed without", "A database migration or schema file appears to have changed without")
+    .replace("Localization files changed without", "Localization files appear to have changed without");
+}
+
+function clampConfidence(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value)));
 }
 
 function detectedCoverageSignalsForTests(testFiles: string[], testFileContents: Record<string, string>): CoverageSignal[] {

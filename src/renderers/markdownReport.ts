@@ -165,7 +165,7 @@ function renderQaFindings(findings: GuardianReport["qaFindings"]): string {
 | Field | Value |
 | --- | --- |
 | Risk | ${renderRiskLabel(finding.riskLevel)} |
-| Affected files | ${renderInlineList(finding.affectedFiles)} |
+${renderConfidenceRow(finding.confidence)}| Affected files | ${renderInlineList(finding.affectedFiles)} |
 
 ${finding.description}${renderQaEvidence(finding)}
 
@@ -302,7 +302,7 @@ function renderSecurityFindings(findings: GuardianReport["securityFindings"]): s
 | Field | Value |
 | --- | --- |
 | Risk | ${renderRiskLabel(finding.riskLevel)} |
-| Location | ${escapeTableCell(location)} |
+${renderConfidenceRow(finding.confidence)}| Location | ${escapeTableCell(location)} |
 
 ${finding.description}
 
@@ -331,6 +331,26 @@ ${finding.description}
 **Recommendation:** ${finding.recommendation ?? "Add the missing check to a required GitHub Actions workflow."}`;
     })
     .join("\n\n");
+}
+
+function renderConfidenceRow(confidence: number | undefined): string {
+  if (confidence === undefined) {
+    return "";
+  }
+
+  return `| Confidence | ${confidence}% (${confidenceBand(confidence)}) |\n`;
+}
+
+function confidenceBand(confidence: number): string {
+  if (confidence >= 80) {
+    return "high confidence";
+  }
+
+  if (confidence >= 50) {
+    return "moderate confidence";
+  }
+
+  return "low confidence";
 }
 
 function renderEnterpriseRiskCorrelation(report: GuardianReport): string {

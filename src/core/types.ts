@@ -61,6 +61,7 @@ export type FindingBase = {
   title: string;
   description: string;
   riskLevel: RiskLevel;
+  confidence?: number;
   filePath?: string;
   recommendation?: string;
   accepted?: boolean;

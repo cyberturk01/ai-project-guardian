@@ -50,6 +50,7 @@ describe("renderMarkdownReport", () => {
         title: "Source change without related test signal",
         affectedFiles: ["src/referral/rewardService.ts", "src/referral/rewardRules.ts"],
         suggestedTests: ["Review related referral test coverage."],
+        confidence: 84,
         testSignalEvidence: {
           changedFiles: ["src/referral/rewardRules.ts", "src/referral/rewardService.ts"],
           expectedTestSignals: ["src/referral/*.test.ts", "src/referral/*.spec.ts", "tests/referral/*"],
@@ -76,6 +77,7 @@ describe("renderMarkdownReport", () => {
     const summary = renderMarkdownSummary(report);
 
     assert.match(fullReport, /\*\*Test signal evidence\*\*/);
+    assert.match(fullReport, /\| Confidence \| 84% \(high confidence\) \|/);
     assert.match(fullReport, /Changed files:\n- `src\/referral\/rewardRules\.ts`\n- `src\/referral\/rewardService\.ts`/);
     assert.match(fullReport, /Expected test signals:\n- `src\/referral\/\*\.test\.ts`\n- `src\/referral\/\*\.spec\.ts`\n- `tests\/referral\/\*`/);
     assert.match(
@@ -316,6 +318,7 @@ function makeReport(): GuardianReport {
         title: "Route or API changed without API/integration test coverage",
         description: "A route, controller, handler, or API file changed without a matching API or integration test.",
         riskLevel: "high",
+        confidence: 84,
         affectedFiles: ["src/api/reservations.ts"],
         suggestedTests: ["Add an API or integration test that exercises src/api/reservations.ts."]
       }
@@ -342,6 +345,7 @@ function makeReport(): GuardianReport {
         title: "Possible hardcoded secret",
         description: "Possible hardcoded secret detected in a changed file. This is a possible risk based on heuristic matching, not a confirmed vulnerability.",
         riskLevel: "high",
+        confidence: 61,
         filePath: "src/api/reservations.ts",
         lineNumber: 18,
         recommendation: "Move secrets to a managed secret store or environment variable, then rotate the exposed value if it is real."

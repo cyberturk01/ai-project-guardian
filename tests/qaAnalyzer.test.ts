@@ -596,6 +596,83 @@ describe("analyzeQa", () => {
     assert.doesNotMatch(sourceFinding?.testSignalEvidence?.reason ?? "", /guaranteed|confirmed/i);
   });
 
+  it("assigns high confidence when QA file, test, and content signals align", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/auth/session.ts",
+          status: "modified",
+          category: "security",
+          riskLevel: "high"
+        },
+        {
+          path: "tests/auth/session.test.ts",
+          status: "modified",
+          category: "test",
+          riskLevel: "low"
+        }
+      ],
+      repoFiles: ["src/auth/session.ts", "tests/auth/session.test.ts"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture,
+      testFileContents: {
+        "tests/auth/session.test.ts": "it('denies unauthorized sessions', () => expect(canAccess()).toBe(false));"
+      }
+    });
+
+    const authFinding = findings.find((finding) => finding.id === "qa-auth-security-without-negative-test");
+
+    assert.ok((authFinding?.confidence ?? 0) >= 80);
+  });
+
+  it("assigns moderate confidence when QA relatedness is partial", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/auth/session.ts",
+          status: "modified",
+          category: "security",
+          riskLevel: "high"
+        },
+        {
+          path: "tests/auth/access.test.ts",
+          status: "modified",
+          category: "test",
+          riskLevel: "low"
+        }
+      ],
+      repoFiles: ["src/auth/session.ts", "tests/auth/access.test.ts"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const authFinding = findings.find((finding) => finding.id === "qa-auth-security-without-negative-test");
+
+    assert.ok((authFinding?.confidence ?? 0) >= 50);
+    assert.ok((authFinding?.confidence ?? 100) < 80);
+  });
+
+  it("assigns low confidence and softer wording for broad QA heuristics", () => {
+    const findings = analyzeQa({
+      changedFiles: [
+        {
+          path: "src/utils/misc.ts",
+          status: "modified",
+          category: "source",
+          riskLevel: "medium"
+        }
+      ],
+      repoFiles: ["src/utils/misc.ts"],
+      config: guardianConfigFixture,
+      projectBrain: projectBrainFixture
+    });
+
+    const sourceFinding = findings.find((finding) => finding.id === "qa-source-without-nearby-test");
+
+    assert.ok((sourceFinding?.confidence ?? 100) < 50);
+    assert.match(sourceFinding?.description ?? "", /Guardian did not find a clear nearby unit test signal/);
+  });
+
   it("groups repeated nearby files into compact expected test signal patterns", () => {
     const findings = analyzeQa({
       changedFiles: [
